@@ -1,0 +1,233 @@
+[
+ {
+  "id": "pics2/bag",
+  "word": "bag",
+  "group": "short a",
+  "pattern": "a (CVC)",
+  "ipa": "/bæɡ/"
+ },
+ {
+  "id": "pics2/boat",
+  "word": "boat",
+  "group": "long o",
+  "pattern": "oa",
+  "ipa": "/bəʊt/"
+ },
+ {
+  "id": "pics2/book",
+  "word": "book",
+  "group": "oo (short)",
+  "pattern": "oo",
+  "ipa": "/bʊk/"
+ },
+ {
+  "id": "pics2/bread11",
+  "word": "bread",
+  "group": "review: irregular",
+  "pattern": "ea as short e",
+  "ipa": "/bred/"
+ },
+ {
+  "id": "pics2/cake",
+  "word": "cake",
+  "group": "long a",
+  "pattern": "a_e",
+  "ipa": "/keɪk/"
+ },
+ {
+  "id": "pics2/candy",
+  "word": "sweet",
+  "group": "long e",
+  "pattern": "ee",
+  "ipa": "/swiːt/"
+ },
+ {
+  "id": "pics2/car",
+  "word": "car",
+  "group": "r-controlled",
+  "pattern": "ar",
+  "ipa": "/kɑː/"
+ },
+ {
+  "id": "pics2/chaor",
+  "word": "chair",
+  "group": "r-controlled",
+  "pattern": "air",
+  "ipa": "/tʃeə/"
+ },
+ {
+  "id": "pics2/cheese",
+  "word": "cheese",
+  "group": "long e",
+  "pattern": "ee",
+  "ipa": "/tʃiːz/"
+ },
+ {
+  "id": "pics2/cup",
+  "word": "cup",
+  "group": "short u",
+  "pattern": "u (CVC)",
+  "ipa": "/kʌp/"
+ },
+ {
+  "id": "pics2/desk",
+  "word": "desk",
+  "group": "short e",
+  "pattern": "e + sk",
+  "ipa": "/desk/"
+ },
+ {
+  "id": "pics2/dress",
+  "word": "dress",
+  "group": "short e",
+  "pattern": "dr + e + ss",
+  "ipa": "/dres/"
+ },
+ {
+  "id": "pics2/egg",
+  "word": "egg",
+  "group": "short e",
+  "pattern": "e + gg",
+  "ipa": "/eɡ/"
+ },
+ {
+  "id": "pics2/glass",
+  "word": "glass",
+  "group": "review: irregular",
+  "pattern": "a as /ɑː/ in British",
+  "ipa": "/ɡlɑːs/"
+ },
+ {
+  "id": "pics2/glove",
+  "word": "glove",
+  "group": "review: irregular",
+  "pattern": "o_e as /ʌ/",
+  "ipa": "/ɡlʌv/"
+ },
+ {
+  "id": "pics2/ink",
+  "word": "ink",
+  "group": "short i",
+  "pattern": "i + nk",
+  "ipa": "/ɪŋk/"
+ },
+ {
+  "id": "pics2/jam",
+  "word": "jam",
+  "group": "short a",
+  "pattern": "a (CVC)",
+  "ipa": "/dʒæm/"
+ },
+ {
+  "id": "pics2/key",
+  "word": "key",
+  "group": "long e",
+  "pattern": "ey",
+  "ipa": "/kiː/"
+ },
+ {
+  "id": "pics2/kite",
+  "word": "kite",
+  "group": "long i",
+  "pattern": "i_e",
+  "ipa": "/kaɪt/"
+ },
+ {
+  "id": "pics2/milk",
+  "word": "milk",
+  "group": "short i",
+  "pattern": "i + lk",
+  "ipa": "/mɪlk/"
+ },
+ {
+  "id": "pics2/peach",
+  "word": "peach",
+  "group": "long e",
+  "pattern": "ea",
+  "ipa": "/piːtʃ/"
+ },
+ {
+  "id": "pics2/pear",
+  "word": "pear",
+  "group": "r-controlled",
+  "pattern": "ear (/eə/)",
+  "ipa": "/peə/"
+ },
+ {
+  "id": "pics2/pen",
+  "word": "pen",
+  "group": "short e",
+  "pattern": "e (CVC)",
+  "ipa": "/pen/"
+ },
+ {
+  "id": "pics2/rice",
+  "word": "rice",
+  "group": "long i",
+  "pattern": "i_e + soft c",
+  "ipa": "/raɪs/"
+ },
+ {
+  "id": "pics2/scarf",
+  "word": "scarf",
+  "group": "r-controlled",
+  "pattern": "ar",
+  "ipa": "/skɑːf/"
+ },
+ {
+  "id": "pics2/shirt",
+  "word": "shirt",
+  "group": "r-controlled",
+  "pattern": "ir",
+  "ipa": "/ʃɜːt/"
+ },
+ {
+  "id": "pics2/skirt",
+  "word": "skirt",
+  "group": "r-controlled",
+  "pattern": "ir",
+  "ipa": "/skɜːt/"
+ },
+ {
+  "id": "pics2/slide",
+  "word": "slide",
+  "group": "long i",
+  "pattern": "i_e",
+  "ipa": "/slaɪd/"
+ },
+ {
+  "id": "pics2/sock",
+  "word": "sock",
+  "group": "short o",
+  "pattern": "o + ck",
+  "ipa": "/sɒk/"
+ },
+ {
+  "id": "pics2/soup",
+  "word": "soup",
+  "group": "long u / oo",
+  "pattern": "ou",
+  "ipa": "/suːp/"
+ },
+ {
+  "id": "pics2/tape",
+  "word": "tape",
+  "group": "long a",
+  "pattern": "a_e",
+  "ipa": "/teɪp/"
+ },
+ {
+  "id": "pics2/train",
+  "word": "train",
+  "group": "long a",
+  "pattern": "ai",
+  "ipa": "/treɪn/"
+ },
+ {
+  "id": "pics2/vase",
+  "word": "vase",
+  "group": "review: irregular",
+  "pattern": "a_e but British /vɑːz/",
+  "ipa": "/vɑːz/"
+ }
+]

@@ -1,0 +1,2541 @@
+[
+ {
+  "id": "pics2/anchor",
+  "file": "anchor.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary",
+   "Town Objects"
+  ],
+  "status": "MATCH",
+  "shown": "닻",
+  "word": "anchor",
+  "us": "",
+  "ko": "닻",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/apple",
+  "file": "apple.png",
+  "cat": "Food Shop",
+  "uses": [],
+  "status": "MULTIPLE",
+  "shown": "체크 천을 깐 바구니에 사과 여러 개",
+  "word": "apples",
+  "us": "",
+  "ko": "사과 바구니",
+  "reason": "사과와 바구니 두 대상 — 사과 한 개는 apple1.png",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/apple pie",
+  "file": "apple pie.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "애플파이",
+  "word": "apple pie",
+  "us": "",
+  "ko": "애플파이",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/apple1",
+  "file": "apple1.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "사과",
+  "word": "apple",
+  "us": "",
+  "ko": "사과",
+  "reason": "파일명 철자·번호 교정(apple)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/avocado",
+  "file": "avocado.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "아보카도",
+  "word": "avocado",
+  "us": "",
+  "ko": "아보카도",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "avocado",
+  "dbRows": 2
+ },
+ {
+  "id": "pics2/bag",
+  "file": "bag.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(cvc)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "가방",
+  "word": "bag",
+  "us": "backpack",
+  "ko": "가방",
+  "reason": "영국식 우선",
+  "dbWord": "backpack",
+  "dbRows": 2
+ },
+ {
+  "id": "pics2/bagette",
+  "file": "bagette.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "바게트",
+  "word": "baguette",
+  "us": "",
+  "ko": "바게트",
+  "reason": "파일명 철자·번호 교정(baguette)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/banana",
+  "file": "banana.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "바나나",
+  "word": "banana",
+  "us": "",
+  "ko": "바나나",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/basket",
+  "file": "basket.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary",
+   "Town Objects"
+  ],
+  "status": "MATCH",
+  "shown": "바구니",
+  "word": "basket",
+  "us": "",
+  "ko": "바구니",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/basketball",
+  "file": "basketball.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "농구공",
+  "word": "basketball",
+  "us": "",
+  "ko": "농구공",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "basketball",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/baskettt",
+  "file": "baskettt.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "UNUSABLE",
+  "shown": "basket.png와 완전히 같은 파일",
+  "word": "basket",
+  "us": "",
+  "ko": "바구니",
+  "reason": "중복 파일(바이트 동일) — basket.png 하나만 사용",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/bear",
+  "file": "bear.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "곰 인형",
+  "word": "teddy bear",
+  "us": "",
+  "ko": "곰 인형",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/bicycle1",
+  "file": "bicycle1.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "자전거",
+  "word": "bicycle",
+  "us": "",
+  "ko": "자전거",
+  "reason": "파일명 철자·번호 교정(bicycle)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/board",
+  "file": "board.png",
+  "cat": "School Shop",
+  "uses": [],
+  "status": "UNCERTAIN",
+  "shown": "A자형 세움 칠판",
+  "word": "blackboard",
+  "us": "",
+  "ko": "칠판",
+  "reason": "교실 칠판이 아니라 가게 앞 세움 간판 모양",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/boat",
+  "file": "boat.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "배",
+  "word": "boat",
+  "us": "",
+  "ko": "배",
+  "reason": "장난감·소형 모형 그림",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/book",
+  "file": "book.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "책",
+  "word": "book",
+  "us": "",
+  "ko": "책",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/brauni",
+  "file": "brauni.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "브라우니",
+  "word": "brownie",
+  "us": "",
+  "ko": "브라우니",
+  "reason": "파일명 철자·번호 교정(brownie)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/bread",
+  "file": "bread.png",
+  "cat": "Food Shop",
+  "uses": [],
+  "status": "MULTIPLE",
+  "shown": "바구니에 바게트·크루아상·둥근 빵",
+  "word": "bread",
+  "us": "",
+  "ko": "빵 바구니",
+  "reason": "빵 종류 여러 개와 바구니 — 식빵은 bread11.png",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/bread11",
+  "file": "bread11.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "빵",
+  "word": "bread",
+  "us": "",
+  "ko": "빵",
+  "reason": "파일명 철자·번호 교정(bread)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/brocolli",
+  "file": "brocolli.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "브로콜리",
+  "word": "broccoli",
+  "us": "",
+  "ko": "브로콜리",
+  "reason": "파일명 철자·번호 교정(broccoli)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/brush",
+  "file": "brush.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "붓",
+  "word": "paintbrush",
+  "us": "",
+  "ko": "붓",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/bun",
+  "file": "bun.png",
+  "cat": "Food Shop",
+  "uses": [],
+  "status": "UNCERTAIN",
+  "shown": "둥근 빵 한 덩이",
+  "word": "bread roll",
+  "us": "bun",
+  "ko": "둥근 빵",
+  "reason": "bun/roll/bread 중 결정 필요",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/butter",
+  "file": "butter.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "버터",
+  "word": "butter",
+  "us": "",
+  "ko": "버터",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cake",
+  "file": "cake.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(magic-e)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "케이크",
+  "word": "cake",
+  "us": "",
+  "ko": "케이크",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/candy",
+  "file": "candy.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "사탕",
+  "word": "sweet",
+  "us": "candy",
+  "ko": "사탕",
+  "reason": "영국식 우선",
+  "dbWord": "sweet",
+  "dbRows": 4
+ },
+ {
+  "id": "pics2/car",
+  "file": "car.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(r-controlled)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "자동차",
+  "word": "car",
+  "us": "",
+  "ko": "자동차",
+  "reason": "장난감·소형 모형 그림",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cattail",
+  "file": "cattail.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "UNCERTAIN",
+  "shown": "물가 풀(부들·갈대) 한 포기",
+  "word": "reeds",
+  "us": "cattail",
+  "ko": "갈대",
+  "reason": "bulrush/cattail/reeds 중 무엇으로 가르칠지 불명확, 저레벨 단어 아님",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cereal",
+  "file": "cereal.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "시리얼",
+  "word": "cereal",
+  "us": "",
+  "ko": "시리얼",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/chaor",
+  "file": "chaor.png",
+  "cat": "Furniture Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "의자",
+  "word": "chair",
+  "us": "",
+  "ko": "의자",
+  "reason": "파일명 철자·번호 교정(chair)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cheese",
+  "file": "cheese.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "치즈",
+  "word": "cheese",
+  "us": "",
+  "ko": "치즈",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cherry",
+  "file": "cherry.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "체리",
+  "word": "cherries",
+  "us": "",
+  "ko": "체리",
+  "reason": "그림은 체리 두 알",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/chocholate",
+  "file": "chocholate.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "초콜릿",
+  "word": "chocolate",
+  "us": "",
+  "ko": "초콜릿",
+  "reason": "파일명 철자·번호 교정(chocolate)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/chocholate cake",
+  "file": "chocholate cake.png",
+  "cat": "Food Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "종이컵에 든 초콜릿 머핀",
+  "word": "muffin",
+  "us": "",
+  "ko": "머핀",
+  "reason": "케이크가 아니라 머핀 1개",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/climb",
+  "file": "climb.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "MISMATCH",
+  "shown": "암벽·그물이 있는 놀이터 정글짐",
+  "word": "climbing frame",
+  "us": "jungle gym",
+  "ko": "정글짐",
+  "reason": "climb은 동작 — 그림은 놀이 기구",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/coconut",
+  "file": "coconut.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "코코넛",
+  "word": "coconut",
+  "us": "",
+  "ko": "코코넛",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cookie",
+  "file": "cookie.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "쿠키",
+  "word": "biscuit",
+  "us": "cookie",
+  "ko": "쿠키",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/corn",
+  "file": "corn.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "옥수수",
+  "word": "sweetcorn",
+  "us": "corn",
+  "ko": "옥수수",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/crayon",
+  "file": "crayon.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "크레용",
+  "word": "crayon",
+  "us": "",
+  "ko": "크레용",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/croissant",
+  "file": "croissant.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "크루아상",
+  "word": "croissant",
+  "us": "",
+  "ko": "크루아상",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cucumber",
+  "file": "cucumber.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "오이",
+  "word": "cucumber",
+  "us": "",
+  "ko": "오이",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/cup",
+  "file": "cup.png",
+  "cat": "Furniture Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(cvc)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "컵",
+  "word": "cup",
+  "us": "",
+  "ko": "컵",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/desk",
+  "file": "desk.png",
+  "cat": "Furniture Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "책상",
+  "word": "desk",
+  "us": "",
+  "ko": "책상",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/dock",
+  "file": "dock.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "UNCERTAIN",
+  "shown": "밧줄 기둥이 있는 나무 선착장",
+  "word": "jetty",
+  "us": "dock",
+  "ko": "선착장",
+  "reason": "dock/jetty/pier 중 결정 필요",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/dog bowl",
+  "file": "dog bowl.png",
+  "cat": "Pet Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "강아지 밥그릇",
+  "word": "dog bowl",
+  "us": "",
+  "ko": "강아지 밥그릇",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/donut",
+  "file": "donut.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "도넛",
+  "word": "doughnut",
+  "us": "donut",
+  "ko": "도넛",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/dress",
+  "file": "dress.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "원피스",
+  "word": "dress",
+  "us": "",
+  "ko": "원피스",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/duck",
+  "file": "duck.png",
+  "cat": "Toy Shop",
+  "uses": [],
+  "status": "UNCERTAIN",
+  "shown": "노란 고무 오리 장난감",
+  "word": "rubber duck",
+  "us": "",
+  "ko": "고무 오리",
+  "reason": "duck(동물)으로 가르칠지 장난감으로 가르칠지 결정 필요",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/egg",
+  "file": "egg.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(cvc)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "달걀",
+  "word": "egg",
+  "us": "",
+  "ko": "달걀",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/eraser",
+  "file": "eraser.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "지우개",
+  "word": "rubber",
+  "us": "eraser",
+  "ko": "지우개",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/firefighter",
+  "file": "firefighter.png",
+  "cat": "Toy Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "사다리가 달린 빨간 소방차",
+  "word": "fire engine",
+  "us": "fire truck",
+  "ko": "소방차",
+  "reason": "사람(소방관)이 아니라 차량",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/fishing pole",
+  "file": "fishing pole.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "낚싯대",
+  "word": "fishing rod",
+  "us": "fishing pole",
+  "ko": "낚싯대",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/flower",
+  "file": "flower.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "MULTIPLE",
+  "shown": "화분 상자에 심긴 분홍 튤립",
+  "word": "tulips",
+  "us": "",
+  "ko": "튤립 화단",
+  "reason": "꽃과 화분 상자",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/flower111",
+  "file": "flower111.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "UNCERTAIN",
+  "shown": "분홍 장미 한 송이",
+  "word": "rose",
+  "us": "",
+  "ko": "장미",
+  "reason": "flower로 가르칠지 rose로 가르칠지 결정 필요",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/flower2",
+  "file": "flower2.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "MULTIPLE",
+  "shown": "화분 상자에 심긴 노란 수선화",
+  "word": "daffodils",
+  "us": "",
+  "ko": "수선화 화단",
+  "reason": "꽃과 화분 상자",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/flower3",
+  "file": "flower3.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "MULTIPLE",
+  "shown": "화분 상자에 심긴 파란 수국",
+  "word": "hydrangeas",
+  "us": "",
+  "ko": "수국 화단",
+  "reason": "꽃과 화분 상자, 저레벨 단어 아님",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/flower4",
+  "file": "flower4.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "UNCERTAIN",
+  "shown": "분홍 장미 덤불",
+  "word": "rose bush",
+  "us": "",
+  "ko": "장미 덤불",
+  "reason": "roses/rose bush/flowers 중 결정 필요",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/flower6",
+  "file": "flower6.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "MISMATCH",
+  "shown": "허브(바질·로즈메리·차이브)가 심긴 화단",
+  "word": "herbs",
+  "us": "",
+  "ko": "허브 화단",
+  "reason": "꽃보다 허브가 중심",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/flwoer5",
+  "file": "flwoer5.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "MISMATCH",
+  "shown": "호박이 열린 텃밭 화단",
+  "word": "pumpkin patch",
+  "us": "",
+  "ko": "호박 텃밭",
+  "reason": "꽃이 아니라 호박",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/glass",
+  "file": "glass.png",
+  "cat": "Furniture Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "유리컵",
+  "word": "glass",
+  "us": "",
+  "ko": "유리컵",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/glasses",
+  "file": "glasses.png",
+  "cat": "Clothes Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "청록색 테 선글라스(검은 렌즈)",
+  "word": "sunglasses",
+  "us": "",
+  "ko": "선글라스",
+  "reason": "렌즈가 검은 선글라스",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/global",
+  "file": "global.png",
+  "cat": "School Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "받침대 있는 지구본",
+  "word": "globe",
+  "us": "",
+  "ko": "지구본",
+  "reason": "global은 형용사 — 물건은 globe",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/glove",
+  "file": "glove.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "장갑",
+  "word": "glove",
+  "us": "",
+  "ko": "장갑",
+  "reason": "그림은 한 짝",
+  "dbWord": "glove",
+  "dbRows": 3
+ },
+ {
+  "id": "pics2/glue",
+  "file": "glue.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "풀",
+  "word": "glue stick",
+  "us": "",
+  "ko": "풀",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/grapefruit",
+  "file": "grapefruit.png",
+  "cat": "Food Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "망고 한 개(잎 달린 붉은·노란 과일)",
+  "word": "mango",
+  "us": "",
+  "ko": "망고",
+  "reason": "자몽이 아니라 망고 모양과 색",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/grapes",
+  "file": "grapes.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "포도",
+  "word": "grapes",
+  "us": "",
+  "ko": "포도",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/guitar",
+  "file": "guitar.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "기타",
+  "word": "guitar",
+  "us": "",
+  "ko": "기타",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/hamburger",
+  "file": "hamburger.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "햄버거",
+  "word": "hamburger",
+  "us": "",
+  "ko": "햄버거",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/helmet",
+  "file": "helmet.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "헬멧",
+  "word": "helmet",
+  "us": "",
+  "ko": "헬멧",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/honey",
+  "file": "honey.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "꿀",
+  "word": "honey",
+  "us": "",
+  "ko": "꿀",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "honey",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/horse",
+  "file": "horse.png",
+  "cat": "Toy Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "나무 흔들 목마",
+  "word": "rocking horse",
+  "us": "",
+  "ko": "흔들 목마",
+  "reason": "살아 있는 말이 아니라 장난감",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/hotdog",
+  "file": "hotdog.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "핫도그",
+  "word": "hot dog",
+  "us": "",
+  "ko": "핫도그",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/ice crema",
+  "file": "ice crema.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "아이스크림",
+  "word": "ice cream",
+  "us": "",
+  "ko": "아이스크림",
+  "reason": "파일명 철자·번호 교정(ice cream)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/ink",
+  "file": "ink.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(cvc)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "잉크",
+  "word": "ink",
+  "us": "",
+  "ko": "잉크",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/jacket",
+  "file": "jacket.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "재킷",
+  "word": "jacket",
+  "us": "",
+  "ko": "재킷",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/jam",
+  "file": "jam.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(cvc)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "잼",
+  "word": "jam",
+  "us": "",
+  "ko": "잼",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/jump rope",
+  "file": "jump rope.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "줄넘기",
+  "word": "skipping rope",
+  "us": "jump rope",
+  "ko": "줄넘기",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/key",
+  "file": "key.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary",
+   "Town Objects"
+  ],
+  "status": "MATCH",
+  "shown": "열쇠",
+  "word": "key",
+  "us": "",
+  "ko": "열쇠",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "key",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/kite",
+  "file": "kite.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(magic-e)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "연",
+  "word": "kite",
+  "us": "",
+  "ko": "연",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/kiwi",
+  "file": "kiwi.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "키위",
+  "word": "kiwi",
+  "us": "",
+  "ko": "키위",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/le,om",
+  "file": "le,om.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "레몬",
+  "word": "lemon",
+  "us": "",
+  "ko": "레몬",
+  "reason": "파일명 철자·번호 교정(lemon)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/letter",
+  "file": "letter.png",
+  "cat": "School Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "닫힌 흰 편지 봉투",
+  "word": "envelope",
+  "us": "",
+  "ko": "봉투",
+  "reason": "편지지·글씨가 보이지 않고 봉투만 있음",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/lettuceaa",
+  "file": "lettuceaa.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "상추",
+  "word": "lettuce",
+  "us": "",
+  "ko": "상추",
+  "reason": "파일명 철자·번호 교정(lettuce)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/lunchbox'",
+  "file": "lunchbox'.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "도시락",
+  "word": "lunchbox",
+  "us": "",
+  "ko": "도시락",
+  "reason": "파일명 철자·번호 교정(lunchbox)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/melon",
+  "file": "melon.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "멜론",
+  "word": "melon",
+  "us": "",
+  "ko": "멜론",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/micro",
+  "file": "micro.png",
+  "cat": "School Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "손잡이 달린 돋보기",
+  "word": "magnifying glass",
+  "us": "",
+  "ko": "돋보기",
+  "reason": "현미경(현미경.png)이 아님",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/milk",
+  "file": "milk.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "우유",
+  "word": "milk",
+  "us": "",
+  "ko": "우유",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/mushroom",
+  "file": "mushroom.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "UNCERTAIN",
+  "shown": "무늬가 있는 장식용 버섯 3개",
+  "word": "mushrooms",
+  "us": "",
+  "ko": "버섯 장식",
+  "reason": "먹는 버섯(mushroom2323.png)과 다름, 여러 개",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/mushroom2323",
+  "file": "mushroom2323.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "버섯",
+  "word": "mushroom",
+  "us": "",
+  "ko": "버섯",
+  "reason": "파일명 철자·번호 교정(mushroom)",
+  "dbWord": "mushroom",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/notebook",
+  "file": "notebook.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "공책",
+  "word": "notebook",
+  "us": "",
+  "ko": "공책",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/onion",
+  "file": "onion.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "양파",
+  "word": "onion",
+  "us": "",
+  "ko": "양파",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/orange",
+  "file": "orange.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "오렌지",
+  "word": "orange",
+  "us": "",
+  "ko": "오렌지",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/palette",
+  "file": "palette.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "팔레트",
+  "word": "palette",
+  "us": "",
+  "ko": "팔레트",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pancake",
+  "file": "pancake.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "팬케이크",
+  "word": "pancake",
+  "us": "",
+  "ko": "팬케이크",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pants",
+  "file": "pants.png",
+  "cat": "Clothes Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "끈 달린 청록색 반바지",
+  "word": "shorts",
+  "us": "",
+  "ko": "반바지",
+  "reason": "길이가 무릎 위 — 긴 바지(trousers.png)와 다름",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/peach",
+  "file": "peach.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "복숭아",
+  "word": "peach",
+  "us": "",
+  "ko": "복숭아",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pear",
+  "file": "pear.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "배",
+  "word": "pear",
+  "us": "",
+  "ko": "배",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pen",
+  "file": "pen.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(cvc)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "펜",
+  "word": "pen",
+  "us": "",
+  "ko": "펜",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pencil",
+  "file": "pencil.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "연필",
+  "word": "pencil",
+  "us": "",
+  "ko": "연필",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pencil sharper",
+  "file": "pencil sharper.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "연필깎이",
+  "word": "pencil sharpener",
+  "us": "",
+  "ko": "연필깎이",
+  "reason": "파일명 철자·번호 교정(pencil sharpener)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pepper",
+  "file": "pepper.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "피망",
+  "word": "pepper",
+  "us": "bell pepper",
+  "ko": "피망",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pineapple",
+  "file": "pineapple.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "파인애플",
+  "word": "pineapple",
+  "us": "",
+  "ko": "파인애플",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pink book",
+  "file": "pink book.png",
+  "cat": "School Shop",
+  "uses": [],
+  "status": "UNCERTAIN",
+  "shown": "장미 무늬 분홍 책",
+  "word": "book",
+  "us": "",
+  "ko": "책",
+  "reason": "일기장인지 알 수 없음 — book.png와 단어가 겹침",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pizza",
+  "file": "pizza.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "피자",
+  "word": "pizza",
+  "us": "",
+  "ko": "피자",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pnecilcase",
+  "file": "pnecilcase.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "필통",
+  "word": "pencil case",
+  "us": "",
+  "ko": "필통",
+  "reason": "파일명 철자·번호 교정(pencil case)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/potato",
+  "file": "potato.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "감자",
+  "word": "potato",
+  "us": "",
+  "ko": "감자",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/pumpkin",
+  "file": "pumpkin.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "호박",
+  "word": "pumpkin",
+  "us": "",
+  "ko": "호박",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/racket",
+  "file": "racket.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "라켓",
+  "word": "racket",
+  "us": "",
+  "ko": "라켓",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "racket",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/radish",
+  "file": "radish.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "무",
+  "word": "radish",
+  "us": "",
+  "ko": "무",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "radish",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/rainboot",
+  "file": "rainboot.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "장화",
+  "word": "wellington boot",
+  "us": "rain boot",
+  "ko": "장화",
+  "reason": "영국식 우선 · 그림은 한 짝",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/rice",
+  "file": "rice.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(magic-e)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "밥",
+  "word": "rice",
+  "us": "",
+  "ko": "밥",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "rice",
+  "dbRows": 4
+ },
+ {
+  "id": "pics2/robot",
+  "file": "robot.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "로봇",
+  "word": "robot",
+  "us": "",
+  "ko": "로봇",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/ruler",
+  "file": "ruler.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "자",
+  "word": "ruler",
+  "us": "",
+  "ko": "자",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/sandbox",
+  "file": "sandbox.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary",
+   "Town Objects"
+  ],
+  "status": "MATCH",
+  "shown": "모래 놀이터",
+  "word": "sandpit",
+  "us": "sandbox",
+  "ko": "모래 놀이터",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/sandwich",
+  "file": "sandwich.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "샌드위치",
+  "word": "sandwich",
+  "us": "",
+  "ko": "샌드위치",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "sandwich",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/scarf",
+  "file": "scarf.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "목도리",
+  "word": "scarf",
+  "us": "",
+  "ko": "목도리",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "scarf",
+  "dbRows": 2
+ },
+ {
+  "id": "pics2/sccoter",
+  "file": "sccoter.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "킥보드",
+  "word": "scooter",
+  "us": "",
+  "ko": "킥보드",
+  "reason": "파일명 철자·번호 교정(scooter)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/scissors",
+  "file": "scissors.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "가위",
+  "word": "scissors",
+  "us": "",
+  "ko": "가위",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "scissors",
+  "dbRows": 2
+ },
+ {
+  "id": "pics2/seasaw",
+  "file": "seasaw.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary",
+   "Town Objects"
+  ],
+  "status": "MATCH",
+  "shown": "시소",
+  "word": "seesaw",
+  "us": "",
+  "ko": "시소",
+  "reason": "파일명 철자·번호 교정(seesaw)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/shirt",
+  "file": "shirt.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "셔츠",
+  "word": "shirt",
+  "us": "",
+  "ko": "셔츠",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/skateboard",
+  "file": "skateboard.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "스케이트보드",
+  "word": "skateboard",
+  "us": "",
+  "ko": "스케이트보드",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/skirt",
+  "file": "skirt.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "치마",
+  "word": "skirt",
+  "us": "",
+  "ko": "치마",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/slide",
+  "file": "slide.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(magic-e)",
+   "Shop Vocabulary",
+   "Town Objects"
+  ],
+  "status": "MATCH",
+  "shown": "미끄럼틀",
+  "word": "slide",
+  "us": "",
+  "ko": "미끄럼틀",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/sneaker",
+  "file": "sneaker.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "운동화",
+  "word": "trainer",
+  "us": "sneaker",
+  "ko": "운동화",
+  "reason": "영국식 우선 · 그림은 한 짝",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/soccerball",
+  "file": "soccerball.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "축구공",
+  "word": "football",
+  "us": "soccer ball",
+  "ko": "축구공",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/sock",
+  "file": "sock.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(blend/digraph)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "양말",
+  "word": "sock",
+  "us": "",
+  "ko": "양말",
+  "reason": "그림은 한 짝",
+  "dbWord": "sock",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/soup",
+  "file": "soup.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "수프",
+  "word": "soup",
+  "us": "",
+  "ko": "수프",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/spiral",
+  "file": "spiral.png",
+  "cat": "Food Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "아이싱 올린 시나몬 롤",
+  "word": "cinnamon roll",
+  "us": "",
+  "ko": "시나몬 롤",
+  "reason": "spiral은 모양 설명일 뿐 물건 이름이 아님",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/stapler",
+  "file": "stapler.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "스테이플러",
+  "word": "stapler",
+  "us": "",
+  "ko": "스테이플러",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/stone",
+  "file": "stone.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "UNCERTAIN",
+  "shown": "이끼와 꽃이 낀 바위 여러 개",
+  "word": "rocks",
+  "us": "",
+  "ko": "바위",
+  "reason": "stone/rock/rocks 중 결정 필요(여러 개)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/strawberries",
+  "file": "strawberries.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "딸기",
+  "word": "strawberry",
+  "us": "",
+  "ko": "딸기",
+  "reason": "그림은 딸기 한 개",
+  "dbWord": "strawberry",
+  "dbRows": 2
+ },
+ {
+  "id": "pics2/sunflower",
+  "file": "sunflower.png",
+  "cat": "Garden Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary",
+   "Town Objects"
+  ],
+  "status": "MATCH",
+  "shown": "해바라기",
+  "word": "sunflower",
+  "us": "",
+  "ko": "해바라기",
+  "reason": "파일명과 그림 일치",
+  "dbWord": "sunflower",
+  "dbRows": 1
+ },
+ {
+  "id": "pics2/sweater",
+  "file": "sweater.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "스웨터",
+  "word": "jumper",
+  "us": "sweater",
+  "ko": "스웨터",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/sweet potato",
+  "file": "sweet potato.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "고구마",
+  "word": "sweet potato",
+  "us": "",
+  "ko": "고구마",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/t-shirt",
+  "file": "t-shirt.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "티셔츠",
+  "word": "T-shirt",
+  "us": "",
+  "ko": "티셔츠",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/tape",
+  "file": "tape.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(magic-e)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "테이프",
+  "word": "tape",
+  "us": "",
+  "ko": "테이프",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/teapot",
+  "file": "teapot.png",
+  "cat": "Furniture Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "받침 접시 위 차가 담긴 찻잔",
+  "word": "teacup",
+  "us": "",
+  "ko": "찻잔",
+  "reason": "주전자가 아님 — 찻주전자는 teapot1.png",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/teapot1",
+  "file": "teapot1.png",
+  "cat": "Furniture Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "찻주전자",
+  "word": "teapot",
+  "us": "",
+  "ko": "찻주전자",
+  "reason": "파일명 철자·번호 교정(teapot)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/tellescope",
+  "file": "tellescope.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "망원경",
+  "word": "telescope",
+  "us": "",
+  "ko": "망원경",
+  "reason": "파일명 철자·번호 교정(telescope)",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/tomato",
+  "file": "tomato.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "토마토",
+  "word": "tomato",
+  "us": "",
+  "ko": "토마토",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/top",
+  "file": "top.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "팽이",
+  "word": "spinning top",
+  "us": "",
+  "ko": "팽이",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/train",
+  "file": "train.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(vowel team)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "기차",
+  "word": "train",
+  "us": "",
+  "ko": "기차",
+  "reason": "장난감·소형 모형 그림",
+  "dbWord": "train",
+  "dbRows": 4
+ },
+ {
+  "id": "pics2/trousers",
+  "file": "trousers.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "바지",
+  "word": "trousers",
+  "us": "pants",
+  "ko": "바지",
+  "reason": "영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/tube",
+  "file": "tube.png",
+  "cat": "Decoration Shop",
+  "uses": [
+   "Town Objects"
+  ],
+  "status": "MISMATCH",
+  "shown": "빨강·흰색 구명 튜브(밧줄 달림)",
+  "word": "lifebuoy",
+  "us": "life ring",
+  "ko": "구명 튜브",
+  "reason": "물놀이 튜브가 아니라 구명 부표",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/umbrella",
+  "file": "umbrella.png",
+  "cat": "Clothes Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "우산",
+  "word": "umbrella",
+  "us": "",
+  "ko": "우산",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/vase",
+  "file": "vase.png",
+  "cat": "Furniture Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Phonics(magic-e)",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "꽃병",
+  "word": "vase",
+  "us": "",
+  "ko": "꽃병",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/watermelon",
+  "file": "watermelon.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "수박",
+  "word": "watermelon",
+  "us": "",
+  "ko": "수박",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/white brocolli",
+  "file": "white brocolli.png",
+  "cat": "Food Shop",
+  "uses": [],
+  "status": "MISMATCH",
+  "shown": "잎에 싸인 콜리플라워",
+  "word": "cauliflower",
+  "us": "",
+  "ko": "콜리플라워",
+  "reason": "\"white broccoli\"는 단어가 아님",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/yoyo",
+  "file": "yoyo.png",
+  "cat": "Toy Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "요요",
+  "word": "yo-yo",
+  "us": "",
+  "ko": "요요",
+  "reason": "파일명과 그림 일치",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/zucini",
+  "file": "zucini.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "애호박",
+  "word": "courgette",
+  "us": "zucchini",
+  "ko": "애호박",
+  "reason": "파일명 철자·번호 교정(zucchini) · 영국식 우선",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/양배추",
+  "file": "양배추.png",
+  "cat": "Food Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "양배추",
+  "word": "cabbage",
+  "us": "",
+  "ko": "양배추",
+  "reason": "파일명 철자·번호 교정((한글 파일명))",
+  "dbWord": null,
+  "dbRows": 0
+ },
+ {
+  "id": "pics2/현미경",
+  "file": "현미경.png",
+  "cat": "School Shop",
+  "uses": [
+   "Picture Vocabulary",
+   "Shop Vocabulary"
+  ],
+  "status": "MATCH",
+  "shown": "현미경",
+  "word": "microscope",
+  "us": "",
+  "ko": "현미경",
+  "reason": "파일명 철자·번호 교정((한글 파일명))",
+  "dbWord": null,
+  "dbRows": 0
+ }
+]
