@@ -109,7 +109,8 @@ ok(run({}, 2).errors.length === 1, 'validator: v!==1 rejected')
 
 // ---- practice.js (pure)
 const P = await import('../src/utils/pictureWords/practice.js')
-ok(P.STEPS.join() === 'look,listen,repeat,quiz,review', 'practice STEPS order')
+ok(P.STEPS.join() === 'card,end,quiz,review,summary' && P.MODES.join() === 'practice,test', 'practice STEPS (251: one card per word) + MODES')
+ok(P.startStep('practice') === 'card' && P.startStep('test') === 'quiz' && P.startStep('nope') === 'card', 'practice starts on the card, test starts on the picture-only question')
 const pool = H.learnableWords()
 let detOk = true, distinctOk = true, onceOk = true, diffOk = true, notConst = true, shopFirstOk = true
 for (const set of H.shopSets().filter((x) => x.ready)) {
@@ -137,6 +138,8 @@ ok(JSON.stringify(P.buildSession(pool, { size: 6, seed: 1 })) !== JSON.stringify
 ok(P.gradeAnswer({ correctId: 'a' }, 'a') && !P.gradeAnswer({ correctId: 'a' }, 'b'), 'practice: gradeAnswer')
 const RES = [{ id: 'a', correct: true }, { id: 'b', correct: false }, { id: 'c', correct: false }, { id: 'b', correct: true }, { id: 'c', correct: false }, { id: 'c', correct: true }]
 ok(P.reviewQueue(RES).join() === 'b,c' && P.reviewQueue([{ id: 'x', correct: true }]).length === 0, 'practice: reviewQueue first-wrong order')
+ok(P.reviewNext(['b', 'c'], true).join() === 'c' && P.reviewNext(['b', 'c'], false).join() === 'c,b' && P.reviewNext(['b'], true).length === 0 && P.reviewNext(['b'], false).join() === 'b', 'practice: review loop (right leaves, wrong goes to the back, empty = clear)')
+{ const q = ['x', 'y']; const before = q.join(); P.reviewNext(q, false); ok(q.join() === before, 'practice: reviewNext does not mutate') }
 const SU = P.summarise(RES)
 ok(SU.total === 3 && SU.firstTryCorrect === 1 && SU.needsReview.join() === 'b,c', 'practice: summarise')
 
@@ -191,8 +194,33 @@ const beforeAnswer = quizCard.slice(0, quizCard.indexOf('{answered && ('))
 ok(!/WordText|ListenBtn|pwp-word|pwp-ko|pwp-listen|\.ko/.test(beforeAnswer), 'quiz: nothing before the answered-conditional renders word/meaning/listen')
 ok(/data-testid=\{`pwp-opt-\$\{k\}`\}/.test(scr), 'quiz: positional option testids')
 ok(!/hidden|invisible|opacity-0|sr-only|display:\s*none/.test(quizCard), 'quiz: no CSS-hide tricks (conditional mount only)')
-for (const id of ['pwp-root', 'pwp-set-', 'pwp-picture', 'pwp-word', 'pwp-ko', 'pwp-listen', 'pwp-next', 'pwp-prev', 'pwp-rec', 'pwp-said', 'pwp-feedback', 'pwp-review-card', 'pwp-summary', 'pwp-summary-first-try', 'pwp-again', 'pwp-other-set', 'pwp-exit']) ok(scr.includes(id), `screen testid ${id}`)
+for (const id of ['pwp-root', 'pwp-set-', 'pwp-picture', 'pwp-word', 'pwp-ko', 'pwp-listen', 'pwp-next', 'pwp-prev', 'pwp-rec', 'pwp-card', 'pwp-progress', 'pwp-said-mark', 'pwp-end', 'pwp-go-test', 'pwp-skip', 'pwp-start-practice-', 'pwp-start-test-', 'pwp-feedback', 'pwp-review-card', 'pwp-summary', 'pwp-summary-first-try', 'pwp-again', 'pwp-other-set', 'pwp-exit']) ok(scr.includes(id), `screen testid ${id}`)
 ok(scr.includes('useLocalRecorder') && scr.includes('RecorderControls') && /playWordAudio\(null/.test(scr), 'screen reuses recorder + playWordAudio (en-GB)')
+
+// ---- 251차: one card per word (listen + recorder together), test mode, privacy pins
+const cardSrc = scr.slice(scr.indexOf('function PracticeCards'), scr.indexOf('function QuizCard'))
+ok(/<ListenBtn word=\{w\} \/>[\s\S]*<RecorderControls rec=\{rec\} prefix="pwp-rec" labels=\{PICTURE_REC_LABELS\}/.test(cardSrc) && /pwp-picture|<Picture word=\{w\}/.test(cardSrc) && /<WordText word=\{w\}/.test(cardSrc), 'card: picture + word/meaning + listen + recorder mount together on one card')
+ok(/const rec = useLocalRecorder\(\)/.test(cardSrc) && /import useLocalRecorder from '\.\.\/\.\.\/hooks\/useLocalRecorder'/.test(scr), 'card: recorder comes from the shared useLocalRecorder hook')
+ok(/rec\.reset\('RESET'\)/.test(cardSrc) && /discard\.current = true; rec\.stop\(\)/.test(cardSrc), 'card: recorder is reset on every word change (a running recording is stopped, then dropped)')
+ok(!/disabled=\{[^}]*(status|rec\.st)/.test(cardSrc.slice(cardSrc.indexOf('pwp-prev'))), 'card: next/prev are never disabled by recorder state')
+const labels = fs.readFileSync(path.join(ROOT, 'src/components/pictureWords/recLabels.js'), 'utf8')
+ok(['🎤 따라 말하기', '⏹ 녹음 끝내기', '▶️ 내 목소리 듣기', '🔄 다시 말하기', '녹음 완료'].every((t) => labels.includes(t)) && scr.includes('🔊 발음 듣기') && scr.includes('➡️ 다음 단어') && scr.includes('말해 봤어요') && scr.includes('녹음 중… '), 'card: required Korean labels (own labels object in the pictureWords folder)')
+ok(/import \{ RecorderControls \} from '\.\.\/SpeakingPracticeItem'/.test(scr) && !/PARTNER_REC_LABELS|SpeakingPracticeItem'.*REC_LABELS/.test(scr), 'card: shared label constants are not used or edited')
+const pwDirs = [path.join(ROOT, 'src/components/pictureWords'), path.join(ROOT, 'src/utils/pictureWords')]
+const pwSrc = pwDirs.flatMap((d) => walk(d)).filter((f) => /\.(jsx?|mjs)$/.test(f)).map((f) => [rel(f), fs.readFileSync(f, 'utf8')])
+const NOIO = /fetch\(|XMLHttpRequest|WebSocket|sendBeacon|supabase|\/api\/|localStorage|sessionStorage|grantReward|markPronunciationOk|addStars|trackEvent|productEvents/
+ok(pwSrc.every(([, t]) => !NOIO.test(t)), `pictureWords components + utils: no network/storage/reward calls (${pwSrc.filter(([, t]) => NOIO.test(t)).map(([f]) => f).join()})`)
+ok(pwSrc.every(([, t]) => !/MediaRecorder|getUserMedia|AudioContext|new Audio\(|SpeechRecognition|transcribe/.test(t)), 'pictureWords folders do not touch MediaRecorder/getUserMedia/STT directly (only via the shared hook)')
+ok(pwSrc.every(([, t]) => !/점수|score|정확도|발음 평가/i.test(t.replace(/\/\/.*$/gm, ''))), 'pictureWords folders: no score / 점수 UI text')
+const quizBefore = (() => { const q = scr.slice(scr.indexOf('function QuizCard'), scr.indexOf('function Session')); return q.slice(0, q.indexOf('{answered && (')) })()
+ok(!/RecorderControls|useLocalRecorder|PracticeCards|pwp-rec/.test(quizBefore) && !/RecorderControls|useLocalRecorder/.test(scr.slice(scr.indexOf('function QuizCard'), scr.indexOf('function Session'))), 'test question: word/meaning/listen/recorder not mounted before the answer (and the question never mounts a recorder)')
+ok(/<PracticeCards key=\{`\$\{rw\.id\}-\$\{rev\.round\}`\} words=\{\[rw\]\} single/.test(scr), 'review: wrong word gets the practice card (with recorder) again')
+ok(/data-testid=\{`pwp-start-practice-\$\{s\.id\}`\}/.test(scr) && /data-testid=\{`pwp-start-test-\$\{s\.id\}`\}/.test(scr), 'set picker: practice + test buttons per set')
+ok(/shopSets\(\)\.map/.test(scr) && /LEVELS\.filter\(\(l\) => l\.enabled\)\.map/.test(scr) && /wordsForLevel\(l\.id\)/.test(scr), 'sets = shop sets + enabled levels, built from the learnable-only helpers')
+ok(!/pendingWords|PICTURE_WORDS|pictureWords\.json/.test(scr), 'screen never reads pending / raw entries')
+const phon = H.LEVELS.find((l) => l.id === 'phonics').labelKo
+ok(phon === 'Phonics — 짧고 쉬운 단어' && !/소리|순서|단모음|장모음|sound|order/i.test(phon), 'Phonics label carries no sound-order claim')
+ok(H.wordsForLevel('phonics').every((w) => H.learnableWords().some((l) => l.id === w.id)) && H.wordsForLevel('conversation').every((w) => H.learnableWords().some((l) => l.id === w.id)), 'level sets only contain learnable words')
 
 console.log(fail ? `FAIL ${fail}/${n}` : `PASS ${n}/${n} picture-word checks`)
 process.exit(fail ? 1 : 0)
