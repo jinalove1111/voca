@@ -195,7 +195,8 @@ const TOWN_GZIP_BUDGET_BYTES = 15 * 1000
 // ⚠ 2026-10-10 (overnight) 1.7MB → 1.8MB — 문법 과정 34단원 데이터가 lazy GrammarCourseScreen 청크(155.5KB raw / 33.5KB gzip)에 들어가 핵심 경로 raw 합계 1.747MB; main gzip 단언은 불변. 다음 단계: 과정별 데이터 청크 분리(ponytail: 한 청크, 과정 6개로 쪼개면 가능)
 // ⚠ 2026-10-10 (scene v2) 1.8MB → 2.0MB — 문법 34단원 그림 미션 데이터(scenes/*.js 약 140KB)와 Stage/SceneCards가 같은 lazy GrammarCourseScreen 청크(약 310KB raw)에 들어가 합계 1.905MB.
 // 문법 화면을 열 때만 받는 청크이고 메인 청크 gzip ≤135KB 단언은 불변(학생 초기 로드 무게 그대로). ponytail: 한 청크 유지 — 문법 청크가 400KB raw를 넘으면 과정별 scenes 동적 import로 분리.
-const CORE_RAW_BUDGET_BYTES = 2.0 * 1_000_000
+// ⚠ 2026-10-10(244차 하이브리드 월드) 2.0MB → 2.1MB — TownWorld lazy 청크(36.8KB raw / 12.7KB gzip, QA 플래그 paulTownWorld ON일 때만 로드)와 스프라이트/키트 공유 청크가 합계에 포함돼 2.010MB. 메인 청크 gzip ≤135KB 단언은 불변(130.3KB, 학생 초기 로드 무게 그대로).
+const CORE_RAW_BUDGET_BYTES = 2.1 * 1_000_000
 
 // ── 1. 코드 분할 — TownScreen은 별도 청크(lazy), index.html이 직접 참조하지 않음 ──
 section('1. 코드 분할 — TownScreen 지연 로드')
@@ -447,13 +448,15 @@ check(
   envArtPhysicalCount === 35,
   `count=${envArtPhysicalCount}`,
 )
-const envArtLeaksInMain = ENV_ART_KEYS.filter((k) => mainSrc.includes(k))
+// 2026-10-10: 키트의 'sunflower-pot'이 env 키 'flower-pot'을 부분 문자열로 포함해 오탐 — 키 앞에 영문자가 없을 때만 env 키로 본다(가드 의도 동일)
+const hasEnvKey = (src, k) => new RegExp('(?<![a-z])' + k).test(src) // 키는 전부 kebab-case 영문·숫자라 이스케이프 불필요
+const envArtLeaksInMain = ENV_ART_KEYS.filter((k) => hasEnvKey(mainSrc, k))
 check(
   '메인 청크(index-*.js)에 환경 아트 키 문자열 0건(플래그 OFF 누출 가드 — env 레지스트리는 v2/*에서만 import됨)',
   envArtLeaksInMain.length === 0,
   JSON.stringify(envArtLeaksInMain),
 )
-const envArtLeaksInTownV1 = ENV_ART_KEYS.filter((k) => townSrc.includes(k))
+const envArtLeaksInTownV1 = ENV_ART_KEYS.filter((k) => hasEnvKey(townSrc, k))
 check(
   'V1 TownScreen 청크에 환경 아트 키 문자열 0건(V1은 env 레지스트리를 import하지 않음)',
   envArtLeaksInTownV1.length === 0,
@@ -491,8 +494,18 @@ if (check('Proto25DScreen 청크가 별도 파일로 존재(React.lazy 분할, p
   const protoGzip = gzipBytes(protoBuf)
   const PROTO_GZIP_BUDGET_BYTES = 60 * 1000 // SPRITE_CONTRACT §5-6 예산(2026-09-24 실측 ≈11.2KB, 러너웨이만 잡는 넉넉한 여유)
 
-  check(`'paul-idle-front' 문자열이 Proto25DScreen 청크(${protoFile})에 존재(스프라이트가 실제로 이 청크에서 참조됨)`, protoSrc.includes('paul-idle-front'))
-  check(`'paul-sit' 문자열이 Proto25DScreen 청크(${protoFile})에 존재`, protoSrc.includes('paul-sit'))
+  // 2026-10-10(244차) 하이브리드 월드(TownWorld 청크)도 같은 스프라이트 매니페스트를 import한다 → rollup이 매니페스트+PNG를 두 마을 청크가
+  // 공유하는 청크(이름은 첫 모듈 기준, 예: signpost@2x-*.js)로 뺀다. 허용 집합 = Proto25DScreen + TownWorld + "둘 다 import하는" 공유 청크뿐.
+  // 메인/그 외 모든 청크에는 여전히 0건이어야 한다(아래 전수 검사).
+  const importsOf = (src) => new Set([...src.matchAll(/\.\/([\w@.-]+\.js)/g)].map((m) => m[1]))
+  const worldFile = findChunk(/^TownWorld-[\w-]+\.js$/)
+  const worldSrc = worldFile ? readAsset(worldFile) : ''
+  const sharedByBoth = worldFile ? [...importsOf(protoSrc)].filter((f) => importsOf(worldSrc).has(f)) : []
+  const spriteAllowed = new Set([protoFile, ...(worldFile ? [worldFile] : []), ...sharedByBoth])
+  const spriteHolders = jsFiles.filter((f) => /paul-idle-front|paul-sit/.test(readAsset(f)))
+  check(`'paul-idle-front'/'paul-sit' 문자열이 Proto25DScreen 청크 또는 그 청크와 TownWorld가 함께 import하는 공유 청크에 존재(${spriteHolders.join(', ')})`, spriteHolders.some((f) => spriteAllowed.has(f)))
+  check('스프라이트 문자열을 가진 청크는 Proto25DScreen/TownWorld/둘의 공유 청크뿐(그 외 모든 청크 0건)', spriteHolders.length > 0 && spriteHolders.every((f) => spriteAllowed.has(f)), JSON.stringify(spriteHolders))
+  check('TownWorld 청크가 별도 파일로 존재하고 dist/index.html이 프리로드하지 않음(paulTownWorld, QA 전용)', !!worldFile && !readFileSync(path.join(process.cwd(), 'dist/index.html'), 'utf8').includes('TownWorld'))
   check(
     "메인 청크(index-*.js)에 'paul-idle-front'/'paul-sit' 문자열 0건(항상 지연 로드 — 누출 가드)",
     !mainSrc.includes('paul-idle-front') && !mainSrc.includes('paul-sit'),

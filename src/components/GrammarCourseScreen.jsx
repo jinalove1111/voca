@@ -306,7 +306,7 @@ function GrammarUnitView({ unit, units, studentId, from, returnTown, returnKind,
 export default function GrammarCourseScreen({ units, onBack, studentId, initialUnitId = null, returnTo = null, placeId = null, homeLabel = '← 홈', onMissionComplete, onUnitComplete }) {
   const [courseId, setCourseId] = useState(null)
   const [unitId, setUnitId] = useState(initialUnitId)
-  const town = returnTo === 'town' || returnTo === 'village' // 마을(2.5D 또는 문법 마을)에서 들어온 경우 — 덱을 나가면 목록이 아니라 마을로
+  const town = returnTo === 'town' || returnTo === 'village' || returnTo === 'world' // 마을(2.5D 또는 문법 마을)에서 들어온 경우 — 덱을 나가면 목록이 아니라 마을로
   const place = returnTo === 'village' && placeId ? placeById(placeId) : null
   const [fromId, setFromId] = useState(null) // 기초 설명으로 건너온 경우 돌아갈 단원
   const deckStates = useRef(new Map()) // 단원 id → { idx, answers } — 기초 설명을 다녀와도 같은 카드·답이 남는다(화면 상태일 뿐, 저장 없음)

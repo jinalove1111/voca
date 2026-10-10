@@ -363,13 +363,21 @@ section('8. 번들 누출(guarded — dist/assets 존재할 때만) — Paul 스
       return markerNeedles.some((needle) => src.includes(needle))
     }
     const chunksWithMarker = assetFiles.filter((f) => chunkHasSpriteMarker(f))
+    // 2026-10-10(244차) 하이브리드 월드(TownWorld 청크)도 같은 매니페스트를 import → rollup이 스프라이트 모듈을 Proto25DScreen과 TownWorld가
+    // 함께 import하는 공유 청크로 뺀다(파일명은 첫 모듈 기준). 허용 = 정확히 1개의 마커 청크가 Proto25DScreen 이거나, 그 청크가 Proto25DScreen과
+    // TownWorld 둘 다에서 import되는 공유 청크. 메인/V1/V2 0건 가드는 아래에서 그대로 유지.
+    const importsOf = (f) => new Set([...readFileSync(path.join(distAssetsDir, f), 'utf8').matchAll(/\.\/([\w@.-]+\.js)/g)].map((m) => m[1]))
+    const protoChunk = assetFiles.find((f) => /^Proto25DScreen-[\w-]+\.js$/.test(f))
+    const worldChunk = assetFiles.find((f) => /^TownWorld-[\w-]+\.js$/.test(f))
     check(
       "정확히 1개의 JS 청크만 'paul-idle-front' 등 스프라이트 파일명 마커를 포함함",
       chunksWithMarker.length === 1,
       JSON.stringify(chunksWithMarker),
     )
     if (chunksWithMarker.length === 1) {
-      check(`그 청크의 파일명이 'Proto25DScreen'을 포함함(지연 로드 청크 증거)`, chunksWithMarker[0].includes('Proto25DScreen'), chunksWithMarker[0])
+      const holder = chunksWithMarker[0]
+      check(`그 청크는 Proto25DScreen 청크이거나 Proto25DScreen·TownWorld 둘 다 import하는 공유 청크(지연 로드 청크 증거)`,
+        holder.includes('Proto25DScreen') || (!!protoChunk && !!worldChunk && importsOf(protoChunk).has(holder) && importsOf(worldChunk).has(holder)), holder)
     }
     if (mainFile) {
       check(`메인 청크(${mainFile})에 Paul 스프라이트 파일명 마커가 없음`, !chunkHasSpriteMarker(mainFile))
@@ -387,7 +395,7 @@ section('8. 번들 누출(guarded — dist/assets 존재할 때만) — Paul 스
     // 안 된 자산을 트리 셰이킹했는지) 확인.
     if (chunksWithMarker.length === 1) {
       const chunkSrc = readFileSync(path.join(distAssetsDir, chunksWithMarker[0]), 'utf8')
-      check("Proto25DScreen 청크에 'paul-walk-side-b-v2' 문자열 존재(스왑된 프레임이 실제로 이 청크에서 참조됨)", chunkSrc.includes('paul-walk-side-b-v2'))
+      check("마커 청크(Proto25DScreen 또는 그 공유 청크)에 'paul-walk-side-b-v2' 문자열 존재(스왑된 프레임이 실제로 이 청크에서 참조됨)", chunkSrc.includes('paul-walk-side-b-v2'))
     }
     const legacyHashedSideB = allDistAssetFiles.filter((f) => /^paul-walk-side-b-(?!v2)/.test(f))
     check(

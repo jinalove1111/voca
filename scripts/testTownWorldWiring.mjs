@@ -1,0 +1,35 @@
+// 2026-10-10(244차) 하이브리드 월드 배선(App.jsx/features.js/GrammarCourseScreen.jsx) 소스 핀. 네트워크 0, 저장소 0.
+import fs from 'node:fs'
+let fail = 0
+const check = (n, ok) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${n}`); if (!ok) fail++ }
+const app = fs.readFileSync('src/App.jsx', 'utf8')
+const feat = fs.readFileSync('src/config/features.js', 'utf8')
+const gc = fs.readFileSync('src/components/GrammarCourseScreen.jsx', 'utf8')
+const panel = fs.readFileSync('src/components/FeatureManagementPanel.jsx', 'utf8')
+const count = (s, re) => (s.match(re) || []).length
+
+check('플래그 paulTownWorld 기본값 false', /^\s*paulTownWorld:\s*false,/m.test(feat))
+check('관리자 카테고리 목록에 paulTownWorld', /attachment: \[[^\]]*'paulTownWorld'/.test(feat))
+check('FEATURE_DETAILS에 paulTownWorld 설명', /paulTownWorld: \{\s*label:/.test(panel))
+check('townWorldEnabled = 플래그 AND qaTestStudent', /const townWorldEnabled = useSyncExternalStore\([^\n]*isFeatureEnabled\('paulTownWorld'\)[^\n]*&& qaTestStudent/.test(app))
+check('QA_ONLY_SCREENS에 townWorld', /const QA_ONLY_SCREENS = \[[^\]]*'townWorld'/.test(app))
+check('TownWorld는 React.lazy 별도 청크(프리로드/정적 import 없음)', /const TownWorld = React\.lazy\(\(\) => import\('\.\/components\/town\/proto2_5d\/world\/TownWorld'\)\)/.test(app) && !/^import[^\n]*world\/TownWorld/m.test(app))
+check('화면은 townWorldEnabled && screen === townWorld 일 때만 렌더', /\{townWorldEnabled && screen === 'townWorld' && \(/.test(app))
+check("홈 paulTown 버튼: townWorldEnabled가 proto25d보다 우선", /\(townWorldEnabled && t === 'paulTown'\) \? 'townWorld' : \(paulTown2_5dEnabled && t === 'paulTown'\) \? 'proto25d'/.test(app))
+check('canEnterTown에 townWorldEnabled 포함', /canEnterTown=\{[^\n]*townWorldEnabled\}/.test(app))
+check('TownWorld에 세션/완료 유닛/미션/뒤로가기 props 전달', /<TownWorld initial=\{townWorldSession\} onSessionChange=\{setTownWorldSession\} completedUnitIds=\{completedUnitIds\}\s+onOpenMission=\{openWorldMission\}/.test(app))
+check('월드 onBack: 복귀 표식만 비우고 세션 유지', /setWorldReturn\(null\); setScreen\('home'\)/.test(app) && !/setTownWorldSession\(\{ pos: null/.test(app.slice(app.indexOf("screen === 'townWorld'"))))
+check('복귀 헬퍼 learningHome 단 하나', count(app, /const learningHome = /g) === 1 && /worldReturn === 'world' && townWorldEnabled \? 'townWorld' : 'home'/.test(app))
+// 헬퍼를 쓰는 퇴장 지점 7곳(speaking onBack, writing onBack/onHome, unit-load-home, grammar-load-home, grammar onBack, UnitScreen onBack)
+check('learningHome() 사용처 7곳', count(app, /learningHome\(\)/g) === 7)
+check('마을 경유 학습 화면 퇴장 지점에 하드코딩 home 없음', !/unit-load-home[^\n]*setScreen\('home'\)/.test(app) && !/<UnitScreen [^\n]*setScreen\('home'\)/.test(app) && !/onHome=\{\(\) => \{ setWritingLink\(null\); setUnitLink\(null\); setScreen\('home'\)/.test(app))
+check('openWorldMission: grammar → grammarEntry returnTo world + grammarCourses', /kind === 'grammar'\) setGrammarEntry\(\{ unitId: mission\.unitId, returnTo: 'world' \}\)/.test(app) && /mission\.kind === 'grammar' \? 'grammarCourses' : 'unit'/.test(app))
+check("openWorldMission: writing → intent 'writing', 선택 없음", /setUnitIntent\(mission\.kind === 'writing' \? 'writing' : null\)/.test(app) && /mission\.kind === 'course' \? \{ courseId: mission\.courseId \} : null/.test(app))
+check('openWorldMission: worldReturn=world 설정 + pilotUnits 로드', /const openWorldMission = [^\n]*\n\s*setWorldReturn\('world'\)/.test(app) && /openWorldMission[\s\S]{0,700}loadPilotUnits\(\)/.test(app))
+check('GrammarCourseScreen: returnTo world를 town처럼 취급', /returnTo === 'town' \|\| returnTo === 'village' \|\| returnTo === 'world'/.test(gc))
+check('문법 덱 마을 복귀 테스트아이디 유지(gu-back, gd-to-town)', gc.includes('data-testid="gu-back"') && gc.includes('data-testid="gd-to-town"'))
+check('완료 유닛은 기존 completedUnitIds 상태를 그대로 전달', /onUnitComplete=\{\(uid\) => \{ setCompletedUnitIds/.test(app))
+const world = app.slice(app.indexOf('townWorldEnabled = useSyncExternalStore'), app.indexOf('const villageReturn'))
+check('월드 배선에 저장소 키 없음(localStorage/sessionStorage)', !/localStorage|sessionStorage/.test(world))
+check('보상/XP 호출 없음', !/grantReward|rewardEngine|addStars/.test(world))
+if (fail) { console.log(`\n${fail}건 FAIL`); process.exit(1) } else console.log('\nALL PASS')

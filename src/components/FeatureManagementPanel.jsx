@@ -80,6 +80,10 @@ const FEATURE_DETAILS = {
     label: 'Paul Town 2.5D Prototype',
     description: 'Paul Town 2.5D 캐릭터 프로토타입(Stage 1). paulTownV1/paulTownV2와 완전히 독립된 별도 격리 실험(공유 상태/네트워크 없음) — 기본 OFF, 켜져 있어도 다른 Paul Town 화면에는 영향을 주지 않습니다.',
   },
+  paulTownWorld: {
+    label: 'Paul Town Hybrid World',
+    description: '폴타운 하이브리드 2.5D 마을(직접 이동 + 지도) — QA 계정 전용 프로토타입. 기본 OFF, 켜져 있어도 QA 계정이 아니면 아무 영향이 없습니다.',
+  },
 }
 
 // 2026-09-12 Kinney Pilot A 온디바이스 진단 — localStorage에 실제로 무엇이
