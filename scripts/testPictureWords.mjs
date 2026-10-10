@@ -109,7 +109,8 @@ ok(run({}, 2).errors.length === 1, 'validator: v!==1 rejected')
 
 // ---- practice.js (pure)
 const P = await import('../src/utils/pictureWords/practice.js')
-ok(P.STEPS.join() === 'look,listen,repeat,quiz,review', 'practice STEPS order')
+ok(P.STEPS.join() === 'card,end,quiz,review,summary' && P.MODES.join() === 'practice,test', 'practice STEPS (251: one card per word) + MODES')
+ok(P.startStep('practice') === 'card' && P.startStep('test') === 'quiz' && P.startStep('nope') === 'card', 'practice starts on the card, test starts on the picture-only question')
 const pool = H.learnableWords()
 let detOk = true, distinctOk = true, onceOk = true, diffOk = true, notConst = true, shopFirstOk = true
 for (const set of H.shopSets().filter((x) => x.ready)) {
@@ -137,6 +138,8 @@ ok(JSON.stringify(P.buildSession(pool, { size: 6, seed: 1 })) !== JSON.stringify
 ok(P.gradeAnswer({ correctId: 'a' }, 'a') && !P.gradeAnswer({ correctId: 'a' }, 'b'), 'practice: gradeAnswer')
 const RES = [{ id: 'a', correct: true }, { id: 'b', correct: false }, { id: 'c', correct: false }, { id: 'b', correct: true }, { id: 'c', correct: false }, { id: 'c', correct: true }]
 ok(P.reviewQueue(RES).join() === 'b,c' && P.reviewQueue([{ id: 'x', correct: true }]).length === 0, 'practice: reviewQueue first-wrong order')
+ok(P.reviewNext(['b', 'c'], true).join() === 'c' && P.reviewNext(['b', 'c'], false).join() === 'c,b' && P.reviewNext(['b'], true).length === 0 && P.reviewNext(['b'], false).join() === 'b', 'practice: review loop (right leaves, wrong goes to the back, empty = clear)')
+{ const q = ['x', 'y']; const before = q.join(); P.reviewNext(q, false); ok(q.join() === before, 'practice: reviewNext does not mutate') }
 const SU = P.summarise(RES)
 ok(SU.total === 3 && SU.firstTryCorrect === 1 && SU.needsReview.join() === 'b,c', 'practice: summarise')
 

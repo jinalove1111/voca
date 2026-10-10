@@ -1,5 +1,9 @@
 // Picture Vocabulary practice logic. Pure: no React, DOM, storage or network; randomness only from the seed the caller passes.
-export const STEPS = ['look', 'listen', 'repeat', 'quiz', 'review']
+// 251차: practice = ONE card per word (picture + word + meaning + listen + record on the same card) -> 'end' card (game / test / skip).
+// test = picture-only question -> review (practice card again, then the question until right once) -> summary.
+export const STEPS = ['card', 'end', 'quiz', 'review', 'summary']
+export const MODES = ['practice', 'test']
+export const startStep = (mode) => (mode === 'test' ? 'quiz' : 'card')
 
 // mulberry32: small deterministic PRNG
 export function rng(seed) {
@@ -57,6 +61,12 @@ export function reviewQueue(results) {
   const out = []
   for (const x of results) if (!x.correct && !out.includes(x.id)) out.push(x.id)
   return out
+}
+
+// review loop: the head of the queue was answered; right -> leaves the queue, wrong -> goes to the back. Empty queue = all clear.
+export function reviewNext(queue, correct) {
+  const [head, ...rest] = queue
+  return correct ? rest : [...rest, head]
 }
 
 export function summarise(results) {
