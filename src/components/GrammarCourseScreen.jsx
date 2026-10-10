@@ -236,28 +236,32 @@ function GrammarUnitDeck({ unit, units, from, initial, onStateChange, onBasics, 
   const ok = canAdvance(c, a)
   const last = idx === total - 1
   const leave = (toList) => { stopSpeaking(); onBack(toList) }
+  // 360x640 높이 예산: 44(바깥 홈 행)+8+44(제목 행)+4+18(단계 행)+6(바)+12+333(52vh 카드)+12+56(nav) ≈ 537 <= 564(innerHeight-76, 플로팅 위젯 위)
+  const TXT_BACK = 'min-h-[44px] px-2 font-black text-gray-600 btn-press shrink-0'
   const backBtn = from
-    ? <button data-testid="gu-basics-back" onClick={() => leave(false)} className={`${BTN} text-base bg-white card-shadow text-gray-700`}>← 돌아가기</button>
-    : <button data-testid="gu-back" onClick={() => leave(true)} className={`${BTN} text-base bg-white card-shadow text-gray-700`}>← 단원 목록</button>
+    ? <button data-testid="gu-basics-back" onClick={() => leave(false)} className={TXT_BACK}>← 돌아가기</button>
+    : <button data-testid="gu-back" onClick={() => leave(true)} className={TXT_BACK}>← 단원 목록</button>
   return (
     <div data-testid="grammar-unit" data-unit={unit.id} className="space-y-3">
-      <div>{backBtn}</div>
       <div data-testid="gd-root" data-unit={unit.id} data-idx={idx} data-total={total} data-kind={c.kind} className="space-y-3 pb-28">
         <div className="space-y-1">
-          <p className="text-sm font-black text-indigo-700 break-keep">{unit.order}. {unit.titleKo}<ReviewBadge unit={unit} testid="gu-review-status" /></p>
-          <div className="flex items-center justify-between gap-2">
-            <span data-testid="gd-step" className="text-sm font-black text-gray-700">{c.stepKo}</span>
-            <span data-testid="gd-progress" className="text-sm font-black text-gray-700">{idx + 1} / {total}</span>
+          <div className="flex items-center gap-2">
+            {backBtn}
+            <p className="min-w-0 flex-1 text-base font-black text-indigo-700 truncate">{unit.order}. {unit.titleKo}<ReviewBadge unit={unit} testid="gu-review-status" /></p>
           </div>
-          <div className="h-2 rounded-full bg-gray-200 overflow-hidden"><div data-testid="gd-bar" className="h-full bg-indigo-500" style={{ width: `${((idx + 1) / total) * 100}%` }} /></div>
+          <div className="flex items-center justify-between gap-2 text-xs font-bold text-gray-700">
+            <span data-testid="gd-step">{c.stepKo}</span>
+            <span data-testid="gd-progress">{idx + 1} / {total}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden"><div data-testid="gd-bar" className="h-full bg-indigo-500" style={{ width: `${((idx + 1) / total) * 100}%` }} /></div>
         </div>
         <div className="max-w-lg mx-auto">
-          <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="bg-white rounded-3xl p-5 card-shadow max-h-[56vh] sm:max-h-[64vh] overflow-y-auto space-y-3">
+          <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="bg-white rounded-3xl p-5 card-shadow max-h-[52vh] sm:max-h-[64vh] overflow-y-auto space-y-3">
             <h2 ref={headingRef} tabIndex={-1} className="text-lg font-black text-gray-900 break-keep outline-none">{c.title}{sub}</h2>
             <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
           </div>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 mt-3">
           <button data-testid="gd-prev" disabled={idx === 0} onClick={() => go(idx - 1)} className={`${NAV} bg-white card-shadow text-gray-700`}>← 이전</button>
           {!last && <button data-testid="gd-next" disabled={!ok} onClick={() => go(idx + 1)} className={`${NAV} bg-sky-500 text-white`}>다음 →</button>}
         </div>
