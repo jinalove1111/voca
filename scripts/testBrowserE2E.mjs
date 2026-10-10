@@ -138,6 +138,7 @@ async function main() {
       { name: '[town-world]', modulePath: '../tests/e2e/townWorld.spec.mjs' },
       { name: '[grammar-village]', modulePath: '../tests/e2e/grammarVillage.spec.mjs' },
       { name: '[picture-words]', modulePath: '../tests/e2e/pictureWordReview.spec.mjs' },
+      { name: '[picture-practice]', modulePath: '../tests/e2e/pictureWordPractice.spec.mjs' },
     ]
 
     for (const spec of specs) {
