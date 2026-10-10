@@ -18,6 +18,7 @@
 // 다른 spec과 동시에 같은 파일을 건드리지 않게).
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 import { ADMIN_PIN, QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
 
 async function waitUntil(fn, { timeout = 15000, interval = 150 } = {}) {
@@ -109,6 +110,7 @@ async function loginStudent(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page) // 로그인 직후 첫 화면은 학생 홈 — 단어 카드로 대시보드 진입(홈 없으면 no-op)
 }
 
 async function goToPaulTownScreen(page) {

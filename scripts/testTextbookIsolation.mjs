@@ -426,7 +426,7 @@ console.log('\n=== 5. 신규 학생 + 아카이브/테스트 계정(이름 충�
     ['export async function setAssignmentUnit(', ['export async function setPrimaryAssignment(']],
     ['export async function setPrimaryAssignment(', ['export async function setPrimaryTextbook(']],
     ['export async function setPrimaryTextbook(', ['export async function linkTextbookToClass(']],
-    ['export async function getStudentClassAssignments(', ['export async function getStudentEntranceClassIds(']],
+    ['export function getStudentClassAssignments(', ['export async function getStudentEntranceClassIds(']],
   ]
   let allClean = true
   const dirty = []

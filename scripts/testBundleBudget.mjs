@@ -24,7 +24,7 @@
 //   5. 어떤 청크에도 src/assets/town 이미지 URL이 없다(TOWN_ASSETS가 비어
 //      있어 지금은 전부 이모지 폴백 — 이미지가 실제로 번들되면 이 체크가
 //      깨져 "언제 채워졌는지"를 잡아준다).
-//   6. "핵심 시작 경로" JS 원본(raw) 합계 ≤ 1.5MB.
+//   6. "핵심 시작 경로" JS 원본(raw) 합계 ≤ 1.5MB(2026-10-07부터 1.6MB, 2026-10-10 1.7MB, 같은 날 overnight 1.8MB — CORE_RAW_BUDGET_BYTES 주석).
 //
 // ⚠ 스코프를 좁힌 결정 1건 — 정직하게 기록한다: 6번은 문자 그대로
 // "dist/assets/*.js 전체 원본 합계"로 읽으면 안 된다. 실측(2026-09-11)
@@ -44,6 +44,31 @@
 // 있다는 코디네이터 피드백에 따라 1.5MB로 상향. 러너웨이(수백 KB 단위
 // 급증)는 여전히 잡되 정상 변동엔 훨씬 넉넉한 여유를 둔다. gzip 예산
 // (메인 ≤135KB/TownScreen ≤15KB)과 다른 단언은 전부 그대로).
+//
+// ⚠ 2026-09-23 수정 — "메인 청크" 판정 방식을 파일명 패턴 매칭에서
+// dist/index.html 기반 실제 엔트리 참조로 바꿨다. 근본 원인: Stage 4
+// (feat/town proto commit 8132dd1 계열)부터 src/assets/town/index.js(마을
+// 에셋 레지스트리)가 지연 로드되는 Proto25DScreen 청크에서도 import되면서,
+// Rollup이 그 모듈을 전용 공유 청크로 분리해 이름을 "index-<hash>.js"로
+// 붙였다 — 즉 실제 엔트리 청크와 이름 패턴이 동일한 "index-*.js" 파일이
+// dist/assets에 2개 존재하게 됐다. 기존 findChunk(/^index-[\w-]+\.js$/)는
+// "여러 개 매치되면 가장 짧은 이름을 쓴다"는 임의 동률 규칙이라, 두 후보의
+// 상대적 이름 정렬 순서가 OS/파일시스템의 readdirSync 열거 순서에 의존했다
+// (Windows NTFS와 Linux ext4가 같은 순서를 보장하지 않음) — 로컬(Windows)
+// 에서는 우연히 실제 엔트리(index-B-ciJRTO.js)가 먼저 나와 통과했지만,
+// Linux CI(run 35792210920)에서는 에셋 레지스트리 청크(index-BK1aVjiB.js,
+// 24KB, TownScreen 참조도 paulTownV1 리터럴도 없음)가 선택되어 "메인 청크에
+// TownScreen 청크 파일명 문자열 존재"·"메인 청크에 paulTownV1:!1 리터럴
+// 존재" 두 단언이 FAIL했다. 진짜 불변식은 "메인 청크 = dist/index.html이
+// <script type="module"> 정적 태그로 직접 참조하는 그 파일"이므로, 이제
+// index.html을 파싱해 그 엔트리 파일명을 직접 얻는다(파일명 패턴 매칭이 아니라
+// 산출물의 실제 배선을 읽음). index.html에서 못 찾으면(예상 밖 산출물 구조)
+// 기존 이름 패턴 방식으로 안전하게 폴백하되, 그 사실을 경고로 콘솔에
+// 남긴다 — 폴백 시에도 "신선한 체크아웃(dist 자체 부재)"는 여전히
+// 0번(위쪽)에서 이미 SKIP 처리되므로 무관하다. TownScreen 청크 판정(접두어
+// "TownScreen-")과 나머지 모든 단언(예산/플래그/에셋 인벤토리)은 이 불변식
+// 변경과 무관해 손대지 않았다 — 아래에서 각 단언을 현재 dist에 대해 그대로
+// 재확인했다(모두 그 진짜 엔트리를 대상으로 여전히 성립).
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
@@ -97,16 +122,42 @@ function findChunk(pattern) {
   return matches.sort((a, b) => a.length - b.length)[0]
 }
 
-const mainFile = findChunk(/^index-[\w-]+\.js$/)
+// index.html을 먼저 읽는다 — 메인 청크 판정이 이제 이 파일의 실제 <script
+// type="module"> 엔트리 참조에 의존하기 때문에 findChunk보다 먼저 필요하다.
+let indexHtml = ''
+const indexHtmlPath = path.join(DIST, 'index.html')
+if (existsSync(indexHtmlPath)) indexHtml = readFileSync(indexHtmlPath, 'utf8')
+
+// 메인 청크 = dist/index.html이 <script type="module" ... src="/assets/…">로
+// 직접 참조하는 그 파일(진짜 엔트리, 산출물의 실제 배선). 파일명 패턴이
+// 아니라 이 배선을 읽어 판정하므로, 같은 "index-*.js" 이름 패턴을 가진
+// 무관한 공유 청크(예: 에셋 레지스트리가 분리돼 나온 청크)가 있어도 흔들리지
+// 않는다.
+function resolveMainFileFromIndexHtml(html, files) {
+  if (!html) return null
+  const m = html.match(/<script[^>]*\btype=["']module["'][^>]*\bsrc=["']\/assets\/([^"']+\.js)["']/)
+  if (!m) return null
+  const name = m[1]
+  return files.includes(name) ? name : null
+}
+
+let mainFile = resolveMainFileFromIndexHtml(indexHtml, assetFiles)
+if (!mainFile) {
+  // 폴백: index.html에서 못 찾은 경우(예상 밖 산출물 구조)만 기존 이름
+  // 패턴 방식을 쓴다 — "신선한 체크아웃"은 이미 위 0번에서 SKIP 처리됐으므로
+  // 여기 도달했다는 것 자체가 이례적인 상황이라는 신호. 조용히 넘어가지
+  // 않고 경고를 남긴다.
+  const fallback = findChunk(/^index-[\w-]+\.js$/)
+  if (fallback) {
+    console.log(`  경고  dist/index.html에서 메인 청크 엔트리를 찾지 못해 이름 패턴 폴백 사용(${fallback}) — index.html 구조 변경 여부 확인 필요`)
+  }
+  mainFile = fallback
+}
 const townFile = findChunk(/^TownScreen-[\w-]+\.js$/)
 
 if (!mainFile || !townFile) {
   skip(`필요한 청크를 찾지 못함(main=${mainFile || 'NONE'}, TownScreen=${townFile || 'NONE'}) — 빌드 산출물 구조가 예상과 다름(청크 분할 변경 등). 신선한 체크아웃 시나리오는 아니므로 회귀일 수 있으나, 이 스크립트는 dist 부재/불완전 케이스 전부를 안전하게 SKIP한다(과제 지시: "dist/assets가 없으면 SKIP").`)
 }
-
-let indexHtml = ''
-const indexHtmlPath = path.join(DIST, 'index.html')
-if (existsSync(indexHtmlPath)) indexHtml = readFileSync(indexHtmlPath, 'utf8')
 
 function readAsset(name) {
   return readFileSync(path.join(ASSETS_DIR, name), 'utf8')
@@ -134,7 +185,17 @@ const townGzip = gzipBytes(townBuf)
 
 const MAIN_GZIP_BUDGET_BYTES = 135 * 1000
 const TOWN_GZIP_BUDGET_BYTES = 15 * 1000
-const CORE_RAW_BUDGET_BYTES = 1.5 * 1_000_000
+// ⚠ 2026-10-07(222차) 예산 1.5MB → 1.6MB 상향 — 정직하게 기록: 2026-09-11 실측 1.168MB 이후 Speaking(이야기 10화·한 문장
+// 흐름·주제 탐색·상대 역할 녹음)과 Town 변경이 정상 범위로 누적돼 1.496MB까지 찼고, Writing 첫 버전(WritingPractice 9.9KB +
+// writingItems/writingDrafts ≈4KB, 전부 lazy 청크 — 학생 초기 로드에 포함되지 않음)이 더해져 1.509MB가 됐다. 이 합계는 pdf/xlsx만
+// 제외한 "모든 lazy 청크 포함" 합계라 초기 로드 무게가 아니라 코드 총량의 러너웨이 감시용이다(메인 청크 gzip ≤135KB 단언은
+// 그대로 통과). 10KB 단위의 정상 증가로 가짜 FAIL이 되지 않도록 6.7% 여유로 올린다. 수백 KB 급증은 여전히 잡힌다.
+// ⚠ 2026-10-10 예산 1.6MB → 1.7MB 상향 — 문법 과정 화면(GrammarCourseScreen lazy 청크 약 17KB)으로 합계가 1.606MB가 됐고, 곧 들어올 문법 단원 데이터
+// (같은 lazy 청크, 수십 KB)를 감안한 정상 증가다. 메인 청크 gzip 단언은 그대로 통과(학생 초기 로드 무게 불변). 수백 KB 급증은 여전히 잡힌다.
+// ⚠ 2026-10-10 (overnight) 1.7MB → 1.8MB — 문법 과정 34단원 데이터가 lazy GrammarCourseScreen 청크(155.5KB raw / 33.5KB gzip)에 들어가 핵심 경로 raw 합계 1.747MB; main gzip 단언은 불변. 다음 단계: 과정별 데이터 청크 분리(ponytail: 한 청크, 과정 6개로 쪼개면 가능)
+// ⚠ 2026-10-10 (scene v2) 1.8MB → 2.0MB — 문법 34단원 그림 미션 데이터(scenes/*.js 약 140KB)와 Stage/SceneCards가 같은 lazy GrammarCourseScreen 청크(약 310KB raw)에 들어가 합계 1.905MB.
+// 문법 화면을 열 때만 받는 청크이고 메인 청크 gzip ≤135KB 단언은 불변(학생 초기 로드 무게 그대로). ponytail: 한 청크 유지 — 문법 청크가 400KB raw를 넘으면 과정별 scenes 동적 import로 분리.
+const CORE_RAW_BUDGET_BYTES = 2.0 * 1_000_000
 
 // ── 1. 코드 분할 — TownScreen은 별도 청크(lazy), index.html이 직접 참조하지 않음 ──
 section('1. 코드 분할 — TownScreen 지연 로드')
@@ -196,7 +257,8 @@ section('4. 마을 이미지 에셋 — Batch 1+2+3 21개만 번들, 그 외 0�
 const TOWN_ASSET_URL_RE = /assets\/town\//
 check('메인 청크에 assets/town/ 경로 문자열 0건(Vite가 소스 폴더 구조를 산출물 URL에 남기지 않음)', !TOWN_ASSET_URL_RE.test(mainSrc))
 check('TownScreen 청크에 assets/town/ 경로 문자열 0건(위와 동일 이유)', !TOWN_ASSET_URL_RE.test(townSrc))
-const KNOWN_SAFE_IMAGE_PREFIX = /^(paul_|favicon\.)/
+// 2026-10-05 Speaking 2화 미아 캐릭터(src/assets/speaking/mia_*.png, KeySentenceFlow lazy 청크 전용) — paul_ 마스코트와 같은 취급
+const KNOWN_SAFE_IMAGE_PREFIX = /^(paul_|mia_|favicon\.)/
 // 2026-09-17 갱신(P0 최종 아트 7종 드롭인, PR #60) — 전제가 다시 바뀌었다:
 // (a) nature/flower-garden·decorations/bench가 TOWN_ASSETS에 신규 등록돼
 // 23개 키, (b) 최종 아트로 교체된 red-post-box.webp(8644B)·street-lamp.webp
@@ -229,11 +291,71 @@ const EXPECTED_ENV_ARTWORK_BASENAMES = [
 function isExpectedEnvArtwork(f) {
   return EXPECTED_ENV_ARTWORK_BASENAMES.some((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)
 }
+// 2026-09-18(작업 지시서 STEP 4) — src/assets/town/env/index.js(TOWN_ENV_ASSETS,
+// 위 EXPECTED_ENV_ARTWORK_BASENAMES(2026-09-15b, TownGrid.jsx 전용 6개)와는
+// 완전히 별개 레지스트리, scripts/testTownEnvAssets.mjs가 그 소스 자체를
+// 이미 검증한다)의 35개 키 — TownGroundLayer.jsx/TownEnvImage.jsx가 처음
+// import해 빌드 그래프에 들어갔다. 아래 4b 섹션이 이 35개의 물리 파일
+// 인벤토리/청크 누출을 자세히 검증하고, 여기서는 "이 35개도 stray가
+// 아니다"만 알린다(같은 매칭 로직을 두 섹션이 공유).
+const ENV_ART_KEYS = [
+  'sky-hills', 'grass-base', 'grass-patch-light', 'grass-patch-dark', 'grass-patch-worn',
+  'wildflower-scatter', 'path-straight', 'path-straight-narrow', 'path-curve-gentle',
+  'path-curve-strong', 'path-fork', 'path-junction', 'path-end', 'path-end-entrance',
+  'fence-straight', 'fence-straight-short', 'fence-corner', 'fence-gate',
+  'hedge-straight', 'hedge-straight-tall', 'hedge-end',
+  'shrub-round', 'shrub-round-small', 'shrub-wide',
+  'flower-cluster-pink', 'flower-cluster-yellow', 'flower-cluster-mixed', 'flower-bed-border',
+  'flower-pot', 'flower-pot-tall',
+  'river-straight', 'river-bend', 'river-highlight', 'riverbank-reeds', 'riverbank-reeds-stones',
+]
+// basename 접두어 충돌(예: path-straight vs path-straight-narrow, Vite 해시
+// 자체에 '-'/'_' 둘 다 나올 수 있어(실측: path-curve-gentle-DsQ3-r7b.webp)
+// "접미부에 하이픈 없음"을 가정한 정규식만으로는 못 가른다, 실측으로 확인
+// 했다) — "가장 긴(가장 구체적인) 키가 이긴다"로 명확히 가른다.
+function matchEnvArtKey(filename) {
+  if (!filename.endsWith('.webp')) return null
+  let best = null
+  for (const key of ENV_ART_KEYS) {
+    if (filename.startsWith(`${key}-`) && (!best || key.length > best.length)) best = key
+  }
+  return best
+}
+// 2026-09-24(Phase 6C) — Paul 캐릭터 스프라이트 PNG 16개(8프레임 x 1x/2x,
+// src/assets/town/character/, characterSpriteManifest.default.js가
+// Proto25DScreen.jsx의 spriteManifest 기본값으로 배선)가 처음으로 빌드
+// 그래프에 들어와 dist/assets에 나타났다. 이 파일들은 §4가 검사하는
+// townCatalog.js 구매 카탈로그(EXPECTED_BATCH1_IMAGE_BASENAMES)나
+// TownGrid.jsx 전용 환경/장식(EXPECTED_ENV_ARTWORK_BASENAMES)이나 V2 환경
+// 아트(ENV_ART_KEYS)와는 완전히 다른 별개 레지스트리라 그 목록들에 섞지
+// 않고 독립된 매칭 함수로 strayImages 제외 집합에만 등록한다 — 정확한
+// 개수/청크 격리/gzip 예산의 실제 검증은 아래 4c 섹션이 전담한다(중복
+// 검증 없음, scripts/testPaulSpriteAssets.mjs가 이미 검증한 소스단
+// 배선/픽셀 계약은 여기서 재구현하지 않는다).
+// 2026-09-25(paul-walk-side-b-v2 원-프레임 스왑) — walk-side-b 프레임 하나가
+// 'paul-walk-side-b-v2.png'로 교체됐다(install2 세션, 이 세션은 소유하지
+// 않음) — 그 해시드 산출물 파일명(예: paul-walk-side-b-v2-<hash>.png)도
+// 여전히 "정상 Paul 스프라이트"로 인식하도록 선택적 `-v숫자` 접미부를
+// 허용한다(다른 7개 프레임의 정규식/개수 계약은 그대로 — CLAUDE.md 규칙 3,
+// 재구현 없음).
+const PAUL_SPRITE_FILE_RE = /^paul-(idle-front|walk-(front|back|side)-[ab](-v\d+)?|sit)(@2x)?-[\w-]+\.png$/
+function isPaulSpriteAsset(filename) {
+  return PAUL_SPRITE_FILE_RE.test(filename)
+}
+// 학생 모자 8종 PNG(src/assets/hats, 256x256, 각 ~30KB) — scripts/testHatImages.mjs가 개수/크기를 검증한다.
+const HAT_IMAGE_FILE_RE = /^paul-hat-(pink|red|orange|green|blue|navy|purple|gold)-[\w-]+\.png$/
+// 2026-10-10 마을 미션 키트 아트(src/assets/town/kit/townMission.js, Proto25DScreen 청크 전용): signpost·cookie-stand 1x/@2x 4개.
+const TOWN_MISSION_KIT_FILE_RE = /^(signpost|cookie-stand)(@2x)?-[\w-]+\.webp$/
+// 2026-10-10 공원 미션 키트 아트(src/utils/grammar/parkArt.js, GrammarCourseScreen 청크 전용): backdrop·cookie-stand·cookie-sit·tree·bench·sunflower-pot 1x/@2x 12개.
+const PARK_KIT_FILE_RE = /^(park-backdrop|cookie-stand|cookie-sit|tree|bench|sunflower-pot)(@2x)?-[\w-]+\.webp$/
+// 2026-10-10 문법 마을 키트 아트(src/utils/grammar/villageArt.js, GrammarVillage 청크 전용): manifest의 모든 target 1x/@2x가 별도 파일(인라인 아님)로 나온다 — 파일명은 manifest 기준으로 허용.
+const VILLAGE_KIT_BASENAMES = Object.keys(JSON.parse(readFileSync(path.join(process.cwd(), 'src/assets/town/kit/manifest.json'), 'utf8')).targets).map((t) => t.split('/').pop().replace(/[^\w-]/g, ''))
+const VILLAGE_KIT_FILE_RE = new RegExp(String.raw`^(${VILLAGE_KIT_BASENAMES.join('|')})(@2x)?-[\w-]+\.webp$`)
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f) && !VILLAGE_KIT_FILE_RE.test(f),
 )
 check(
-  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
 )
@@ -261,7 +383,8 @@ check(
 )
 check(
   'owl은 물리 파일로 dist/assets에 존재하지 않음(3.8KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('owl-') || f === 'owl.webp'),
+  // 마을 키트에도 animals/owl이 있어(1x+@2x 별도 파일) 그 쌍이 있으면 'owl-' 1x 파일은 키트 것이다 — 카탈로그 owl의 인라인 여부는 아래 data:image 계약(5건)이 따로 지킨다.
+  assetFiles.some((f) => f.startsWith('owl@2x-')) || !assetFiles.some((f) => f.startsWith('owl-') || f === 'owl.webp'),
 )
 check(
   'puppy는 물리 파일로 dist/assets에 존재하지 않음(2.7KB < 4KB 인라인 한도, 의도된 Vite 동작)',
@@ -291,6 +414,109 @@ check(
   `count=${totalInlinedWebpOccurrences}`,
 )
 
+// ── 4b. V2 환경(environment) 아트 — 35개 키 인벤토리 + 메인/V1 청크 누출 가드 ──
+// 2026-09-18(작업 지시서 STEP 4) — src/assets/town/env/index.js
+// (TOWN_ENV_ASSETS, 위 섹션 4의 카탈로그 물리 파일 18개/환경-장식
+// 아트워크 6개와는 완전히 별개 레지스트리, scripts/testTownEnvAssets.mjs가
+// 그 소스 자체를 이미 검증한다)가 처음으로 실제 빌드 그래프에 들어간
+// 시점 — TownGroundLayer.jsx/TownEnvImage.jsx가 이 레지스트리를
+// import한다. 이 섹션은 그 35개 키가 실제 산출물에 정확히 반영됐는지
+// (물리 파일 개수, 실측 전부 4KB 이상이라 인라인 후보가 아님)와,
+// paulTownV2 플래그가 OFF인 배포본에서 메인 청크/V1 TownScreen 청크가
+// 이 자산을 전혀 요청하지 않는지(누출 가드)를 확인한다.
+section('4b. V2 환경 아트(35개 키) — 물리 파일 인벤토리 + 메인/V1 청크 누출 가드')
+check('환경 아트 키가 정확히 35개(manifest staged 개수와 동일 — scripts/testTownEnvAssets.mjs가 그 원천을 검증)', ENV_ART_KEYS.length === 35)
+
+// ENV_ART_KEYS/matchEnvArtKey는 위 섹션 4(strayImages 계산)와 공유(중복
+// 정의 없음, 같은 접두어-충돌 매칭 로직을 여기서도 그대로 재사용).
+const envArtFilesByKey = {}
+for (const f of assetFiles) {
+  const key = matchEnvArtKey(f)
+  if (!key) continue
+  envArtFilesByKey[key] = envArtFilesByKey[key] || []
+  envArtFilesByKey[key].push(f)
+}
+const envArtPhysicalCount = Object.values(envArtFilesByKey).reduce((sum, arr) => sum + arr.length, 0)
+check(
+  '환경 아트 35개 키가 전부 정확히 물리 파일 1개씩(실측 전부 4KB 이상이라 인라인 후보가 아님)',
+  ENV_ART_KEYS.every((k) => (envArtFilesByKey[k] || []).length === 1),
+  JSON.stringify(Object.fromEntries(ENV_ART_KEYS.map((k) => [k, (envArtFilesByKey[k] || []).length]))),
+)
+check(
+  '환경 아트 물리 파일 총 개수 === 35(그 외 미분류/중복 매치 없음)',
+  envArtPhysicalCount === 35,
+  `count=${envArtPhysicalCount}`,
+)
+const envArtLeaksInMain = ENV_ART_KEYS.filter((k) => mainSrc.includes(k))
+check(
+  '메인 청크(index-*.js)에 환경 아트 키 문자열 0건(플래그 OFF 누출 가드 — env 레지스트리는 v2/*에서만 import됨)',
+  envArtLeaksInMain.length === 0,
+  JSON.stringify(envArtLeaksInMain),
+)
+const envArtLeaksInTownV1 = ENV_ART_KEYS.filter((k) => townSrc.includes(k))
+check(
+  'V1 TownScreen 청크에 환경 아트 키 문자열 0건(V1은 env 레지스트리를 import하지 않음)',
+  envArtLeaksInTownV1.length === 0,
+  JSON.stringify(envArtLeaksInTownV1),
+)
+
+// ── 4c. Paul 캐릭터 스프라이트(2026-09-24, Phase 6C) — 16개 물리 파일
+// 인벤토리 + 메인/V1/V2 청크 누출 가드 ────────────────────────────────────
+// Phase 6C — install 세션이 src/assets/town/character/에 Paul 캐릭터
+// 스프라이트 PNG 16장(8프레임: idle-front/walk-front-a·b/walk-back-a·b/
+// walk-side-a·b/sit, 각 1x+@2x)을 드롭하고 characterSpriteManifest.default.js
+// (PAUL_SPRITE_MANIFEST)가 Proto25DScreen.jsx의 spriteManifest 기본값으로
+// 배선됐다(그 소스단 계약/픽셀 실측은 scripts/testPaulSpriteAssets.mjs가
+// 이미 전담 검증 — 여기서는 재구현하지 않는다, CLAUDE.md 규칙 3). 이
+// 섹션은 그 결과가 실제 빌드 산출물에 기대한 모양으로만 반영됐는지 —
+// 정확히 16개 물리 파일 + Proto25DScreen 청크(지연 로드) 하나에만 격리 +
+// gzip 예산 — 를 확인한다. Proto25DScreen 청크가 §1(TownScreen)과 마찬가지로
+// dist/index.html이 직접 참조하지 않는 지연 로드 청크라는 사실 자체는
+// scripts/testPaulSpriteAssets.mjs §8(번들 누출 가드)이 이미 확인했으므로
+// (그 스위트가 유일한 검증 경로) 여기서 다시 확인하지 않고, 이 파일
+// 고유의 관심사(gzip 예산 + 이 파일이 이미 읽어둔 main/townSrc 대비 재확인)
+// 만 추가한다.
+section('4c. Paul 캐릭터 스프라이트(2026-09-24, Phase 6C) — 16개 물리 파일 인벤토리 + 메인/V1/V2 청크 누출 가드')
+const paulSpriteFiles = assetFiles.filter(isPaulSpriteAsset)
+check(
+  'Paul 캐릭터 스프라이트 물리 파일이 정확히 16개(8프레임 x 1x/2x)',
+  paulSpriteFiles.length === 16,
+  `count=${paulSpriteFiles.length}, files=${JSON.stringify(paulSpriteFiles)}`,
+)
+
+const protoFile = findChunk(/^Proto25DScreen-[\w-]+\.js$/)
+if (check('Proto25DScreen 청크가 별도 파일로 존재(React.lazy 분할, paulTown2_5d 프로토타입)', !!protoFile)) {
+  const protoBuf = readAssetBuf(protoFile)
+  const protoSrc = protoBuf.toString('utf8')
+  const protoGzip = gzipBytes(protoBuf)
+  const PROTO_GZIP_BUDGET_BYTES = 60 * 1000 // SPRITE_CONTRACT §5-6 예산(2026-09-24 실측 ≈11.2KB, 러너웨이만 잡는 넉넉한 여유)
+
+  check(`'paul-idle-front' 문자열이 Proto25DScreen 청크(${protoFile})에 존재(스프라이트가 실제로 이 청크에서 참조됨)`, protoSrc.includes('paul-idle-front'))
+  check(`'paul-sit' 문자열이 Proto25DScreen 청크(${protoFile})에 존재`, protoSrc.includes('paul-sit'))
+  check(
+    "메인 청크(index-*.js)에 'paul-idle-front'/'paul-sit' 문자열 0건(항상 지연 로드 — 누출 가드)",
+    !mainSrc.includes('paul-idle-front') && !mainSrc.includes('paul-sit'),
+  )
+  check(
+    "V1 TownScreen 청크에 'paul-idle-front'/'paul-sit' 문자열 0건(V1은 Proto25DScreen을 import하지 않는 완전 격리 실험)",
+    !townSrc.includes('paul-idle-front') && !townSrc.includes('paul-sit'),
+  )
+  const townV2File = findChunk(/^TownScreenV2-[\w-]+\.js$/)
+  if (townV2File) {
+    const townV2Src = readAsset(townV2File)
+    check(
+      `V2 TownScreenV2 청크(${townV2File})에 'paul-idle-front'/'paul-sit' 문자열 0건(V2도 Proto25DScreen을 import하지 않음)`,
+      !townV2Src.includes('paul-idle-front') && !townV2Src.includes('paul-sit'),
+    )
+  } else {
+    console.log('  정보  TownScreenV2 청크를 찾지 못함(산출물 구조가 예상과 다름) — 이 청크 대상 누출 가드만 건너뜀(다른 단언과 무관, 신선한 체크아웃이 아니므로 전체 SKIP은 하지 않음).')
+  }
+
+  check(`Proto25DScreen 청크 gzip ≤ 60KB (실측 ${fmtKB(protoGzip)}KB)`, protoGzip <= PROTO_GZIP_BUDGET_BYTES)
+} else {
+  console.log('  정보  Proto25DScreen 청크 부재로 이 섹션의 나머지 청크-격리/gzip 단언을 건너뜀(바로 위 존재 여부 FAIL이 이미 문제를 보고함).')
+}
+
 // ── 5. 전체 JS 원본(raw) 크기 예산(핵심 시작 경로만, 스코프는 파일 헤더 참고) ──
 section('5. JS 원본(raw) 크기 — 핵심 시작 경로')
 // 관리자 전용 대용량 서드파티(성적표 PDF/엑셀 내보내기, Town 도입 이전부터
@@ -307,7 +533,7 @@ for (const f of jsFiles) {
   sizeRows.push({ file: f, size, excluded })
 }
 check(
-  `핵심 시작 경로 JS 원본 합계 ≤ 1.5MB (실측 ${fmtMB(coreRaw)}MB, 관리자 전용 pdf/pdf.worker/xlsx 제외)`,
+  `핵심 시작 경로 JS 원본 합계 ≤ 2.0MB (실측 ${fmtMB(coreRaw)}MB, 관리자 전용 pdf/pdf.worker/xlsx 제외)`,
   coreRaw <= CORE_RAW_BUDGET_BYTES,
 )
 console.log(`  정보  dist/assets/*.js 전체 원본 합계(제외 없음) = ${fmtMB(totalRaw)}MB — pdf.worker/pdf/xlsx 제외분 = ${fmtMB(totalRaw - coreRaw)}MB`)

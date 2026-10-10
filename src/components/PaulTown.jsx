@@ -17,6 +17,7 @@
 import { computeWorldState, gardenPlots } from '../utils/attachment/worldProgress'
 import { retroWelcome, townPlacesState, paulHomeDeco } from '../utils/attachment/paulTown'
 import { HAT_CATALOG, HAT_COLOR_STYLE, hatById, hatTintStyle } from '../utils/attachment/hatSystem'
+import { hatImageFor, HAT_IMG_CLASS } from '../assets/hats'
 import { isFeatureEnabled } from '../config/features'
 import { TOWN_SHOP_ITEMS, shopItemState, purchasedDeco, formatDollars } from '../utils/townShop'
 
@@ -143,7 +144,9 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
                       isEquipped ? 'border-purple-400 bg-purple-50' : 'border-transparent bg-gray-50 hover:border-purple-200'
                     }`}
                   >
-                    <span style={hatTintStyle(style?.colorHex)}>🎩</span>
+                    {hatImageFor(h.hatId)
+                      ? <img data-testid={`town-hat-rack-img-${h.hatId}`} src={hatImageFor(h.hatId)} alt={hat.name} draggable={false} className={HAT_IMG_CLASS} />
+                      : <span style={hatTintStyle(style?.colorHex)}>🎩</span>}
                   </button>
                 )
               })}

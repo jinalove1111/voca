@@ -152,3 +152,9 @@ MVP는 DB 접근 0 — SQL 실행 여부와 무관하게 완전 동작하고, �
 - 완료 요약 Supabase 저장(writing_submissions) + 관리자 통계 화면
 - Guided(문장 3~5개)/Free 모드, AI 검사 2단계(§7 결정 선행)
 - 규칙 소사전 확장(반 단어 데이터 기반 자동 확장 검토)
+
+## 10. 2026-10-07(222차) — Writing 첫 버전(주제별 문장 쓰기)은 별도 설계 문서로 (append-only)
+
+운영자 지시로 "말하기에서 배운 표현을 상황 보고 직접 쓰고 예시와 비교해 고치는" 첫 버전을 QA 계정 전용으로 구현했다. 설계·문항·저장·평가 한계·근거는
+`docs/design/WRITING_PRACTICE_2026-10-07.md`. 이 문서의 MVP(오늘 단어 자유 문장 + 규칙 검사기, `WritingCoach.jsx`, `writingSession/ruleChecks`)는 삭제·수정하지 않았고
+비QA 경로(`App.jsx` `!qaTestStudent && screen === 'writingCoach'`, 플래그 OFF)에 그대로 남아 있다. 두 구현의 통합(규칙 검사기를 비교 단계의 선택 도움으로 쓸지)은 운영자 결정 대기.

@@ -1,0 +1,128 @@
+{
+  "generatedFrom": [
+    "\ubaa8\uc7901.png",
+    "\ubaa8\uc7902.png",
+    "\ubaa8\uc7903.png",
+    "\ubaa8\uc7904.png",
+    "\ubaa8\uc7905.png",
+    "\ubaa8\uc7906.png",
+    "\ubaa8\uc7907.png",
+    "\ubaa8\uc7908.png"
+  ],
+  "size": 256,
+  "marginPct": 6,
+  "hats": {
+    "navy": {
+      "file": "paul-hat-navy.png",
+      "bytes": 29750,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        11,
+        44,
+        245,
+        212
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.4139
+    },
+    "green": {
+      "file": "paul-hat-green.png",
+      "bytes": 33272,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        13,
+        48,
+        243,
+        208
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.4048
+    },
+    "pink": {
+      "file": "paul-hat-pink.png",
+      "bytes": 33852,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        13,
+        45,
+        243,
+        210
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.4031
+    },
+    "gold": {
+      "file": "paul-hat-gold.png",
+      "bytes": 33997,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        13,
+        48,
+        243,
+        208
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.4035
+    },
+    "blue": {
+      "file": "paul-hat-blue.png",
+      "bytes": 32631,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        13,
+        45,
+        243,
+        211
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.4177
+    },
+    "purple": {
+      "file": "paul-hat-purple.png",
+      "bytes": 30693,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        13,
+        48,
+        243,
+        210
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.4123
+    },
+    "red": {
+      "file": "paul-hat-red.png",
+      "bytes": 29077,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        11,
+        46,
+        244,
+        210
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.4092
+    },
+    "orange": {
+      "file": "paul-hat-orange.png",
+      "bytes": 29213,
+      "width": 256,
+      "height": 256,
+      "alphaBbox": [
+        13,
+        49,
+        243,
+        207
+      ],
+      "cornerAlpha": 0,
+      "opaqueRatio": 0.3967
+    }
+  }
+}

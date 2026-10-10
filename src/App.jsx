@@ -1,6 +1,21 @@
 import React, { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import StudentSelect from './components/StudentSelect'
 import Dashboard from './components/Dashboard'
+import StudentHome, { resetStudentHomeState } from './components/StudentHome'
+import StudentGrowth from './components/StudentGrowth'
+import WritingCoach from './components/WritingCoach'
+// 208차 — Speaking(이야기 10화 데이터 포함)은 QA 전용 화면이라 lazy 로드: 메인 청크(gzip ≤135KB 예산)에 이야기 데이터가 실리지 않게.
+const SpeakingPractice = React.lazy(() => import('./components/SpeakingPractice'))
+// 2026-10-07(222차) Writing 첫 버전(주제 → 상황 → 직접 쓰기 → 예시 비교) — QA 계정 홈의 ✍️ 카드에서만 연다
+const WritingPractice = React.lazy(() => import('./components/WritingPractice'))
+// 2026-10-08(224차) 통합 과정 시범 Unit(교실에서 물건 빌리기) — QA 계정 홈 [오늘의 학습]에서만
+const UnitScreen = React.lazy(() => import('./components/UnitScreen'))
+// 2026-10-10 문법 과정 5개(Easy~High School) — QA 계정 홈에서만. 시범 Unit 데이터(pilotUnits)를 선택 연습에 재사용
+const GrammarCourseScreen = React.lazy(() => import('./components/GrammarCourseScreen'))
+// 2026-10-10 문법 마을(QA 전용) — 키트 그림이 많아 자체 청크(홈 문법 카드에서만 로드)
+const GrammarVillage = React.lazy(() => import('./components/GrammarVillage'))
+import { readyMissions, missionById, missionForUnit } from './utils/grammar/townMissions'
+const loadPilotUnits = () => import('./utils/curriculum/units')
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -25,7 +40,7 @@ import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { resolveSessionSpellingDirection } from './utils/writePracticeDirection'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName, getTodaysAssignmentWordIds } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
@@ -34,6 +49,7 @@ import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // (readingStudentUI와 동일한 게이팅 메커니즘, GuidedSession.jsx 기존 관례).
 import { isFeatureEnabled, subscribeFeatures } from './config/features'
 import { isPilotTownStudent } from './config/pilotTown'
+import { isQaTestStudent } from './config/qaTestAccounts'
 import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary'
 // Wave 4 학생 경험 폴리시(2026-08-02) — GuidedSession 완료 카드의 "오늘
 // 씨앗 심음" 안내용. 기존 Paul Town 홈 밴드(Dashboard.jsx)가 쓰는 것과
@@ -64,6 +80,7 @@ const AdminScreen = React.lazy(() => import('./components/AdminScreen'))
 // 학부모 화면도 같은 이유로 lazy — 학생/관리자 어느 쪽도 매일 안 쓰는
 // 코드를 학생 메인 번들에 얹지 않는다.
 const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
+// 2026-10-04 상황 보고 말하기 — 타운 에셋(TOWN_ASSETS)을 물고 있어 메인 번들에 얹지 않는다(lazy).
 // 입실시험 응시 화면도 같은 이유로 lazy — 학생이 홈 화면 배너를 보는 것과
 // 별개로, "참여하기"를 눌러 실제로 들어갈 때만 로드(Phase 3 성능,
 // 2026-07-18). 배너는 이제 별도 파일(EntranceTestBanner.jsx)이라 이 lazy
@@ -91,6 +108,11 @@ const TownScreen = React.lazy(() => import('./components/town/TownScreen'))
 // 형제 렌더러, V1 대체 아님). 플래그 OFF(기본)면 townV2Active가 항상
 // false라 아래 screen==='town' 블록은 기존 TownScreen 분기만 탄다.
 const TownScreenV2 = React.lazy(() => import('./components/town/v2/TownScreenV2'))
+// Paul Town 2.5D 캐릭터 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) —
+// paulTownV1/paulTownV2와 완전히 독립된 별도 격리 실험(공유 상태/게이팅
+// 없음, docs/design/town/ASTRA_HANDOFF_2026-09-21.md). 플래그 OFF(기본)면
+// 아래 paulTown2_5dEnabled가 항상 false라 이 청크는 로드조차 안 된다.
+const Proto25DScreen = React.lazy(() => import('./components/town/proto2_5d/Proto25DScreen'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -216,7 +238,43 @@ function SpeedBtn() {
 // (표시/legacy 마이그레이션용)을 따로 받는다 — 이름만으로는 더 이상 학생을
 // 유일하게 식별할 수 없다(동명이인 허용).
 function AppInner({ studentId, studentName, onLogout }) {
-  const [screen, setScreen]         = useState('dashboard')
+  // 2026-10-04 205차 — 개발 중 테스트 전용 화면(home/speaking/growth/proto25d)은
+  // students.id UUID 허용목록(config/qaTestAccounts.js)의 QA 계정만 진입한다.
+  // 메뉴 숨김 + 직접 진입 차단. Pilot A/Voca/대시보드는 무관. Production에는 이 브랜치 코드가 없다.
+  const qaTestStudent = isQaTestStudent(studentId)
+  // 2026-10-02 학생 홈 개편 — 플래그(기기 로컬 kill switch)가 켜져 있으면 첫
+  // 화면이 4메뉴 홈. 초기값만 결정(이미 로그인 중 플래그가 바뀌면 다음
+  // 마운트부터 적용). 하위 화면들의 onBack('dashboard')는 그대로 둔다.
+  const studentHomeEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('studentHomeMenu'), () => false) && qaTestStudent
+  // 2026-10-02 학생 홈 개편 — 홈/나의 성장에서 연 기록 화면(캘린더/앨범/모자/
+  // 박물관/정원/마을)은 뒤로가기 시 출발지로 돌아가야 한다. 출발지는 goFrom이
+  // 기록하고, Dashboard는 setScreen을 직접 부르므로 ref가 null → 기존대로
+  // 'dashboard'로 복귀(Dashboard 출발 동작 불변).
+  const returnToRef = useRef(null)
+  const RETURN_SCREENS = ['studyCalendar', 'growthAlbum', 'hatCollection', 'wordMuseum', 'englishGarden', 'paulTown']
+  const goFrom = (origin, target) => { returnToRef.current = RETURN_SCREENS.includes(target) ? origin : null; setScreen(target) }
+  const backToOrigin = () => { const t = returnToRef.current || 'dashboard'; returnToRef.current = null; setScreen(t) }
+  // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
+  useEffect(() => () => resetStudentHomeState(), [])
+  const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') && isQaTestStudent(studentId) ? 'home' : 'dashboard'))
+  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'unit', 'grammarCourses', 'grammarVillage']
+  useEffect(() => { if (!qaTestStudent && QA_ONLY_SCREENS.includes(screen)) setScreen('dashboard') }, [qaTestStudent, screen])
+  const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
+  // Speaking 연습 끝 → [이 표현 써보기] → Writing 문항 → ← 목록이면 원래 Speaking(그 세트의 연습 끝 화면)으로
+  const [writingLink, setWritingLink] = useState(null) // { writingItemId, setId } | null
+  // 시범 Unit에서 말하기/쓰기로 나갔다가 돌아올 때(224차). unitLink가 있으면 Speaking/Writing의 뒤로는 Unit 화면으로
+  const [unitLink, setUnitLink] = useState(null) // { speakingMode?: 'key'|'practice', setId?, writingItemId? } | null
+  const [pilotUnits, setPilotUnits] = useState(null)
+  // 228차: 홈의 말하기·쓰기·오늘의 학습이 같은 과정→단계→단원 선택기로 들어온다. 선택은 세션 상태일 뿐(저장 없음)
+  const [curriculumSel, setCurriculumSel] = useState(null) // { courseId, blockId, entryId } | null
+  const [unitIntent, setUnitIntent] = useState(null) // 'speaking' | 'writing' | null
+  // 폴타운 미션(2026-10-10) — 마을에서 문법 단원으로 들어온 세션 상태(저장 없음). 완료 id는 중복 없이 모은다
+  const [grammarEntry, setGrammarEntry] = useState(null) // { unitId, returnTo: 'proto25d' } | null
+  const [completedMissionIds, setCompletedMissionIds] = useState([])
+  // 문법 마을(2026-10-10) — 세션 상태(저장 없음): 마을에서 연 단원의 복귀 정보 + 완료 단원 id(중복 없음) + 마을이 스크롤할 마지막 장소
+  const [completedUnitIds, setCompletedUnitIds] = useState([])
+  const [villageFocus, setVillageFocus] = useState(null) // placeId | 'notes' | null
+  const [pilotUnitsFailed, setPilotUnitsFailed] = useState(false) // 226차: 청크 로드 실패 시 빈 화면 대신 안내 + 홈
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -230,7 +288,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 익명 관찰(2026-07-23) — 화면 열람 이벤트. trackEvent는 (이벤트,날짜)당
   // 1회 dedupe + fire-and-forget이라 이 effect가 몇 번 돌아도 무해.
   useEffect(() => {
-    const m = { dashboard: EV.appOpened, paulTown: EV.paulTownOpened, englishGarden: EV.gardenOpened, bookshelf: EV.bookshelfOpened, timeMachine: EV.timeMachineOpened, wordMuseum: EV.museumOpened }
+    const m = { dashboard: EV.appOpened, home: EV.appOpened, paulTown: EV.paulTownOpened, englishGarden: EV.gardenOpened, bookshelf: EV.bookshelfOpened, timeMachine: EV.timeMachineOpened, wordMuseum: EV.museumOpened }
     if (m[screen]) trackEvent(studentId, m[screen])
   }, [screen, studentId])
   const [currentGameId, setCurrentGameId] = useState('balloon')
@@ -271,7 +329,20 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 허용목록 학생(기기 플래그 OFF)에게서 V2가 조용히 사라지지 않게 한다.
   const paulTownV2Enabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownV2'), () => false)
   const townV2Active = townV1Enabled && paulTownV2Enabled
-  const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled) && !!studentId)
+  // Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1) — 단독 플래그, townV1
+  // 자격/파일럿 허용목록/paulTownV2와 절대 결합하지 않는다(기존 Town V1/V2
+  // 게이팅과 완전히 무관한 독립 dev/QA 서피스).
+  const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false) && qaTestStudent
+  const townReturn = !!grammarEntry && grammarEntry.returnTo === 'proto25d' && paulTown2_5dEnabled // 플래그가 꺼졌으면 홈으로
+  const villageReturn = !!grammarEntry && grammarEntry.returnTo === 'village' // 문법 마을에서 연 덱
+  const villageBack = villageReturn || (!!grammarEntry && !!grammarEntry.viaVillage) // 과정 목록/덱을 나가면 마을로
+  // 2026-09-27 경제 단계 A2 — paulTown2_5d 단독 플래그(townShopV1/townV1
+  // 자격 없이)로도 코인 배지가 실제 서버 잔액을 읽을 수 있도록 훅 게이트를
+  // 넓힌다. 위 STEP 0 안전성 검토(get_town_shop_state RPC는 순수 SELECT,
+  // 쓰기/lazy row 생성 없음)로 다른 소비자(TownScreen/TownScreenV2/
+  // PaulTown/Dashboard wallet)의 게이팅은 전부 그대로 townShopEnabled/
+  // townV1Enabled 기준이라 이 변경으로 새로 노출되는 화면은 없다.
+  const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled || paulTown2_5dEnabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -356,7 +427,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   const [textbookAssignments, setTextbookAssignments] = useState([])
   useEffect(() => {
     let cancelled = false
-    getStudentClassAssignments(studentId).then((list) => {
+    getStudentClassAssignments(studentId, { cached: true }).then((list) => {
       if (!cancelled) {
         setTextbookAssignments(list)
         // 콜드스타트 수정(2026-08-06) — 배정 캐시 예열 완료 후
@@ -791,6 +862,103 @@ function AppInner({ studentId, studentName, onLogout }) {
           최상단에 떠 있는 소형 토스트. 모달 아님(다른 화면 입력을 막지
           않음), 큐가 비어있으면 RewardToast 자체가 null을 반환. */}
       <RewardToast entries={rewardFeedback} onDismiss={dismissRewardFeedback} />
+      {qaTestStudent && screen === 'home' && (
+        <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
+          hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
+          onStartGuided={startGuidedSession} onLogout={onLogout}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null)
+            // 228차: 말하기(시험 제외)·쓰기·오늘의 학습은 모두 같은 선택기(screen 'unit')로. 이 홈은 QA 전용이다
+            const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach'
+            if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
+            if (t === 'grammar') { setVillageFocus(null); setGrammarEntry(null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
+            goFrom('home', t === 'grammar' ? 'grammarVillage' : viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
+          townEligible={townV1Enabled}
+          writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
+          grammarEnabled={qaTestStudent}
+          speakingEnabled={isFeatureEnabled('speakingPracticeV1')}
+          speakingExamEnabled={isFeatureEnabled('situationRecallV1')} />
+      )}
+      {qaTestStudent && screen === 'speaking' && (
+        // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <SpeakingPractice studentId={studentId} initialMode={unitLink?.speakingMode || speakingMode} initialSetId={unitLink?.setId || writingLink?.setId || null} examEnabled={isFeatureEnabled('situationRecallV1')}
+            menuExits={!!unitLink} onBack={() => setScreen(unitLink ? 'unit' : 'home')}
+            onWrite={(writingItemId, setId) => { if (unitLink?.storyId) setUnitLink({ ...unitLink, writingItemId }); else setWritingLink({ writingItemId, setId }); setScreen('writingCoach') }} />
+        </React.Suspense>
+      )}
+      {qaTestStudent && screen === 'growth' && (
+        <StudentGrowth studentData={studentData} classWords={classWords}
+          wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned } : null}
+          starsDisplay={studentData.starsDisplay}
+          onBack={() => setScreen('home')} onGo={(t) => goFrom('growth', t)} onStartGuided={startGuidedSession} />
+      )}
+      {qaTestStudent && screen === 'writingCoach' && (
+        // 2026-10-07(222차) QA 계정: 주제별 문장 쓰기(Speaking 문항 재사용). ← 홈 / Speaking에서 왔으면 그 세트의 연습 끝 화면으로
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <WritingPractice studentId={studentId} linkLabel={unitLink ? (unitLink.storyId ? '← 단원 목록으로' : '← 이 단원으로') : null} episode={unitLink?.writingEpisode || null} startItemId={unitLink?.writingItemId || writingLink?.writingItemId || null}
+            onBack={() => { if (unitLink) setScreen('unit'); else if (writingLink) { setSpeakingMode('practiceDone'); setScreen('speaking') } else setScreen('home') }}
+            onHome={() => { setWritingLink(null); setUnitLink(null); setScreen('home') }} />
+        </React.Suspense>
+      )}
+      {qaTestStudent && screen === 'unit' && !pilotUnits && (
+        <div data-testid={pilotUnitsFailed ? 'unit-load-failed' : 'unit-loading'} className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+          {/* 한 번 실패한 import()는 브라우저가 새로고침 전까지 실패로 기억하므로 "다시 열기"가 아니라 새로고침을 안내한다(226차 e2e g) */}
+          <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '오늘의 학습을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.' : '불러오는 중...'}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {pilotUnitsFailed && <button data-testid="unit-load-reload" onClick={() => window.location.reload()} className="min-h-[44px] px-5 rounded-2xl font-black bg-teal-500 text-white btn-press">🔄 새로고침</button>}
+            <button data-testid="unit-load-home" onClick={() => { setUnitLink(null); setCurriculumSel(null); setUnitIntent(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+          </div>
+        </div>
+      )}
+      {qaTestStudent && screen === 'grammarCourses' && !pilotUnits && (
+        <div data-testid={pilotUnitsFailed ? 'grammar-load-failed' : 'grammar-loading'} className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '문법 과정을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.' : '불러오는 중...'}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {pilotUnitsFailed && <button data-testid="grammar-load-reload" onClick={() => window.location.reload()} className="min-h-[44px] px-5 rounded-2xl font-black bg-teal-500 text-white btn-press">🔄 새로고침</button>}
+            <button data-testid="grammar-load-home" onClick={() => { const toVillage = villageBack; setGrammarEntry(null); setScreen(toVillage ? 'grammarVillage' : 'home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+          </div>
+        </div>
+      )}
+      {qaTestStudent && screen === 'grammarCourses' && pilotUnits && (
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <GrammarCourseScreen units={pilotUnits} studentId={studentId}
+            initialUnitId={townReturn || villageReturn ? grammarEntry.unitId : null} returnTo={townReturn ? 'town' : villageReturn ? 'village' : null}
+            placeId={villageReturn ? grammarEntry.placeId || null : null} homeLabel={villageBack ? '← 마을 지도' : '← 홈'}
+            onMissionComplete={(id) => { setCompletedMissionIds((s) => (s.includes(id) ? s : [...s, id])); const m = missionById(id); if (m) setCompletedUnitIds((s) => (s.includes(m.unitId) ? s : [...s, m.unitId])) }}
+            onUnitComplete={(uid) => { setCompletedUnitIds((s) => (s.includes(uid) ? s : [...s, uid])); const m = missionForUnit(uid); if (m) setCompletedMissionIds((s) => (s.includes(m.id) ? s : [...s, m.id])) }}
+            onBack={() => { setGrammarEntry(null); setScreen(townReturn ? 'proto25d' : villageBack ? 'grammarVillage' : 'home') }} />
+        </React.Suspense>
+      )}
+      {qaTestStudent && screen === 'grammarVillage' && (
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <GrammarVillage completedUnitIds={completedUnitIds} focusId={villageFocus}
+            onStart={(unitId, focusId) => { setVillageFocus(focusId); setGrammarEntry({ unitId, returnTo: 'village', placeId: focusId === 'notes' ? null : focusId }); setPilotUnitsFailed(false)
+              if (!pilotUnits) loadPilotUnits().then((r) => setPilotUnits(r.UNITS)).catch(() => setPilotUnitsFailed(true)); setScreen('grammarCourses') }}
+            onCourses={() => { setGrammarEntry({ unitId: null, returnTo: null, viaVillage: true }); setScreen('grammarCourses') }}
+            onHome={() => { setVillageFocus(null); setGrammarEntry(null); setScreen('home') }} />
+        </React.Suspense>
+      )}
+      {qaTestStudent && screen === 'unit' && pilotUnits && (
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <UnitScreen units={pilotUnits} initialUnitId={unitLink?.unitId || null} returnedFrom={unitLink ? (unitLink.writingItemId ? 'writing' : 'speaking') : null} studentId={studentId} onBack={() => { setUnitLink(null); setCurriculumSel(null); setUnitIntent(null); setScreen('home') }}
+            intent={unitIntent} initialSelection={curriculumSel} onSelectionChange={setCurriculumSel}
+            onStory={(entry, mode) => { if (mode === 'writing') { setUnitLink({ storyId: entry.id, writingEpisode: entry.card.n }); setScreen('writingCoach') } else { setUnitLink({ storyId: entry.id, speakingMode: mode === 'key' ? 'key' : 'practice', setId: entry.id }); setScreen('speaking') } }}
+            onSpeaking={(unitId, a) => { setUnitLink({ unitId, speakingMode: a.flow === 'key' ? 'key' : 'practice', setId: a.setId }); setScreen('speaking') }}
+            onWriting={(unitId, a) => { setUnitLink({ unitId, writingItemId: a.writingItemId }); setScreen('writingCoach') }} />
+        </React.Suspense>
+      )}
+      {!qaTestStudent && screen === 'writingCoach' && (
+        // 2026-10-02 학생 홈 개편 — Dashboard 로컬 state였던 WritingCoach를
+        // 그대로 옮김(props 동일). 저장 없음(MVP), 닫으면 홈.
+        <WritingCoach
+          targetWords={(studentData?.round?.wordsViewed || [])
+            .slice(-2)
+            .map((id) => attachment.wordTextById?.get?.(id))
+            .filter(Boolean)}
+          onBack={() => setScreen('home')}
+          onComplete={() => setScreen('home')} />
+      )}
       {screen === 'dashboard'     && (
         <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
@@ -803,6 +971,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           pendingCeremonyHat={attachment.pendingCeremonyHat} onDismissCeremony={attachment.dismissCeremony}
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
           onTextbookSwitch={handleTextbookSwitch}
+          onHome={studentHomeEnabled ? () => setScreen('home') : undefined}
           wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned, dollarsAvailable: townShop.state.dollars.available } : null} />
       )}
       {screen === 'guidedSession' && (
@@ -926,7 +1095,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'diary'         && <DiaryPage studentData={studentData} onBack={() => setScreen('dashboard')} />}
-      {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={() => setScreen('dashboard')} />}
+      {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={backToOrigin} />}
       {/* 애착 시스템(2026-07-22) — 4개 화면 전부 lazy(공유 fallback), 진입은
           Dashboard "더 많은 메뉴"의 feature flag 게이트를 거친다. */}
       {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden' || screen === 'paulTown' || screen === 'bookshelf' || screen === 'timeMachine') && (
@@ -941,18 +1110,18 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'hatCollection' && (
             <HatCollection studentName={studentName} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={(id) => { studentData.equipHat(id); trackEvent(studentId, EV.hatEquipped) }}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'wordMuseum' && (
             <WordMuseum studentId={studentId} stats={attachment.stats} lib={attachment.lib}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'growthAlbum' && (
             <GrowthAlbum milestones={studentData.milestones} stats={attachment.stats}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'englishGarden' && (
-            <EnglishGarden stats={attachment.stats} onBack={() => setScreen('dashboard')} />
+            <EnglishGarden stats={attachment.stats} onBack={backToOrigin} />
           )}
           {/* Paul Town v2.0 — 순수 파생 마을 화면. 읽는 영속 상태는 기존
               사실 2가지(hatInventory/equippedHatId)뿐, 장착은 기존 equipHat
@@ -960,9 +1129,9 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'paulTown' && (
             <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
-              onGo={setScreen} onBack={() => setScreen('dashboard')}
+              onGo={setScreen} onBack={backToOrigin}
               shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled}
-              onGoTown={townV1Enabled ? () => setScreen('town') : null} />
+              onGoTown={paulTown2_5dEnabled ? () => setScreen('proto25d') : townV1Enabled ? () => setScreen('town') : null} />
           )}
           {/* Paul Town 월드 — 도서관/시계탑. 마을 건물 카드로만 진입하므로
               뒤로 가기는 마을(paulTown)로. 전부 파생 화면 — 저장 0. */}
@@ -1080,7 +1249,26 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && screen !== 'unit' && screen !== 'grammarVillage' && <SpeedBtn />}
+      {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
+          `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
+          내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구
+          자체가 없음) — 플래그 하나로만 게이팅되는 오버레이.
+          2026-10-04(205차) — 운영자 지시로 기존 내비게이션에 통합: 홈 🏘️ 버튼 → screen 'proto25d', 🏠 홈 버튼 → onBack. 플래그는 여전히 렌더 조건(OFF면 청크 로드 0). */}
+      {paulTown2_5dEnabled && screen === 'proto25d' && (
+        <React.Suspense fallback={null}>
+          {/* 경제 단계 A2(2026-09-27) — Dashboard wallet(townShopEnabled 게이트)과
+              달리, 이 프로토타입은 paulTown2_5d 플래그 자체가 이미 렌더 조건이므로
+              같은 플래그로 지갑도 게이팅한다(townShopV1이 꺼져 있어도 코인 배지가
+              보여야 함) — 소스는 여전히 townShop.state 하나(읽기 전용, 새 fetch 없음). */}
+          <Proto25DScreen wallet={paulTown2_5dEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null}
+            missions={readyMissions()} completedMissionIds={completedMissionIds}
+            onStartMission={(id) => { const m = missionById(id); if (!m) return
+              setGrammarEntry({ unitId: m.unitId, returnTo: 'proto25d' }); setPilotUnitsFailed(false)
+              loadPilotUnits().then((r) => setPilotUnits(r.UNITS)).catch(() => setPilotUnitsFailed(true)); setScreen('grammarCourses') }}
+            onBack={() => setScreen(studentHomeEnabled ? 'home' : 'dashboard')} />
+        </React.Suspense>
+      )}
     </>
   )
 }

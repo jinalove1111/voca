@@ -84,11 +84,21 @@ export default function TownSheet({ open, title, onClose, children }) {
 
   return (
     <>
+      {/* 2026-09-20 — z-[120]/z-[130]이던 이전 값은 Paul Town V2 씬 자신의
+          렌더 z-index 체계(src/utils/town/depthOrder.js LAYER_BASE, 최고값
+          ui=9000, 씬 로컬 팝오버는 sceneZ.js POPOVER_Z=ui+200=9200)보다
+          한참 낮아, 이 시트가 씬과 같은 루트 스태킹 컨텍스트를 공유하는
+          한 씬 콘텐츠(예: "for sale" 랜드마크 박스)가 시트 위로 그대로
+          페인트돼 상품 카드 영역을 가리는 결함이 있었다(데스크톱/모바일
+          동일 재현, elementFromPoint 기반 히트테스트는 이미 정상이라
+          클릭은 문제없이 카드로 가지만 화면에는 씬이 겹쳐 보였다 — 순수
+          페인트 순서 버그). LAYER_BASE.ui(9000)와 POPOVER_Z(9200) 둘 다
+          확실히 넘도록 9500/9510로 올린다(+10 간격은 기존 관례 유지). */}
       <button
         type="button"
         aria-label="닫기"
         onClick={onClose}
-        className="fixed inset-0 bg-[#1e2a5a]/30 z-[120] min-h-[44px]"
+        className="fixed inset-0 bg-[#1e2a5a]/30 z-[9500] min-h-[44px]"
       />
       <div
         ref={dialogRef}
@@ -97,7 +107,16 @@ export default function TownSheet({ open, title, onClose, children }) {
         aria-label={title}
         tabIndex={-1}
         data-testid="town-sheet"
-        className="fixed left-0 right-0 bottom-0 z-[130] max-h-[78vh] overflow-y-auto rounded-t-3xl bg-[#fdf6ea] p-4 pb-[max(2rem,env(safe-area-inset-bottom))] card-shadow motion-safe:animate-fade-in"
+        // 2026-09-20 — 모바일은 그대로(전폭 하단 시트, left-0/right-0/
+        // bottom-0/rounded-t-3xl/max-h-[78vh] 무변경), md(768px) 이상에서만
+        // 중앙 정렬된 최대폭 모달로 전환한다. 768(태블릿)도 데스크톱 취급을
+        // 골랐다 — 576px(max-w-xl) 폭 카드에 768px에서도 양옆 96px 여백이
+        // 남아 "상자" 형태로 읽히고, 그 폭에서도 전폭 시트를 유지하면 상품
+        // 그리드 두 칸이 불필요하게 넓게 벌어지는 동일 증상이 약하게
+        // 재현되기 때문(측정: 1280/1440/1920에서 시트 폭==뷰포트 폭,
+        // x==0 — md: 오버라이드로 해결). 오버레이(button[aria-label="닫기"])
+        // 의 inset-0 전체 커버리지는 변경하지 않는다.
+        className="fixed left-0 right-0 bottom-0 z-[9510] max-h-[78vh] overflow-y-auto rounded-t-3xl bg-[#fdf6ea] p-4 pb-[max(2rem,env(safe-area-inset-bottom))] card-shadow motion-safe:animate-fade-in md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl md:max-h-[85vh] md:rounded-3xl"
       >
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-black text-[#1e2a5a]">{title}</p>

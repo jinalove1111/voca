@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "점검 취합·구현·검증·문서·push (2화 리뷰어는 읽기 전용 서브에이전트)",
+  "task_id": "speaking-ep2-audit-ep13-2026-10-06",
+  "task": "2화 완성도 점검·수정 + 1·3화 오늘 기억할 한 문장 확장(기존 에셋)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-06T01:00:00+09:00",
+  "updated_at": "2026-10-06T02:30:00+09:00",
+  "files_owned": ["src/utils/situation/storyEpisodes.js", "src/components/PencilCaseScene.jsx", "src/components/KeySentenceFlow.jsx", "src/components/SpeakingPracticeItem.jsx", "scripts/testSpeakingSets.mjs", "scripts/testKeySentenceFlow.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "handoff.md"],
+  "summary": "[mock 기반] 2화 시간선·역할 힌트·이름표 수정. 1화 Could you speak a bit louder?, 3화 That's a great idea! 흐름 추가(임시 선정). 보기 단계 하드코딩 결함 수정. e2e speaking 468/0, speaking-exam 216/0, 정적 9종 PASS.",
+  "blocker": null,
+  "next_action": "운영자: 1·3화 핵심 문장 확인, 1화 '폴 선생님' 이름 겹침 결정, 로그인 Preview 확인. 미완료 목록은 설계 문서 §18.3"
+}

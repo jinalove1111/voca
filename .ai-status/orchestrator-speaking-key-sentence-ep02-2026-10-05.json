@@ -1,0 +1,27 @@
+{
+  "agent_name": "orchestrator",
+  "role": "보존·검증·결함 수정·문서·커밋 — Speaking 2화 오늘 기억할 한 문장",
+  "task_id": "speaking-key-sentence-ep02-2026-10-05",
+  "task": "85a968f1 위 체크포인트 없는 미커밋 10개(2화 Can I borrow a pencil? 흐름 + 필통 장면) 보존·검증·수정·커밋(push 없음)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-05T13:14:00+09:00",
+  "updated_at": "2026-10-05T14:10:00+09:00",
+  "files_owned": [
+    "src/components/KeySentenceFlow.jsx",
+    "src/components/PencilCaseScene.jsx",
+    "src/components/SpeakingPractice.jsx",
+    "src/utils/situation/speakingSets.js",
+    "src/utils/situation/storyEpisodes.js",
+    "scripts/testKeySentenceFlow.mjs",
+    "scripts/testSpeakingSets.mjs",
+    "tests/e2e/speaking.spec.mjs",
+    "tests/harness/registry.mjs",
+    "docs/design/SPEAKING_UX_V2_2026-10-04.md",
+    "handoff.md",
+    "TESTING.md"
+  ],
+  "summary": "[mock 기반] 미커밋 WIP를 scratchpad에 patch/tar 백업 후 검증. 수정 3건: 뚜껑 왼쪽 경첩이 '나' 팔과 겹침(시각) → 오른쪽 경첩, e2e toStep 재클릭 타임아웃, e2e k6 앱 공통 버튼 전환 오탐 → key-scene 범위로 한정(reduced=false 사본에서 FAIL 확인). build PASS, testKeySentenceFlow 15/0, testSpeakingSets 56/0, e2e speaking 388/0, speaking-exam 216/0. 나머지 9화 무변경, QA 게이트 무변경, DB·SQL·Production·.env 0.",
+  "blocker": null,
+  "next_action": "운영자 결정: (1) PR #62(feat/paul-town-v2-clean-pr)로 non-force push 여부 (2) 카드를 기본 진입 직후 노출할지(현재 2화 선택 시만) (3) 실기기 Preview에서 장면·마이크·듣기 확인"
+}

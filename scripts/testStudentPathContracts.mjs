@@ -181,6 +181,7 @@ await esbuild.build({
   platform: 'node',
   outdir: path.join(TMP, 'dist'),
   jsx: 'automatic',
+  loader: { '.png': 'dataurl' }, // 모자 PNG(src/assets/hats) import 대응
   external: ['react', 'react/jsx-runtime'],
   define: {
     'import.meta.env.DEV': 'false',

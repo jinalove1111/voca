@@ -9,6 +9,7 @@
 // hatTintStyle(hatSystem.js)을 단일 진실 원천으로 쓴다(HatCeremony/
 // PaulTown과 동일 함수). 획득/장착 로직은 무변경.
 import { HAT_CATALOG, hatTintStyle } from '../utils/attachment/hatSystem'
+import { hatImageFor, HAT_IMG_CLASS } from '../assets/hats'
 
 export default function HatCollection({ studentName, hatInventory, equippedHatId, onEquip, onBack }) {
   const ownedById = new Map(hatInventory.map((h) => [h.hatId, h]))
@@ -25,7 +26,9 @@ export default function HatCollection({ studentName, hatInventory, equippedHatId
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
           <div className="text-6xl mb-2">
             {equipped
-              ? <span style={hatTintStyle(equipped.colorHex)}>{equipped.emoji}</span>
+              ? (hatImageFor(equipped.id)
+                ? <img data-testid="hat-collection-avatar-img" data-hat={equipped.id} src={hatImageFor(equipped.id)} alt={equipped.name} draggable={false} className={HAT_IMG_CLASS} />
+                : <span style={hatTintStyle(equipped.colorHex)}>{equipped.emoji}</span>)
               : '👑'}
           </div>
           <h1 className="text-2xl font-black">{studentName}의 모자 컬렉션</h1>
@@ -51,7 +54,9 @@ export default function HatCollection({ studentName, hatInventory, equippedHatId
                 }`}>
                 <div className={`text-4xl mb-1 ${owned ? '' : 'grayscale opacity-40'}`}>
                   {owned
-                    ? <span style={hatTintStyle(hat.colorHex)}>{hat.emoji}</span>
+                    ? (hatImageFor(hat.id)
+                      ? <img data-testid={`hat-card-img-${hat.id}`} src={hatImageFor(hat.id)} alt={hat.name} draggable={false} className={HAT_IMG_CLASS} />
+                      : <span style={hatTintStyle(hat.colorHex)}>{hat.emoji}</span>)
                     : '🔒'}
                 </div>
                 <p className={`font-black text-sm ${owned ? 'text-gray-800' : 'text-gray-400'}`}>{hat.name}</p>
@@ -65,7 +70,7 @@ export default function HatCollection({ studentName, hatInventory, equippedHatId
                     )}
                     <button
                       onClick={() => onEquip(isEquipped ? null : hat.id)}
-                      className={`w-full mt-2 py-2 rounded-xl font-black text-sm btn-press ${
+                      className={`w-full mt-2 py-2 min-h-[44px] rounded-xl font-black text-sm btn-press ${
                         isEquipped ? 'bg-purple-200 text-purple-700' : 'bg-purple-500 text-white hover:bg-purple-600'
                       }`}>
                       {isEquipped ? '쓰고 있어요 ✓ (벗기)' : '이 모자 쓰기'}

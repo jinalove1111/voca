@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "구현(취합)·문서·커밋 — 콘텐츠/시각 리뷰어·독립 QA는 서브에이전트",
+  "task_id": "speaking-ep02-paul-complete-2026-10-05",
+  "task": "Speaking 2화 Paul 중심 완성: 상대 교사 Paul→Mia, 장면 인과·크기·소품 개선, 보기 단계 상황 추가",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-05T17:30:00+09:00",
+  "updated_at": "2026-10-05T18:30:00+09:00",
+  "files_owned": ["src/utils/situation/storyEpisodes.js", "src/components/PencilCaseScene.jsx", "src/components/KeySentenceFlow.jsx", "scripts/testKeySentenceFlow.mjs", "scripts/testSpeakingSets.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "handoff.md"],
+  "summary": "[mock 기반] 독립 QA PASS. e2e speaking 422/0, speaking-exam 216/0, 정적 9종 PASS, build 경고 0. 2화만 변경(id·en 불변). 학습 효과 미검증.",
+  "blocker": null,
+  "next_action": "운영자: Preview에서 2화 실사용(마이크·듣기·아이 반응), 부족 에셋 제작 여부, 1화·3화 이후 교사 Paul 정리 여부 결정"
+}

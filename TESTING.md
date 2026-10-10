@@ -1207,6 +1207,14 @@ _append. 초등 5개 반/45명 확장 production readiness 점검, 브랜치
 | `scripts/testHomeworkPipeline45.mjs` | 183 | 아니오 | homework |
 | `scripts/testWritingPolicyFiveClasses.mjs` | 90 | 아니오 | writing |
 | `tests/e2e/mobileViewports.spec.mjs`(확장) | 112→178 | 아니오 | e2e `[mobile]` |
+| `tests/e2e/studentHome.spec.mjs`(신규, 198차) | 192단언(191 PASS/1 SKIP: 360 헤더 streak>0 fixture 시드 불가), 12 시나리오 × 360/390/412/1280 | 아니오 | e2e `[student-home]` |
+| `tests/e2e/speaking.spec.mjs`(신규, 200차) | 93 PASS/0 FAIL — 합성 getUserMedia(AudioContext 오실레이터)로 진입·녹음→재생→다시 녹음·빈 녹음·거부/장치 없음/점유/무응답·트랙 해제·탭 숨김·플래그 OFF·인앱 브라우저·업로드/STT 0 | 아니오 | e2e `[speaking]` (실제 마이크는 운영자 Preview 확인) |
+| `scripts/testSpeakingSession.mjs`(신규, 200차) | 32 | 아니오 | `npm run verify:speaking-session`(registry audioTts) |
+| `scripts/testSituationRecall.mjs`(신규, 201차) | 48 — 힌트 생성(5표현 첫 단어+밑줄), 스토어(UUID 키·이름 키 금지·10개 절삭·손상 JSON/비배열 sessions 무해), 복습 휴리스틱(같은 날 제외·1일/3일·같은 날 recall+transfer 쌍은 3일 규칙 미발동·오래된 순), UI 소스에 완료/숙달/✅/점수/⭐ 부재, `persist` 가드·`EXPR` 필터 소스 패턴 | 아니오 | `npm run verify:situation-recall` |
+| `tests/e2e/speakingExam.spec.mjs`(신규, 202차 — `situation.spec.mjs` 대체) | 148 PASS/0 FAIL — 답 확인 전 EN/KO/듣기/자기 확인/다시 연습 DOM 부재·speak 0·alt 금칙어 없음, 답 확인 후 표시, 다시 연습 인라인, 문항 전환 리셋, 마이크 없이·권한 거부·인앱에서 완주, UUID 저장 케이스 3종, 뒤로/재진입/홈 직진입/플래그 OFF, 360/390/412/1280, 손상 시드 | 아니오 | e2e `[speaking-exam]` |
+| `tests/e2e/speaking.spec.mjs`(재작성, 202차) | 200 PASS/0 FAIL — 메뉴 2버튼 동일 높이, 연습 그림+문장+뜻+듣기 동시 표시(y순서, EN ≥24px), 기존 녹음 시나리오 전부 유지, 큰 시험 시작 버튼, 재진입 1번 | 아니오 | e2e `[speaking]` |
+| `scripts/testSituationRecall.mjs`(갱신, 202차) | 51 — alternatives·examAlt 무단서, SpeakingExam 소스 핀(조건부 마운트·금칙 문구·next 리셋·retry 분기) | 아니오 | `verify:situation-recall` |
+| `tests/e2e/situation.spec.mjs`(201차, 202차에서 삭제) | 94 PASS/0 FAIL — 진입/뒤로, 보기 단계 EN+KO·임시 배지·aria-label "임시 그림.", 회상 단계 EN/KO DOM 부재→힌트 1/2/3 순차, 다음 항상 활성·자기 보고 aria-pressed·완료/숙달 문구 부재, 합성 마이크 녹음→재생→다시 녹음·녹음 중 다음/뒤로 비활성·해제, UUID별 복습 시드(어제 → 배너+recall 시작, 세션 키 집합 고정, 다른 UUID 무영향), 같은 날 재진입 미복습·same-day 쌍 1일·recall 'can'×2 → 3일, 무상호작용 15회 다음 → 요약 "미기록" 5행·기록 0, 360×640 가로 스크롤 0·44px·h1 포커스·reduced-motion 애니메이션 0, 손상 시드 무충돌 | 아니오 | e2e `[situation]` |
 | `scripts/testSpeakingPathNoPermanentDisable.mjs` | 90 | 예 — 수정 전 FAIL 2건(A1/A2), `speech.js` `playAudioUrl()` 실패 경로가 `onError`+`advance()`(→`onEnd`)를 이중 호출하던 결함(P1) 수정 후 90/90 | speech |
 
 - `verify:e2e` 253/253 ×2연속(student 34/admin 21/entrance 12 불변 +
@@ -1413,3 +1421,643 @@ reject 캐시로 "그냥 다시 시도"로는 복구 불가하던 문제의 자�
   `testPronunciationRewardOnce` 54/54 · `testRegistryCoverage` 8/8 ·
   `testBundleBudget` 10/10 · `rewardSystem` 도메인 47개 스크립트 PASS.
   로컬 PASS이며 최종 판정은 CI Release Gate(PR 생성 후)에서 한다.
+
+## 관련 항목: Paul Town V2 세계 좌표 렌더러 — 순수 단위 테스트 9종 등록 + 스크린샷 도구 (2026-09-18, 170차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+Paul Town V2 렌더러 통합(`handoff.md` 2026-09-18(170차) 참고, 플래그
+`paulTownV2` OFF)이 만든 순수 단위 테스트 9종을
+`tests/harness/registry.mjs`(`attachment` 도메인, `npm run
+verify:attachment`로 함께 실행)에 `extra:false`로 등록했다 — 그중 6종
+(`testTownWorldContract`/`testTownPlacementContract`/
+`testTownHarnessGeometrySync`/`testTownDepthOrder`/`testEnvArtManifest`/
+`validateEnvArtManifest`)은 2026-09-17 작성분, 3종(`testTownEnvAssets`/
+`testTownWorldRender`/`testTownWorldScenery`)은 2026-09-18 신규 작성이며,
+9종 전부 이번 세션 이전에는 registry 미등록이라 `verify:all`에서 한 번도
+실행되지 않고 있었다(단독 실행으로 전부 PASS 확인 후 등록).
+
+| 스크립트 | 단언 | 대상 | 네트워크 |
+|---|---|---|---|
+| `scripts/testTownWorldContract.mjs` | 96 | `worldContract.js`(동결 월드 지오메트리) — `townLevel.js`/`townScene.js`(`DISTRICTS[*].unlock`/`lotState`)에 실제로 위임하는지(재구현 아님) | 0 |
+| `scripts/testTownPlacementContract.mjs` | 690 | `placementContract.js`(47칸 배치 계약) — 콜리전/SPOT_MAP 일치/존 배분/tree·bench 배제(시드 고정 LCG 퍼징) | 0 |
+| `scripts/testTownHarnessGeometrySync.mjs` | 75 | 디자인 목업 하네스(`paul-town-recompose.html` `#geometry`)와 `worldContract.js` 대조 | 0 |
+| `scripts/testTownDepthOrder.mjs` | 62 | `depthOrder.js`(월드 깊이/z-index 모델) — 계약+property 테스트 | 0 |
+| `scripts/testEnvArtManifest.mjs` | 71 | `validateEnvArtManifest.mjs` 자체의 회귀 스위트(결함 주입 4종 포함) | 0 |
+| `scripts/validateEnvArtManifest.mjs` | — | env 아트 매니페스트 검증 CLI(스키마/중복 키/px1x=px2x/2/열거값), 인자 없이 실행 시 실제 manifest/spec 검사 | 0 |
+| `scripts/testTownEnvAssets.mjs`(신규) | 196 | `src/assets/town/env/*.webp` 35개 + `index.js`(`TOWN_ENV_ASSETS`) — manifest와 파일 집합/sha256/bytes 일치, "assets/town/env" 참조가 V2 밖(0건)인지 | 0 |
+| `scripts/testTownWorldRender.mjs`(신규) | 97 | `worldRender.js`(세계 좌표 렌더 어댑터) — `cellAnchor`/`landmarkBox`/`worldZIndex`/`freeWorldAnchors`/`pxToWidthPct`/`widthPctToHeightPct`가 기존 계약을 그대로 변환만 하는지 | 0 |
+| `scripts/testTownWorldScenery.mjs`(신규) | 206 | `worldScenery.js`(동결 배경/장식 데이터) — 아래 참고 | 0 |
+
+**`testTownWorldScenery.mjs`의 `node:vm` 동기화 방식** — 이 테스트는
+승인 디자인 하네스(`docs/design/town/mockup/paul-town-recompose.html`)의
+합성 스크립트를 **한 글자도 수정하지 않고** `node:vm` 샌드박스 안에서
+그대로 실행한다. 하네스가 기대하는 `document`/캔버스류 API 대신 값을
+그대로 기록만 하는 가짜 DOM(recording fake DOM)을 주입해, 하네스가
+평소처럼 동작하며 계산해내는 `ENV_PLACEMENTS`(108개)/`GROUND`/
+`PROP_PLACEMENTS`(20개)/`SIGNS`/`LANDMARK_DECOR`/`BG_FILLER_TREES`(10개)
+수치를 그대로 뽑아내 `worldScenery.js`의 동결 상수와 대조한다(허용오차
+0.05, 390px 기준) — 하네스 로직을 테스트 파일에 손으로 베끼지 않는다는
+이 저장소의 "핵심 원칙"(§ 문서 상단)을 프론트엔드 하네스에도 그대로
+적용한 사례. 해상도(360/390/430px) 무관성, 레벨(1/3/4/5/8) 무관성,
+`worldScenery.js` 자체의 모듈 순수성(fetch/localStorage/Math.random/
+document/window/supabase/`isFeatureEnabled` 없음, import는
+`./worldContract` 하나뿐)까지 함께 고정한다.
+
+**`scripts/town-art/shootRenderer.mjs`(신규, verify:* 미등록 — 사람이
+눈으로 보는 QA 보조 도구)** — Paul Town V2 렌더러를 실제 브라우저
+(Playwright chromium)로 띄워 스크린샷을 찍는 도구다.
+`scripts/testBrowserE2E.mjs`와 동일하게 `dist/`가 없으면 먼저
+`npm run build`한 뒤 vite preview로 띄우고, `tests/e2e/lib/mockRoutes.mjs`
+의 전체 네트워크 mock(실 Supabase/Vercel 요청 0건)으로 QA 픽스처 학생을
+로그인시킨다. `npm run verify:*`/`verify:all`에는 등록돼 있지 않고
+PASS/FAIL을 자동 판정하는 테스트도 아니지만, 가로 스크롤/페이지
+에러/환경 자산 요청 실패 같은 명백한 구조적 결함은 exit code 1 +
+콘솔 로그로 fail-closed 신호를 준다.
+
+- **CLI**: `node scripts/town-art/shootRenderer.mjs --levels 1,3,4,5,8
+  --widths 360,390,430 [--zoom2] [--owned all|none] [--out <dir>]`.
+  기본값은 `--levels 4 --widths 390 --owned all --out
+  art-staging/renderer-previews/`(`.gitignore`의 `art-staging/` 아래라
+  산출물은 커밋되지 않는다).
+- **보장하는 것**: Playwright 컨텍스트를 `reducedMotion:'reduce'`로 열어
+  `motion-safe:` 페이드인 애니메이션이 아예 걸리지 않게 하고, 벨트+
+  서스펜더로 씬과 조상 체인의 computed opacity가 전부 1이 되고
+  `img[data-env-asset]` 전부가 `.complete`될 때까지 폴링한 뒤에만
+  셔터를 누른다(색 바랜 스크린샷 방지). 이 도구의 Playwright 페이지
+  안에서만(`addStyleTag`) 앱의 고정 UI 크롬(발음 재생 속도 위젯) 1개를
+  스크린샷 비교 편의를 위해 숨기며, 이는 이 도구의 캡처 화면에만
+  적용되고 실제 학생 화면 동작에는 영향이 없다.
+
+## 관련 항목: Paul Town 2.5D 캐릭터 프로토타입 — 신규 단위/E2E 스위트 4종 + S9/testBundleBudget CI 노트 (2026-09-23, 172차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+Paul Town 2.5D 캐릭터 프로토타입(`paulTown2_5d` 플래그, 기본 OFF,
+`handoff.md` 2026-09-23(172차)/`docs/design/town/ASTRA_HANDOFF_2026-09-21.md`
+§0 참고) Stage 1~5가 추가한 테스트 4종. 앞의 3종은 `tests/harness/registry.mjs`
+의 `attachment` 도메인에 `extra:false`로 등록돼 있어(`npm run
+verify:attachment`, 그리고 `verify:all`에 포함) 관례상 위 "새 테스트 작성
+패턴"/"4개 카테고리"를 따른다(카테고리 2 순수 로직 단위 테스트 2종 +
+esbuild 번들 필요 1종).
+
+| 스크립트 | 단언 | 대상 | 네트워크 |
+|---|---|---|---|
+| `scripts/testProto25dWalkGrid.mjs` | 28 | `walkGrid.js`(걷기 가능 격자/장애물 판정) + `pathfinding.js`(BFS+string-pulling) | 0 |
+| `scripts/testProto25dDepth.mjs` | 23 | `depthVisual.js`(Y-기반 스케일/z-index, worldContract/depthOrder 위임 확인) | 0 |
+| `scripts/testProto25dBench.mjs` | 88 | `benchInteraction.js`(벤치 도착/좌석 지점, 탭 hit-test, 좌석 sink 보정) | 0 |
+| `tests/e2e/townProto25d.spec.mjs`(`[town-proto2.5d]`, `scripts/testBrowserE2E.mjs`에 등록, `npm run verify:e2e`로 실행) | S1~S8c+S10, 160 PASS | 브라우저 E2E — 클릭투무브/장애물 회피/depth occlusion/reduced-motion/벤치 walk-to-sit/모바일 터치/44px 탭 타겟/상호작용 도중 언마운트 | 0(`installMocks` 전체 가로채기) |
+
+`walkGrid.js`/`depthVisual.js`는 `worldContract.js`/`depthOrder.js`를
+확장자 없는 상대 import로 참조하므로 plain `node`로 직접 import하면 Node
+ESM 로더가 `ERR_MODULE_NOT_FOUND`로 죽는다(`scripts/testTownWorldContract.mjs`
+와 동일 원인) — esbuild로 `scripts/.tmp/`(gitignore 대상)에 번들해 그
+산출물을 import한다. `benchInteraction.js`만 의존성이 0개(순수 상수/함수,
+어떤 것도 import하지 않음)라 이 번들링이 필요 없고 plain `node`로 직접
+import한다.
+
+**E2E spec을 단독으로 재실행하는 법(standalone runner 패턴, 이 저장소
+기존 관례)** — `npm run verify:e2e`가 여러 spec을 순차 실행하므로
+프로토타입 하나만 빠르게 확인하려면:
+
+```
+node -e "import('./tests/e2e/townProto25d.spec.mjs').then(async m => { const { chromium } = await import('playwright'); const b = await chromium.launch({headless:true}); const r = await m.run(b, 'http://localhost:4173'); console.log(r.results.filter(x=>x.status==='FAIL')); await b.close(); })"
+```
+
+(사전에 `vite preview --port 4173` 기동 필요, `scripts/testBrowserE2E.mjs`
+관례 그대로.)
+
+### S9(`tests/e2e/townV2.spec.mjs`, "배치 앵커 탭 가능성") — 미확정 CI 1회 FAIL 기록
+
+이 노트는 Paul Town 2.5D 작업이 아니라 **기존 V2 자석 드래그 배치
+기능**(`tests/e2e/townV2.spec.mjs`)의 회귀 조사 결과다 — 별도 세션이 CI
+로그를 직접 조사해 남겼다.
+
+> S9(`tests/e2e/townV2.spec.mjs`, "배치 앵커 탭 가능성")는 CI(Linux
+> Chromium)에서 1회 FAIL(run 35567109630, commit 1945eb5, 2026-09-21)
+> 했다(앵커 bbox ~43.3-43.4px, 테스트 자체의 허용치 `>=43.5`px 미달),
+> 반면 Windows Chromium(로컬, `deviceScaleFactor` 1/2 둘 다,
+> `S9_VIEWPORTS` 전체)은 매번 정확히 44.0px를 측정했다. 이후 재현 안 됨
+> (최신 실행 clean PASS). 근본 원인 미확정 — 씬 입장 줌 애니메이션
+> (`motion-safe:animate-town-entrance`) 가설은 로컬 재현으로 반증(측정
+> 시점에 이미 애니메이션 종료, `transform:none`). Linux Chromium
+> 환경이 없어 추가 조사 불가 — 재발 시 조사할 것. `e2e` 도메인은
+> `extra:true`(non-gating)이므로 이 FAIL이 Release Gate를 막지 않는다.
+
+### `scripts/testBundleBudget.mjs` — 메인 청크 판별을 `dist/index.html` 기준으로 변경
+
+이유: Proto 2.5D Stage 4(`8132dd1`)가 지연 로드되는 `Proto25DScreen`도
+기존 town 자산 레지스트리(`src/assets/town/index.js`)를 import하게
+되며, 그 모듈이 메인 엔트리 + 2개 이상의 lazy chunk에 공유돼 Rollup이
+별도 공유 청크로 분리했다 — 그 청크의 파일명이 실제 엔트리와 동일한
+`index-<hash>.js` 패턴이라, 기존 `findChunk`(파일명 정규식 매칭 +
+"짧은 이름 우선" 타이브레이크)가 `readdirSync` 열거 순서(OS/파일시스템
+의존, 보장되지 않음)에 따라 둘 중 아무 파일이나 "메인"으로 오판할 수
+있게 됐다. Windows(NTFS) 로컬은 순서상 우연히 실제 엔트리를 먼저 찾아
+통과했지만, Linux CI(ext4/overlay)는 반대 순서라 자산 registry 청크를
+"메인"으로 잘못 골라 2개 단언(`TownScreen` 청크 문자열 포함 여부/
+`paulTownV1:!1` 리터럴 포함 여부)이 FAIL했다. 수정은 메인 청크를
+`dist/index.html`의 실제 `<script type="module" src="...">` 참조로
+판별하도록 바꾼 것(파싱 실패 시에만 기존 파일명 매칭으로 안전하게
+폴백, 경고 로그와 함께) — 예산 수치(gzip 135KB/15KB, raw 1.5MB)나 다른
+단언은 무변경. 정방향 24/24 PASS, `readdirSync` 순서를 인위적으로
+뒤집은 재현 케이스도 24/24 PASS로 확인(수정 전에는 이 재현 케이스가
+CI와 동일한 2 FAIL을 재현했다 — CLAUDE.md 규칙 15 "회귀 의심 시 실제
+FAIL 확인" 적용).
+
+### `scripts/testProdCheck.mjs` — 같은 CI 실행에서 관측된 별도 FAIL(원인만 기록, 미조사)
+
+이 PR의 같은 CI 실행(`verify:all` 스텝)에서 `scripts/testProdCheck.mjs`
+(`extra:true`, non-gating — 위 "Production Safety Harness" 섹션 참고)도
+FAIL했다. Proto 2.5D/testBundleBudget과는 무관한 별개 원인 — 자체
+`--fixture` self-suite(총 292단언) 중 1건: `--show-names — INFO 절에
+원본 이름 "DriftStudentS1" 이 보인다`(CI 학생명 마스킹의 `--show-names`
+옵트아웃 플래그가 INFO 절의 마스킹까지는 해제하지 않는 것으로 보임).
+`extra:true`라 Release Gate를 막지 않는다. 이 세션은 원인 관측만 기록하고
+조사/수정은 하지 않았다(범위 밖) — 상세는
+`docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.15.
+
+### S8a(`tests/e2e/townV2.spec.mjs`, "마을을 열기만 해도 student_progress 쓰기 0건") — 타이밍 의존 단언 기록(2026-09-23)
+
+`npm run verify:e2e` 전체 순차 실행(1488단언)에서 1회 FAIL(`writes=1`),
+같은 코드로 `townV2.spec.mjs` 단독 재실행 448/448 PASS, 직전 `verify:all`의
+e2e 도메인도 PASS — 회귀가 아니라 타이밍 플레이크. 메커니즘:
+`src/hooks/useStudent.js:2043-2047`의 "restoreChecked 이후 record 변경 →
+2초 디바운스 → doSync(student_progress upsert, `wordLibrary.js:3185`)"가
+정상 동작이며, S8a는 클라우드 병합 복원이 화면에 보인 뒤 +500ms에 쓰기
+수를 재므로 복원→측정 구간이 렌더 지연으로 2초를 넘기면 이 sync가 측정
+창 안에 들어온다. 이 세션은 테스트/대기시간/허용치를 바꾸지 않았다(문서화만,
+`handoff.md` 172차 §9) — 재발 시 "디바운스 창 밖에서 재는" 방식으로
+S8a를 재설계할지는 V2 소유 세션이 결정한다. 재확인 커맨드: `vite preview`
+기동 후 `townV2.spec.mjs`만 단독 실행(위 standalone runner 패턴).
+
+### 2026-09-23 후속 — S9 원인 증명·측정 시점 수정 + Proto S3 항목11 측정 시점 수정 (Linux CI 전용 타이밍)
+
+위 S9 노트("원인 미확정")는 이후 같은 날 **증명·수정**됐다 — CI run
+35802684946(Linux)이 다시 43.445px로 FAIL했고, 프로브(`scripts/.tmp/
+s9_restart_probe.mjs`, `s9_early_read_probe.mjs`)로 (a) 배치 모드 진입 시
+애니메이션 재시작은 없음(반증), (b) 씬 루트의 1회성 `townEntrance 450ms`
+scale(0.97→1) 애니메이션이 **아직 재생 중일 때** 자손 앵커의 bbox를 읽으면
+진행률만큼 축소된다는 것을 확인(자연 실행 1/10이 367ms 시점 43.95px; 인위적
+재생 중 읽기 5/5 43.13~43.39px = CI 값; 종료 대기 후 5/5 44.00). 수정은
+`tests/e2e/townV2.spec.mjs`의 `waitForEntranceAnimationSettled(page)`를 S9
+bbox 루프 직전에 호출하는 것뿐(허용치 `>=43.5`/`>=44`·뷰포트·단언 수 448
+무변경, 제품 코드 무변경).
+
+같은 CI run의 `[town-proto2.5d] S3 항목11 드래그 dist=1.0156`도 측정
+레이스였다 — `Proto25DScreen.jsx:193-198`의 650ms `setTimeout`(커밋 시
+예약)과 650ms CSS transition(다음 페인트에 시작)이 다른 시계라 phase가
+`idle`이어도 잔여 이동이 남을 수 있고, 항목9 연속 탭 직후의 `boxBeforeDrag`가
+그 잔여를 드래그로 오귀속. 수정은 `tests/e2e/townProto25d.spec.mjs`의
+`waitForBoxStable(locator)`(연속 3표본 0.05px 이내)로 기준선 샘플만 안정화
+(허용치 `<1px`·단언 수 160 무변경). Windows 로컬 프로브 12회는 잔여 0px —
+재현은 CI 재실행으로 확정(결과는 `handoff.md` 172차 §10/PR #62 코멘트).
+
+## 관련 항목: Paul Town 2.5D Phase 6A — 씬 픽스처/캐릭터 매니페스트 단위 스위트 2종 + E2E 160→190 (2026-09-23, 173차)
+
+- `scripts/testProto25dSceneFixture.mjs`(24단언, gating): `sceneFixture.js`
+  id 8개 고유, 모든 `assetKey`가 `townAsset()`에서 URL로 해석, `walkGrid.js`
+  `OBSTACLES`가 `deriveObstacles(SCENE_FIXTURE)`와 deep-equal(단일 진실
+  원천), 레거시 3개 rect byte-identical, 신규 5개 rect = `footprintRect`
+  산식, 장애물 쌍 겹침 0, 스폰(50,62) walkable + 8개 장애물 옆까지 BFS
+  도달, `objectRenderedWidthPx`/`sceneUnitPx` 규칙. `src/assets/town/
+  index.js`는 `.webp`를 dataurl 로더로 번들(`testTownAssetManifest.mjs`
+  패턴).
+- `scripts/testProto25dCharacterManifest.mjs`(72단언, gating): 매니페스트
+  부재/무효 9종 → throw 없이 emoji 폴백(기존 glyph 규칙과 동일), 유효
+  매니페스트 ok, phase→state 매핑, frameIndex modulo, `isAnimated`,
+  sheet src/srcSet 전달. 의존성 0(plain import).
+- `tests/e2e/townProto25d.spec.mjs` 160→190: S6 장애물 8개 + `OBSTACLES_REF`
+  8개(5개 파생 rect를 리터럴로 복제, 이 파일의 "src import 금지" 관례) +
+  항목16 우회 2종(house-annex 탭 (13,24), tree-plaza-ne 탭 (59,44) — 박스
+  밖 4 world-% 북쪽, 경로 샘플이 박스에 진입하지 않음), S9 항목17(360/390/
+  412/1280) `proto25d-object` 7개·pointer-events:none·bottom-center가
+  `SCENE_OBJECTS_REF` 앵커와 1.0 world-% 이내·`proto25d-object-shadow` 7개·
+  `data-proto25d-obstacle-count="8"`, S3 항목C2 탭 리플 ≥1 → 700ms 후 0,
+  S5 항목C1 reduced-motion 리플 0. 스펙 갱신 전 기준선 실측: 159/160(예상
+  FAIL 1 = "장애물 3개") — 규칙 15 방식으로 회귀 확인 후 갱신. 갱신 후
+  190/190 × 3회(Windows 로컬, 단독 러너).
+- 항목17은 실제 버그를 잡는 단언이다: sway keyframe이 inline transform을
+  덮어써 나무/꽃밭이 앵커에서 한 폭·한 높이 어긋나던 문제(173차 §4)를
+  래퍼 `div` 분리로 수정한 뒤에만 통과한다.
+- 재확인 커맨드: `node scripts/testProto25dSceneFixture.mjs`,
+  `node scripts/testProto25dCharacterManifest.mjs`, E2E는 `npm run
+  verify:e2e`(전체) 또는 `vite preview` 기동 후 이 spec만 단독 실행.
+
+## 관련 항목: Paul Town 2.5D 캐릭터 스프라이트 v2 계약 — 신규 단위 스위트 2종 + E2E S11 (2026-09-24, 175차 Phase 6B)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._ 위쪽 172차 절의
+"160 PASS", 173차 절의 "160→190"은 그 시점 기준 기록이며, 이 절이
+추가한 S11(+16)로 현재 `[town-proto2.5d]` 총 단언은 206이다 — 옛
+기록은 append-only 원칙에 따라 고치지 않고 이 절이 최신 값을 남긴다.
+
+Paul Town 2.5D 캐릭터 스프라이트 v2 계약(`characterSpriteContract.js`,
+`handoff.md` 2026-09-24(175차)/`docs/design/town/
+SPRITE_CONTRACT_2026-09-24.md` §4 참고)이 추가한 순수 함수 단위
+테스트 + 그 어댑터 배선을 검증하는 SSR 단위 테스트 + E2E 확장.
+`paulTown2_5dSprite` 플래그는 이번 Phase에서 추가되지 않았고, 어떤
+프로덕션 파일도 이 계약 모듈을 아직 실제 매니페스트로 import하지
+않는다(오늘은 전부 휴면 — `ProtoCharacter.jsx`/`Proto25DScreen.jsx`는
+선택적 prop만 받고, 유일한 호출부인 `App.jsx`는 값을 넘기지 않는다).
+
+| 스크립트 | 단언 | 대상 | 네트워크 | 결과 |
+|---|---|---|---|---|
+| `scripts/testProto25dSpriteContract.mjs`(`tests/harness/registry.mjs` attachment 도메인, `extra:false`) | 172 | `characterSpriteContract.js`(매니페스트 validator — 8프레임 전부 필수, 누락 시 개별 폴백 없이 전체 거부 / `directionForMove`·`facingForMove`·`spriteStateForPhase` / `frameIndexAt` / `anchorOffsetPct`(퍼센트 앵커) / `resolveSpriteFrame`의 `walkSide`+좌측 전용 미러링과 이모지 폴백) | 0 | 172/172 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs`(`tests/harness/registry.mjs` attachment 도메인, `extra:false`) | 50 | `ProtoCharacter.jsx`/`Proto25DScreen.jsx`의 v2 렌더 분기 — 브라우저 E2E가 아니라 React SSR(esbuild + `react-dom/server`) 기반 DOM 검증(프로덕션 코드에 테스트 훅을 심지 않는 방식). 이모지 기본 DOM/무효 매니페스트 시 무매니페스트와 byte-identical, phase·direction·facing별 v2 프레임 선택, 미러는 `walkSide`+좌측만, 착석 seat-anchor 퍼센트, reduced-motion 정지, 커스텀 foot anchor 퍼센트, outer anchor·z-index·scale·그림자·min-width가 이모지·스프라이트 모드 간 동일, `img` src/srcSet, v1 매니페스트 하위호환 + 둘 다 넘기면 v2 우선, direction pass-through | 0 | 50/50 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S11(+16, `[town-proto2.5d]` 190→206) | 16 | 기본 렌더는 여전히 이모지·스프라이트 마크업 없음, `direction` 속성이 우/하/상 탭에 따라 side/front/back으로 갱신, 일반 걷기는 이모지를 절대 뒤집지 않음, 도착 후에도 direction 유지 | 0 | 포함 통과(§verify:e2e 총계) |
+
+의존성: `characterSpriteContract.js`는 v1(`characterManifest.js`,
+72단언, 무변경)의 공유 이모지 glyph 상수 하나만 import한다 — 나머지는
+재구현하지 않는다. `tests/fixtures/proto2_5d/spriteManifest.example.mjs`
+(테스트 전용, 1x1 투명 데이터 URI)는 어떤 프로덕션 파일도 import하지
+않는다.
+
+전체 회귀(2026-09-24 18:08–18:45 KST, HEAD `78125bf`): `npm run
+verify:e2e` 1534 PASS / 0 FAIL / 0 SKIP(미mock 요청 0), `npm run
+verify:all` "ALL DOMAINS: PASS"(스위트 단위 PASS 139 / FAIL 0, 약
+25분, 타임아웃/취소 없음), `npm run build` PASS(경고 0).
+
+재확인 커맨드: `node scripts/testProto25dSpriteContract.mjs`,
+`node scripts/testProto25dSpriteAdapter.mjs`, 전체 회귀는 `npm run
+verify:e2e`/`npm run verify:all`.
+
+## 관련 항목: Paul 캐릭터 8프레임 스프라이트 실장 — `testPaulSpriteAssets` 신규 + E2E S12/S13 신규 (2026-09-24, 177차 Phase 6C)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._ 175차 절이 검증한
+v2 계약/어댑터는 그때까지 휴면(이모지만 실제 렌더)이었다. 177차는
+운영자가 ChatGPT로 생성한 실제 PNG 8프레임을
+`src/assets/town/character/`에 설치하고
+`characterSpriteManifest.default.js`(`PAUL_SPRITE_MANIFEST`)를
+`Proto25DScreen.jsx` 기본 매니페스트로 배선해, `paulTown2_5d` 플래그가
+켜지면 처음으로 이모지 대신 실제 스프라이트가 렌더된다(신규 게이팅
+플래그는 추가하지 않았다 — `docs/design/town/
+PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14.6). 아래 결과는
+2026-09-24 21:47–22:27 KST, 워크트리 `wt-clean-pr`에서 lead가 직접
+실행한 최종 전체 회귀 기준이다.
+
+| 스크립트/스펙 | 대상 | 결과 |
+|---|---|---|
+| `scripts/testPaulSpriteAssets.mjs`(신규) | 설치된 8프레임 PNG의 정적/레지스트리/청크 격리/번들 누출 검사(파일 존재, `index.js` export 형태, `Proto25DScreen-*.js` 청크에만 `paul-` 문자열 존재하고 메인/TownScreen 청크에는 없음 등) | 112/112 PASS |
+| `scripts/testPaulSpriteIngest.mjs` §5–6(기존 135단언 중 "이미지 부재" 전제였던 절을 "이미지 존재" 케이스로 조정) | `spriteIngestPaul.mjs --check`/`--write`가 실제 8프레임 PNG를 만났을 때의 동작 | 132/132 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S8/S9/S11(스프라이트 모드로 조정) | 175차가 이모지 전제로 작성한 항목을 실제 스프라이트 렌더 기준으로 갱신 | 포함 통과(아래 standalone 270/270에 합산) |
+| `tests/e2e/townProto25d.spec.mjs` S12(신규, 뷰포트 360/390/412/1280) | 스프라이트 이미지 로드, 렌더 크기 밴드, 클리핑 없음, 프레임 교대(`walk-*-a`↔`walk-*-b`), 그림자, 검은 배경 없음, UI 탭이 캐릭터를 이동시키지 않음 | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` S13(신규) | `prefers-reduced-motion`에서 프레임 정지(`freezeFrameIndex`) | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | S8/S9/S11/S12/S13 포함 전체 | 270/270 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs` / `testProto25dSpriteContract.mjs` / `testProto25dCharacterManifest.mjs`(회귀 재확인) | 175차 스위트가 실 이미지 배선 후에도 그대로 통과하는지 | 50/50, 172/172, 72/72 전부 PASS |
+| `scripts/testTownEnvAssets.mjs`(회귀 재확인) | 스프라이트 신규 주석이 town 자산 매니페스트 검사에 영향 없는지 | 196/196 PASS(최초 실행에서 신규 주석 문구 충돌로 실패 → 수정 후 PASS, 아래 참고) |
+| `scripts/testBundleBudget.mjs`(§4c 신규 항목) | 스프라이트 16파일 인벤토리 + 누출 가드(main/V1/V2 청크에 `paul-` 없음), `Proto25DScreen` 청크 예산 | 32/32 PASS — 청크 누출 0, gzip 11.3KB ≤ 60KB |
+| `node scripts/spriteIngestPaul.mjs --check` | 실제 이미지 존재 상태에서 재실행 | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| 로컬 뷰포트 스크린샷(360/390/412/1280, Playwright + 네트워크 mock, 12장: {viewport}×{idle,mid-walk,sitting}) | Production PIN API를 호출하지 않는 로컬 검증(Production WRITE 0 원칙, 173차 §8과 동일 방식 — `handoff.md` 177차 §6) | lead 리뷰 완료 — 스프라이트 정상 렌더, 클리핑/검은 배경 없음, 프레임 교대·방향·착석·그림자·reduced-motion·UI 탭 무이동 전부 확인 |
+| Vercel Preview 확인(로그인 없이) | 배포 생존 + Proto 청크/`paul-*` 자산 서빙 여부만 | **완료.** 커밋 `8be6ba99`(2026-09-24 22:30 KST) 배포 `6638989777` success. 메인 청크 스프라이트 참조 0, `Proto25DScreen-*.js` 청크에만 `paul-*` 포함, `/assets/paul-*.png` 16개 전부 200 `image/png`, `paulEasyVoca_features` localStorage 부재(기본값 유지). 로그인 없이 GET만 수행(Production WRITE 0) — 상세는 `handoff.md` 177차 §7 |
+| `npm run build` | 전체 회귀 | PASS, 경고 0 |
+| `npm run verify:all` | 전체 회귀 | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 27분 |
+| `npm run verify:e2e` | 전체 회귀 | 1598 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+
+최종 PASS에 이르기 전 1차 전체 체인 실행에서 실제 버그 3건이
+드러났고 전부 수정 후 재실행으로 확인됐다:
+
+1. `testTownEnvAssets` — 신규 주석 3곳의 리터럴 문자열
+   `"assets/town/env"`가 매니처 검사에 걸림 → 문구 변경으로 수정.
+2. `testBundleBudget` §4 — 신규 PNG 16장이 "예기치 않은 파일"로
+   판정 → §4c 인벤토리 항목 + 누출 가드로 등록.
+3. E2E S12 `[412x915]` — `naturalWidth` 1회성 읽기가 전체 러너
+   안에서 간헐적으로 flaky → 최대 5초 폴링으로 수정.
+
+상세 배경은
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14와
+`handoff.md` 2026-09-24(177차) 참고.
+
+## 관련 항목: Paul 스프라이트 walk-side-b 프레임 교체(v2) (2026-09-25, 178차)
+
+177차가 설치한 8프레임 중 `walk-side-b` 한 프레임만 새 렌더로 교체하는
+작업이다(상세 판정·페어링은 `handoff.md` 2026-09-25(178차) §1 참고).
+
+**정정(2026-09-25, lead)**: 초기 보고에서 후보 원본 `12_54_37 AM
+(1)`을 "좌측·하단 잘림(클리핑)"으로 기록했던 것은 PIL
+`Image.getbbox()`를 RGBA에 그대로 적용해 alpha=0 픽셀까지 잉크로 잡은
+결과였다. alpha>16 기준 잉크 bbox로는 (80,18)–(1004,1431)로 여백이
+충분해 실제로는 클리핑이 아니다. 운영자가 `walk-side-a`를 유지하고
+`12_54_38 AM (2)`(alpha>16 잉크 bbox (151,17)–(901,1463), sha256
+`23c4a79f…`가 식별 키)를 `walk-side-b-v2`로 채택, (1)을 미사용으로 둔
+결정은 구도(art/composition) 판단으로 그대로 유효하다. 상세는
+`handoff.md` 178차 §0 정정,
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+§15.1 정정 참고.
+
+`walk-side-a`를 포함한 나머지 7프레임, 앵커, 타이밍, 미러 규칙은
+무변경이다. 기존 `paul-walk-side-b.png`(+`@2x`)는 디스크에 보존되되
+레지스트리에서 빠지므로, 기존 `testPaulSpriteAssets`/
+`testPaulSpriteIngest`/`testBundleBudget`가 v2 파일명
+(`paul-walk-side-b-v2.png`)과 레거시 파일 보존을 함께 검사하도록
+조정된다. `tests/e2e/townProto25d.spec.mjs` S12는 좌/우 측면 걷기에서
+frame id와 `src` 파일명이 a ↔ b-v2로 정확히 교대하는지, 렌더 크기와
+발 접지선이 흔들리지 않는지를 추가로 검사하고, S13은 측면 걷기
+프레임 정지(reduced-motion) 케이스를 포함한다.
+
+**정정(2026-09-25, lead) — 예방적 facing 가드, 관측된 결함 아님**: 위
+walk-side-b v2 교체와는 별개로, E2E 검증 중 여러 leg로 이어지는 긴
+LEFT 걷기에서 idle 전환 직전 약 100ms 동안 미러
+(`data-proto-character-sprite-mirror`/`scaleX(-1)`)가 무미러로 순간
+해제되는 것처럼 관측됐으나, lead 재조사 결과 **제품 버그가 아니라
+테스트 측정 아티팩트**였다. `findPath`로 확인한 (90,20)→(20,20)
+경로는 dx=−70, dy=0인 `side` 방향 단일 leg이고, 실제 원인은 E2E
+샘플러가 phase/mirror/facing 값을 서로 다른 Playwright 호출로 순차
+읽었고 두 호출 사이에 걷기가 끝나 idle로 전환되며 값이 어긋난
+레이스였다. S12 샘플러를 phase/mirror/facing을 한 번에 캡처하는
+atomic `page.evaluate` 스냅샷 방식으로 교체 중이다(LEFT 걷기 단언
+자체를 강화한 것이 아니라 측정 방식을 고친 것). 다만 재조사 과정에서
+`walkLeg`가 leg마다 그 leg 자신의 `dx`로만 facing을 재계산하는 기존
+로직이 실제 path-snap 시나리오(예: (65,62)→(20,62)의 마지막 leg는
+dx=0, dy=−3.8인 순수 수직 `walkBack` leg)에서는 facing이 잘못
+뒤집힐 위험이 있음을 확인했고, `Proto25DScreen.jsx` 1개 파일에 신규
+상수 `FACING_MIN_DX_PCT = 1.0`(world-%)을 **예방적 가드(하드닝,
+관측된 결함에 대한 수정 아님)** 로 도입했다 — 스프라이트 모드에서
+leg의 이동 방향이 `side`이고 `|dx| ≥ 1.0`인 진짜 수평 leg에서만
+facing을 갱신(`walkLeg`와 reduced-motion 점프 양쪽)하고, 수직/미세
+leg는 이전 facing을 유지한다. pathfinding, 벤치(`facingToward`),
+depth, shadow, 크기는 무변경. S12의 발 접지선 검사에는 기존부터 있던
+walk-bob CSS 애니메이션(크기에 비례해 진폭 증가)을 반영한 허용
+오차(키의 8% 또는 최소 4.5px 중 큰 값)를 추가했다.
+
+검증 결과(2026-09-25 01:55–02:42 KST, 워크트리 `wt-clean-pr`, lead
+실행):
+
+| 스크립트/스펙 | 대상 | 결과 |
+|---|---|---|
+| `scripts/testPaulSpriteAssets.mjs`(조정) | v2 파일명 + 레거시 보존 | 125/125 PASS |
+| `scripts/testPaulSpriteIngest.mjs`(조정) | v2 파일명 반영 | 132/132 PASS |
+| `scripts/testBundleBudget.mjs`(조정) | v2 인벤토리 + 레거시 미누출 | 32/32 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs`(회귀 재확인) | 175차 스위트 회귀 | 50/50 PASS |
+| `scripts/testProto25dSpriteContract.mjs`(회귀 재확인) | 175차 스위트 회귀 | 172/172 PASS |
+| `scripts/testTownEnvAssets.mjs`(회귀 재확인) | 스프라이트 신규 변경이 town 자산 매니페스트 검사에 영향 없는지 | 196/196 PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | 실제 이미지 재검사 | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| `tests/e2e/townProto25d.spec.mjs` S12(확장, atomic 샘플러 교체 포함) | 좌/우 걷기 frame id **와** `src` 파일명이 `walk-side-a` ↔ `paul-walk-side-b-v2`로 교대, LEFT 걷기 모든 샘플에서 미러 `'1'`, 크기/발선이 bob 허용 오차 안에서 안정, 4뷰포트 | 포함 통과(아래 standalone 327/327에 합산) |
+| `tests/e2e/townProto25d.spec.mjs` S13(확장) | `walk-side-a` 기준 측면 걷기 reduced-motion 프레임 정지 | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | S12/S13 포함 전체 | 327/327 PASS |
+| `npm run build` | 전체 회귀 | PASS, 경고 0 |
+| `npm run verify:all` | 전체 회귀 | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 32분 |
+| `npm run verify:e2e` | 전체 회귀 | 1655 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+| 로컬 뷰포트 스크린샷 리드 검수 | `preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png` | lead 리뷰 완료 — a/b-v2 프레임 동일 크기·발 접지선, 검은 배경/클리핑 없음 |
+| Vercel Preview 확인(로그인 없이) | 배포 생존 + 자산 서빙 | **완료.** 커밋 `5d2faf29`(2026-09-25 약 02:45 KST) push, GitHub 배포 `6644346180` success. 로그인 없이 GET만(Production WRITE 0): 로그인 화면 렌더, `Proto25DScreen-Dk3K-cwh.js` 청크에 `paul-walk-side-b-v2` 참조, 레거시 `paul-walk-side-b-<hash>.png` 참조 없음, `/assets/paul-*.png` 16개 전부 200 `image/png`(v2+`@2x` 포함), 메인 청크 스프라이트 참조 0, `paulEasyVoca_features` localStorage 부재. 2.5D 화면은 학생 로그인(Production PIN API WRITE) 필요해 미오픈 |
+
+상세 배경은 `handoff.md` 2026-09-25(178차) §7,
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §15.7
+참고.
+
+## 관련 항목: Paul Town 2.5D 학생 파일럿 직전 품질 정리 신규 스위트 (2026-09-25, 179차)
+
+179차 세션이 랜덤 경로 property 테스트에서 실제 pathfinding 결함(D1
+— string-pulling이 셀 인덱스 공간에서 직선시야를 판정해 지름길 leg가
+장애물 모서리를 최대 ~0.3% world-% 스칠 수 있던 문제)을 발견·수정한
+과정에서 신규/확장된 스위트다. 상세 근본원인·수정 내용은 `handoff.md`
+2026-09-25(179차) §2 참고.
+
+| 스크립트/스펙 | 단언 수 | 성격 |
+|---|---|---|
+| `scripts/testProto25dPathRandom.mjs`(신규) | 16 | mulberry32 결정론적 시드(20260925) 랜덤 (start,target) 100쌍 + 스트레스 1000쌍(시드+1)으로 `walkGrid.js`/`pathfinding.js`를 property 테스트. 각 leg를 1% 간격(101샘플)으로 세그먼트 샘플링해 장애물 엄격 내부 침입 0건을 기대하고, 994번 쌍(스트레스 i=994) 고정 좌표 결정적 회귀 케이스를 포함한다. `characterSpriteContract.js`의 방향-미러 계약도 함께 검증. |
+| `scripts/testProto25dWalkGrid.mjs`(확장, 28→37) | 37 | 기존 28단언(정상 목적지 보존/clamp/장애물 회피/결정론 등)에 sub-cell 오프셋 + 장애물 모서리 인접 시나리오 9단언을 추가 — 위 `testProto25dPathRandom.mjs`가 찾은 world-space LOS 버그와 같은 근본 원인을 다른 고정 좌표로 재현하는 회귀 방지 케이스. |
+| `scripts/testProto25dSpriteAdapter.mjs`(회귀 재확인, 50→70) | 70 | 2026-09-24 등록 당시 50단언이었으나, 179차 Q1(프레임 cadence 단위 시간 락) + Q2(@2x 실패 시 1x 강등 재시도 후 이모지 폴백) 수정으로 관련 SOURCE 단언이 추가돼 70단언으로 늘었다(커밋 `09fe5a62`). 2026-09-25 본 세션에서 `node scripts/testProto25dSpriteAdapter.mjs` 직접 실행해 70/70 PASS 재확인. |
+| `scripts/testProto25dSpriteContract.mjs`(회귀 재확인) | 177 | 179차 변경(캐릭터 cadence/degrade 로직 수정)이 기존 스프라이트 계약을 깨지 않는지 회귀 재확인. |
+| `tests/e2e/townProto25d.spec.mjs` S14(전환 행렬, 신규) | 52 | 179차 Phase 2, 커밋 `4982d933`. |
+| `tests/e2e/townProto25d.spec.mjs` S15(@2x 강등 실측, 신규) | 13 | 179차 Phase 7, 커밋 `b5430e9e` — Q2에서 단위 테스트로만 검증됐던 "@2x만 실패 → 1x 강등 렌더"/"@2x+1x 모두 실패 → 이모지"의 두 경로를 실제 브라우저에서 검증. |
+
+측정 방법 메모: 위 랜덤/property 테스트는 Math.random이 아니라
+mulberry32 PRNG를 고정 시드로 사용해 실패 시에도 100% 재현 가능하다
+(시드+쌍 번호만 기록하면 동일 입력을 재생성할 수 있음) — 이 저장소의
+기존 결정론적 테스트 관례(`CLAUDE.md` 규칙 15 "회귀가 의심되면 먼저
+FAIL을 재현해 확인")를 property 테스트에도 동일하게 적용한 것이다.
+`testProto25dPathRandom.mjs`가 994번 쌍에서 실측으로 결함을 재현·확정한
+사례가 정확히 이 패턴이다.
+
+Flake 재현성 분석(179차 Phase 5): 수정 후 dist에서
+`tests/e2e/townProto25d.spec.mjs`를 독립적으로 5회 연속 재실행 —
+매회 379/379 PASS, 0 FAIL(재현 가능한 flake 없음). S14 개발 중
+S12에서 1회 관측된 Playwright 타임아웃은 5회 재실행 어디에서도
+재현되지 않아 일회성 인프라 이슈로 분류했다(코드/테스트 수정 없음).
+S14(52) 포함 379개 + S15(13) = 프로토타입 E2E standalone 합계
+392/392 PASS.
+
+Phase 3(모바일 실기기 대응 측정, 4개 뷰포트 11/11 PASS)은 별도 신규
+스위트가 아니라 기존 `tests/e2e/townProto25d.spec.mjs`의 뷰포트별
+측정 섹션을 재확인한 것이며, 측정값은
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md` §3과
+`handoff.md` 2026-09-25(179차) §4에 기록했다.
+
+Phase 6 코드품질 리뷰(11건 발견, 행동 변화 없는 정리 5건 적용, 커밋
+`193b1e42`)와 Phase 8 독립 검토(pathfinding 수정/degrade 로직/aria
+배치/assertion 무결성/레지스트리 일치/작업 범위 전부 CONFIRMED) 상세는
+`handoff.md` 2026-09-25(179차) §3.1 참고.
+
+전체 회귀 결과(179차): `npm run build`(HEAD `b5430e9e`/`01450a0d`)
+PASS·경고 0. `npm run verify:all`(HEAD `b5430e9e`) "ALL DOMAINS:
+PASS", 142 스위트 PASS/0 FAIL(약 28분, 위 신규 스위트 전부 포함).
+`npm run verify:e2e`(전체 1720단언 기준) — run 1(`b5430e9e`)
+1718/1720(S15 타이밍 이슈 2건, 커밋 `01450a0d`로 수정 — 제품 코드
+무변경), run 2(`01450a0d`) 1718/1720(S15는 PASS로 전환, 대신
+`[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`에서 간헐 FAIL
+2건 — 179차가 손대지 않은 기존 V2 코드, `handoff.md` 179차 §6.1과
+`BLOCKERS.md` 참고), run 3(`01450a0d`, 2026-09-25 05:38–05:53 KST)
+**1720/1720 PASS, 0 FAIL, 0 SKIP, 미mock 요청 0** — S15 PASS, V2
+S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
+`DECISIONS_PENDING.md`로 이관). 3회 전부 완료. Vercel Preview(HEAD
+`b5430e9e`, 배포 `6646333620`) 에이전트 GET-only 확인 완료 — 200,
+로그인 화면 렌더, v2 스프라이트/degrade 속성/region 라벨 포함 청크,
+`paul-*.png` 16개 200 `image/png`, 저장된 플래그
+없음. 상세는 `handoff.md` 179차 §6에 기록했다.
+
+## 관련 항목: 학생 홈 4메뉴 + 로그인 중복 fetch 제거 테스트 (2026-10-02, 198차)
+
+- `tests/e2e/studentHome.spec.mjs`(`[student-home]`): 위 e2e 표 행 참고(12 시나리오 × 4뷰포트, 191 PASS/0 FAIL/1 SKIP). DOM 검증만 — VoiceOver/TalkBack 실검증 없음.
+- `tests/e2e/lib/studentHome.mjs`의 `enterVocaFromHome`: 학생 홈(`studentHomeMenu`)이 로그인 직후 첫 화면이 되어, 기존 Dashboard 전제 e2e 7스펙(student/mobile 등)의 login 헬퍼가 홈에서 "Voca" 메뉴를 눌러 Dashboard에 진입하도록 한 공용 헬퍼다. student.spec 34/34, mobileViewports 178/178 유지.
+- Playwright는 `aria-disabled` 요소를 disabled로 취급해 일반 click이 대기하므로, "준비 중" 카드 탭 테스트는 force click을 쓴다(제품 변경 아님).
+- `scripts/testLoginRefreshDedupe.mjs`(단위/하네스, `testStaleCacheRevalidation`과 같은 로그인·캐시 재검증 계열): 로그인 60초 이내 students만 재조회, in-flight 중복 제거, 관리자 화면 재조회, 오류 결과 미캐시. 참고: `testStaleCacheRevalidation`은 이 문서에 별도 항목이 없어 여기서 함께 언급만 한다.
+
+## 관련 항목: testTextbookIsolation 5f 정적 마커 드리프트 (2026-10-04, 203차)
+
+- `scripts/testTextbookIsolation.mjs` 5f(`getStudentClassAssignments 어디도 .eq('name')로 학생을 찾지 않음`)가 verify:all에서 `not-found`로 FAIL했다. 원인은 198차 커밋 `3238df49`가 함수를 `export async function getStudentClassAssignments(studentId)`에서 동기 캐시 래퍼 `export function getStudentClassAssignments(studentId, { cached = false } = {})`로 바꿨는데 정적 마커가 옛 `async` 형태를 찾아 함수 본문 검사가 건너뛰어진 것이다(테스트 계약 표류, 제품 결함 아님). 커밋 `2510d13c`가 마커 1줄만 새 시그니처로 맞췄고 단언은 불변, 스위트 43/43.
+- 규칙: 정적 마커(`fnMarkers`)가 추적하는 함수의 시그니처(`async` 여부, 인자)를 바꾸면 같은 변경에서 해당 마커도 함께 고친다. 마커가 함수를 못 찾으면 본문 단언이 조용히 건너뛰어지므로 FAIL(`not-found`)을 정상 신호로 취급한다.
+
+## 관련 항목: Speaking 이야기 세트 테스트 + e2e 빌드 env 주의 (2026-10-05, 208차)
+
+- `scripts/testSpeakingSets.mjs`(정적, 레지스트리 등록 `extra:false`, 저장·네트워크 0): 기본 세트 5개 정규화(id·exprId 보존), 이야기 10회차 존재·새 목표 정확히 100개·en 유일(대소문자/문장부호 무시)·기본 5문장과 다름, `situationKo`/`roleKo` ≤60자·영어 0·자기 뜻 미포함, `reply.speaker` 허용 목록, `alternatives`/`level`, 복습 `reviewOf`↔`reuseIn` 양방향, 복습 en = 원문 en. 208차 49 PASS.
+- `tests/e2e/speaking.spec.mjs` s1~s3(세트 선택 aria-pressed·44px, 1화 연습 상황/역할/문장/뜻/상대 대사/듣기 2종/10문항 완주, 기본 세트 회귀), `tests/e2e/speakingExam.spec.mjs` e1~e5(1화 공개 전 정답·뜻·듣기·상대 대사 DOM 부재 + speak 0, 공개 후 라벨·EN·KO·reply, 내비게이션·재진입, 다시 연습, 저장 시 기본 hello 기록 무영향). **이야기는 1화만 브라우저 커버** — 2~10화는 위 정적 검사만.
+- **브라우저 스펙용 build는 더미 Supabase env 필수**: env 없는 dist는 `createClient(undefined, undefined)`가 첫 청크에서 throw → 빈 화면 → 전 시나리오가 로그인 입력칸 대기 타임아웃으로 FAIL(208차 실측 26 FAIL, 제품 결함 아님). 프로세스 env로만 `VITE_SUPABASE_URL=https://e2e-dummy.supabase.co VITE_SUPABASE_ANON_KEY=dummy npm run build`. `.env` 생성·실제 키 사용 금지 — mock 패턴(`**/rest/v1/**` 등)은 호스트 무관이지만, mock 밖 요청은 catch-all이 `route.continue()`로 실제 호스트에 보내므로 실제 키면 Production에 닿을 수 있다.
+- 메모리: 브라우저 스펙은 여유 RAM ≥3 GB에서 스펙 1개씩 단독 실행(208차: 5스펙 각 26~157초, 실행 전후 2.8~4.3 GB 측정).
+
+## 관련 항목: 오늘 기억할 한 문장(2화) 테스트 (2026-10-05, 209차)
+
+- `scripts/testKeySentenceFlow.mjs`(정적 소스 핀, 레지스트리 `extra:false`, 저장·네트워크 0): PencilCaseScene SVG `<text>`·aria-label 영어 0, reduced-motion(matchMedia + CSS) 처리, clearTimeout·무한 애니메이션 없음 / KeySentenceFlow speak는 onClick 안에서만(자동 재생 0), `ks.en`은 watch와 `{revealed && <Answer`에서만, 금지 문구(정답·합격·완료·숙달·점수 등)·storage·supabase·fetch 없음 / 메뉴 카드는 `keySentenceFor` 있을 때만, 영어 직접 렌더 없음. 209차 15 PASS.
+- `scripts/testSpeakingSets.mjs` keySentence 7단언 추가(basic/ep01 null, itemId 문항 en/ko 일치, transfer 상대≠recall 상대, 한글 텍스트 ≤60자·영어 0·"빌려/빌리"·답 어간 금지, 키 문장 유일). 209차 56 PASS.
+- `tests/e2e/speaking.spec.mjs` k1~k7: 메뉴 카드(2화만, 한글만), watch(spoon → given ≤6초, 듣기 전 speak 0), recall/transfer **공개 전 `documentElement.outerHTML`에 영어 문장 없음**(숨김 렌더 금지), 공개 후 라벨·EN·상대 대사·handover 장면, 끝(금지 문구·localStorage 키 변화 0), reduced-motion(장면 즉시 최종, `key-scene` 안 애니메이션 0 — 앱 공통 버튼 전환은 집계 제외), 360/412 레이아웃(가로 스크롤 0, 버튼 ≥44px, 장면 폭 ≥300px). `toStep`은 [답 확인]이 있을 때만 누른다(이미 공개된 단계 재클릭 → 타임아웃 방지). 209차 388/0.
+
+## 관련 항목: Speaking 진입 세트 기본값·기억 (2026-10-05, 210차)
+
+- `scripts/testSpeakingSets.mjs` 진입 세트 5단언(첫 방문 ep02, 선택 기억, UUID 키만, 없는 세트 값/저장 거부, storage 예외 폴백). 210차 61 PASS.
+- e2e `speaking.spec.mjs`/`speakingExam.spec.mjs` `scenario()`는 기본으로 `lastSetKey(QA_STUDENT_ID)`='basic'을 **값이 없을 때만** 시드한다(기존 시나리오 = 기본 5개를 고른 학생). 첫 방문 동작은 `{ fresh: true }`로 검사(k1). 새 시나리오가 기본 5개를 전제하면 시드 그대로, 2화 기본을 검사하면 `fresh: true`.
+
+## 관련 항목: 상대(미아) 역할 녹음 (2026-10-06, 218차)
+
+- `scripts/testKeySentenceFlow.mjs` Partner 5단언: 훅 재사용(`sharedStreamRef`, 연습·시험 각각 녹음기 2개가 스트림 공유), 연습 예시 처음부터·시험 [예시 대답 듣기] 전 미마운트, 시험 블록은 `revealed && partner && !retrying`, 이동·다시 연습에서 두 녹음기 reset, 판정 문구·storage·fetch·업로드·SpeechRecognition 없음.
+- `scripts/testSpeakingSets.mjs`: `partnerRole`은 2화 문항만, s02-03 예시 대답 "Sure. Here you are!".
+- e2e `speaking.spec.mjs` k10(mock 합성 마이크): 연습 s02-03 — 폴 문장 듣기 → 내 문장 녹음 중 내 대답 녹음 비활성 → 내 대답 녹음/녹음 끝내기/blob/내 목소리 듣기/다시 녹음, `window.__micTracks.length === 1`(스트림 공유), 예시 대답 듣기 speak, 다음 문항에서 두 녹음 비움, localStorage 흔적 없음, 화면을 떠나면 트랙 ended. 마이크 거부 시 안내·예시·이동 유지. 시험: 답 확인 전 블록·예시 글 DOM 없음 → 답 확인 후 블록만 → [예시 대답 듣기] 후 글+speak → 다음 문제에서 숨김. 1화 연습에는 블록 없음. k8 시험 단언은 예시 대답 버튼 뒤로 이동.
+- 실제 마이크·실기기는 이 하네스로 확인할 수 없다(`verify:speaking`은 정직한 SKIP 유지).
+
+## 관련 항목: Speaking 주제별 탐색 (2026-10-07, 219차)
+
+- `scripts/testSpeakingSets.mjs` 주제 7단언: 주제 전부 이야기 ≥1·id 유일·회차 id 실재, 카드 핵심 표현 = 같은 회차 기존 문항(복사 없음), 1~3화 keyItemId = keySentence.itemId, 제목 ≤12자·한 줄 ≤30자·영어/답 어간 없음, 주제 설명 규칙, 미분류 = ep07, 여러 주제의 같은 회차 = 같은 카드.
+- `scripts/testKeySentenceFlow.mjs` Topics 3단언: 루트 첫 화면 topics·origin 복귀·전체 이야기 버튼, 화면은 speakingTopics만 참조(저장·네트워크·콘텐츠 import 없음)·회차별 썸네일, 판정 문구 없음.
+- e2e `speaking.spec.mjs`/`speakingExam.spec.mjs`: `openMenu`는 주제 화면 → [전체 이야기]로 기존 메뉴를 연다(기존 단언 유지). k11: 주제 카드 수·영어 없음, 학교생활 → 1·2화 카드 내용·썸네일 차이, 연습 시작 → s02-01…s02-03 같은 id, ← 메뉴 → 들어온 주제, 한 문장 이야기 → 1화 흐름, ← 주제, 전체 이야기 → 메뉴(마지막 세트 기억), 홈 재진입 → 주제; 쇼핑 → 5화 연습 끝 → 한글 보고 말하기 → 답 확인 전 영어 없음 → ← 메뉴 → 쇼핑 카드; 360/390/412/1280 레이아웃(주제·기분 4카드).
+
+## 관련 항목: 주제별 구성 다듬기·결함 수정 (2026-10-07, 220차)
+
+- `scripts/testKeySentenceFlow.mjs` +5: 카드 영어 핵심 표현은 `<details>` 안(접힘)·버튼 설명 문구, `stopSpeaking` export와 호출 위치(연습 move·시험 next/back/retry·흐름 go·녹음 start·언마운트), `BUSY`(recording||requesting)는 다른 녹음기·듣기에만 쓰고 이동·뒤로는 recording만, 허용 대기 중 중복 스트림 재사용, 시험 다시 연습 패널 partnerRec.
+- e2e `speaking.spec.mjs`: k11 2화 카드 단언을 "핵심 표현 접힘 → 열면 영어+뜻"으로 교체, k10 "허용 대기 중 중복 요청 금지"(mic hang: 내 대답 녹음 비활성·← 메뉴 가능·getUserMedia 1회). 220차 speaking 540/0, speaking-exam 216/0.
+- TTS 정지는 mock(speechSynthesis 스텁이 항상 onerror)으로 재생 상태를 만들 수 없어 e2e로 검증하지 않음 — 정적 핀 + 실기기 확인 대상.
+
+## 관련 항목: Writing 첫 버전(주제별 문장 쓰기) (2026-10-07, 222차)
+
+- `scripts/testWritingPractice.mjs`(레지스트리 `writingCoach` 도메인, `verify:writing-coach`): 문항 10개가 기존 Speaking 문항 id만 가리킴·학교생활/쇼핑 5개씩·빈 주제 없음·회차-주제 일치, 화면용 문항 값이 원본과 동일, promptKo ≤45자·영어 없음·뜻 문장 미포함, hintWords 1~3개·문장 안 조각, noteKo/acceptNoteKo 길이, Speaking 링크(2·5화만); 초안 저장 UUID 키·라운드트립·계정 분리·판정 값 없음·깨진 JSON/예외 폴백, hasContent/sameSentence; 소스 핀(예시는 비교 후에만, 공백 입력 비교 불가, 수정 전/후 구분, 채점 문구 없음, 임시 저장·미전송 안내, DB/AI 없음, App QA 게이트·링크·복귀, Speaking [이 표현 써보기]·startDone, 비QA 경로 무변경·플래그 OFF).
+- e2e `tests/e2e/writing.spec.mjs`(`testBrowserE2E` 목록 `[writing]`): a 주제 2개·문항 5·안내, b 쓰기 흐름(예시·대체 답안·듣기 DOM 없음 → 공백 비활성 → 도움 단어만 → 비교 → 고치기 → 수정 전/후 → localStorage UUID 키/필드 → 다음 문항 예시 숨김 → 재진입 복원), c 혼자 쓰기·다른 UUID 초안 미노출·무변경, d Speaking 2화 연습 끝 [이 표현 써보기] → w-s02-03 → ← 목록 → 2화 연습 끝 복귀, 홈 재진입 시 주제 화면, 3화에는 버튼 없음, e 360/390/412/1280 레이아웃(긴 문장 포함).
+- `tests/e2e/studentHome.spec.mjs`: QA 계정 홈의 문장 쓰기 카드는 플래그와 무관하게 활성(App 게이트 `|| qaTestStudent`), 클릭 → `writing-topics`. '준비 중' 계약은 비QA 대시보드 경로에만 남는다.
+- `scripts/testBundleBudget.mjs`: raw 합계 예산 1.5MB → 1.6MB(파일 주석에 사유 — lazy 청크 포함 총량 감시용, 메인 gzip ≤135KB 단언은 그대로).
+
+## 관련 항목: 자체 커리큘럼 목표 매핑·교재 독립성 (2026-10-08, 223차)
+
+- `scripts/testCommGoals.mjs`(speaking 도메인, extra:false): func 69종 → 목표 정확히 한 번(누락·중복·stale 0), 114문항+기본 5 전부 목표 보유, 목표 id 유일·레벨 1~3·제목 ≤10자·영어 없음, 레벨 3개, 목표당 문항 ≥3, itemsForGoal 합계, 목표→회차 연결, 콘텐츠 모듈 9개에 특정 교재 브랜드·권/단원 번호 체계 없음(설명 주석의 낱말 '교재'는 허용), 회차 제목·요약에 단원 번호 없음, 설계 문서 필수 섹션. 223차 ALL PASS.
+
+## 관련 항목: 통합 과정 공통 구조·시범 Unit (2026-10-08, 224차)
+
+- `scripts/testPilotUnit.mjs`(speaking 도메인): 공통 구조(과정 5·회화 블록 6·목표 id 실재, 기간 "가안"·영국 학년/CEFR/권수 필드 없음, 지원 단계 4·영역 2, 기록 플래그 5 중 앱 설정 2), 시범 Unit 계약(validateUnit, 활동 7종 순서, 기존 말하기/쓰기 연결, 핵심 표현 s02-03, 어휘=텍스트 안, 듣기 ≤45단어·읽기 ≤70단어·문장 ≤9단어, 복습 상황 영어/빌려 없음, Could I… 비오답, 출처 kind 구분, 교재 브랜드 없음), 기록(UUID 키·앱은 completed/selfChecked만·플래그 아닌 값 거부·다음 활동·영역별 지원 단계·깨진 JSON·점수/숙달 값 없음), 화면·App·Speaking 루트 핀. 224차 ALL PASS.
+- e2e `tests/e2e/unit.spec.mjs`(`[unit]`): a 개요(제목·활동 7·다음=어휘·안내) → 어휘 🔊 speak → 듣기(대본 숨김·버튼 재생·문항·근거·자기 확인) → 읽기(틀린 보기도 근거만) → 문형(관찰 확인 전 숨김·정답 2개 문항) → 기록(UUID, completed/selfChecked만, teacherObserved false, 이름 키 없음); b 복습(공개 전 모범·듣기·speak 없음 → 확인 후 모범·대체) → 도움 정도(말하기/읽기·쓰기 따로) → 재진입 복원; c 말하기(2화 한 문장 흐름 spoon) ← 메뉴 → Unit, 쓰기(w-s02-03) ← 목록 → Unit, 홈 재진입 시 링크 초기화; d 360/390/412/1280 레이아웃. 224차 54/0. 1차 3 FAIL은 테스트 환경 문제(speak 카운터 등록 순서, 정답 배열 id).
+- 영향 회귀: studentHome 218/0/1, speaking 540/0, speaking-exam 216/0, writing 63/0(홈 진입 1개 추가·Speaking 루트 initialMode 확장 뒤 재실행).
+- `scripts/testQaGate.mjs` QA_ONLY_SCREENS 5개(unit 추가)로 갱신.
+
+## 관련 항목: 첫 Unit 독립 검수 반영·두 번째 Unit·Unit 간 격리 (2026-10-08, 225차)
+
+- `scripts/testPilotUnit.mjs` +11: Unit 2(`unitLostBag.js`)도 같은 계약(validateUnit)·`UNITS` 2개·id 유일, 목표 asking-info 실재, 활동 7종 같은 순서, 말하기는 Unit 안 3단계(repeat→swap→recall: 틀 `___` 1개·칩 ≥2, 회상 상황 한국어만·모범/대답/대체 있음), 쓰기 inline 문항 `w-u2-under`(주제 finding, itemId 없음), 어휘=텍스트 안·위치 말 ≤3, 듣기 ≤45단어·Paul/Mia만·읽기 ≤70단어·문장 ≤9단어, 복습 영어 없음·근거 본문 그대로, Where is…(대체) 비오답·출처 kind·교재 브랜드 없음, 두 Unit 핵심 문장이 서로의 텍스트에 없음, 화면 핀(unit-list/unit-pick, 3단계 분기, 답 확인 전 `unit-speaking-answer` 미마운트, RecorderControls/useLocalRecorder 재사용, steps 없는 말하기만 onSpeaking). 225차 QA 수정 핀: 첫 응답만 `onAnswered`(2곳), 재생 체인 `alive` 가드, `returnedFrom` 복귀 기록(App 전달식 포함), 자기 확인 미응답(`selfPicked[...] === false`), "끝냈어요" 없음; 콘텐츠 핀(듣기 1번 "얼마나", ruler·ball 어휘, 방어 가능 오답 제거).
+- `scripts/testWritingPractice.mjs`: 이야기 문항(`!w.inline`) 10개 핀은 `storyItems`로 범위를 좁히고, inline 문항 계약(situationKo·roleKo·en·ko 보유, `writingItem()`이 그대로 반환, episode null)·주제 `school:5,shopping:5,finding:1` 추가. promptKo 핀은 `writingItem(w.id)`로 inline도 검사.
+- e2e `tests/e2e/unit.spec.mjs`: `openUnit(unitId)`가 Unit 선택 목록(`unit-list` → `unit-pick-<id>`)을 거치고 `goHome`은 ← 목록 → ← 홈. a에 "한 문항 두 번 눌러도 끝나지 않음(첫 응답만)"·"자기 확인 고르기 전 둘 다 강조 없음", c에 "말하기/쓰기 복귀 시 '해 봤어요' + 다음=문형" 추가. **e(신규)** Unit 2: 목록 2개 → 개요 → 말하기 1단계(문장 수·🔊 그 문장만) → 2단계(칩 바꾸면 질문·대답 문장 변경·질문 듣기) → 3단계(한국어 상황만·모범/대답 DOM 없음·speak 추가 없음·미완료 → 답 확인 → 모범·대체·대답·'해 봤어요'·판정 없음) → 쓰기 inline 문항 ← 목록 → Unit 2 → 문형 3문항 → 기록은 Unit id별(Unit 1 키 없음) → Unit 1 화면 초기 상태·복습은 Unit 1 문장 → Unit 2 재진입 유지 → 다른 UUID 기록 심기 + 새로고침·재로그인 → Unit 2 유지·타 UUID 미노출. **f(신규)** Unit 2 360/412 레이아웃(개요·물건 바꾸기). 결과 수치는 handoff 225차.
+- 정적만으로 검증한 것(브라우저 미재현): 듣기 재생 체인 중단(mock speechSynthesis는 항상 onerror라 재생 상태를 만들 수 없음), 청크 로드 실패 빈 화면.
+- **225차 재개 결과(12:52~13:06, RAM 4.1GB, 브라우저 1개 순차)**: `[unit]` 1차 80/6 → 제품 결함 1건(`returnedFrom`이 목록에서 연 다른 Unit에도 적용되어 그 Unit 쓰기가 완료로 기록 → `UnitScreen` `pendingReturn` 1회 소비·선택 시 비움, 핀 추가) + 스펙 3건(c 기대값, 새로고침 뒤 세션 복원 로그인, 상태 문구 `waitUntil`) 수정 → **88/0 ×2**. `[student-home]` 218/0/1 SKIP, `[speaking]` 540/0, `[speaking-exam]` 216/0, `[writing]` 62/1(주제 "2개뿐" 계약 → 3개로 갱신) → 63/0. e2e e(격리) 시나리오가 실제 격리 결함을 잡아낸 첫 사례 — 테스트 유효성 확인.
+
+## 관련 항목: A안 — 보류 결함 2건·교사 검수표·ROADMAP (2026-10-08, 226차)
+
+- `scripts/testPilotUnit.mjs` +1: Unit 청크 로드 실패 → `.catch(() => setPilotUnitsFailed(true))`·`unit-load-failed`/`unit-loading` 분기·`unit-load-home` 버튼, App이 `linkLabel='← 이 단원으로'`를 unitLink일 때만 전달, WritingPractice `onNext={linked && linkLabel ? onBack : next}`·`nextLabel || ('다음 문장 →' | '목록으로')` 핀. 독립 Writing·Speaking 링크 흐름은 `writing.spec.mjs`의 기존 "다음 문장 → 다음 문항" 단언(b·d)으로 회귀 보호.
+- e2e `tests/e2e/unit.spec.mjs`: c에 "쓰기 비교 뒤 버튼 = '← 이 단원으로' → Unit 화면 복귀 → 다시 쓰기 → ← 목록" 추가. **g(신규)** `page.route('**/assets/units-*.js', abort)`로 청크 실패 재현 → `unit-load-failed` 안내 문구·홈 버튼 → 학생 홈 → unroute 뒤 다시 열면 목록 로드.
+- 결과 수치는 handoff 226차(RAM <3GB면 미실행으로 기록).
+- **226차 결과(16:10~16:21, RAM 3.3~3.6GB, 브라우저 1개 순차)**: `[unit]` 1차 90/2 → g의 FAIL 2건은 환경·설계 순서(① 기존 `vite:preloadError` stale-chunk 자동 새로고침이 먼저 동작 → 가드 활성인 2차 실패에서만 안내 ② 같은 페이지 재시도는 브라우저가 실패한 import()를 새로고침 전까지 기억 → 안내 문구 "새로고침" + 🔄 버튼으로 제품 보완) → 2차 95/1(evaluate가 새로고침과 경합, `framenavigated` 대기 + safe evaluate) → **99/0**. `[writing]` 63/0(독립 '다음 문장 →' b·d 유지), `[student-home]` 218/0/1 SKIP(기존 fixture 한계). 최종 빌드로 writing·student-home 재실행 PASS. g 시나리오의 재진입 단언은 "같은 페이지 재시도 → 여전히 안내(빈 화면 아님) → 새로고침 → 목록"으로 확정.
+
+## 관련 항목: 레벨 구조 연결 — 수행 수준·프로필·과정→단계→Unit·인접 단계 Unit 3 (2026-10-08, 227차)
+
+- `scripts/testPilotUnit.mjs` +11: `PERFORMANCE_LEVELS` 5(입문·기초·발전·확장·발표, 말하기/쓰기 설명이 서로 다름)·`blocksForCourse`/`blockLabelKo`; 두 Unit의 `performance`+`profile` 8항목; `validateUnit`이 잘못된 performance/profile을 거부하고 없으면 허용(기존 데이터 호환); 화면 3단 선택 핀(unit-course/unit-block/unit-pick, data-level, '미제작' aria-disabled, UnitScreen 선택부에 localStorage/sessionStorage 없음, `unit-speaking-to-writing`, '운영 계획' 안내); Unit 3 — 계약 통과·같은 goalId·C2·developing/developing(Unit 2는 basic), 말하기 3턴/Is it 틀/What about 되묻기/followUp(Unit 2엔 없음), 쓰기 2~3문장(Unit 2는 1문장, 문자열 비포함), 듣기·읽기·복습 모범이 Unit 2와 전부 다름(라벨 교체 금지), 어휘=텍스트 안·길이 제한·복습 한국어만, followUp 2차 답 확인 전 미마운트 핀.
+- `scripts/testWritingPractice.mjs`: 주제 `finding:2`(C1 `w-u2-under`, C2 `w-c2-find`).
+- e2e `tests/e2e/unit.spec.mjs`: `openUnit(unitId)`가 과정 → 단계 → Unit 3단을 거침. e에 과정 선택(회화만 열림, 4과정 '미제작' 비활성) → 단계 선택(1단계 단원 2개·2단계 단원 1개, 3~6단계 '미제작', 기간은 운영 계획 안내) → Unit 목록(수행 수준 표기), ← 목록은 같은 단계로·선택 저장 키 없음, 말하기 답 확인 뒤 [이 표현 써보기] → 이 Unit의 쓰기. **h(신규)** Unit 3: 개요(2단계·궁금한 것 묻기) → 따라 하기 3턴 → Is it 틀+되묻기 틀 → 회상(모범·대답·후속 답 전부 DOM 없음) → 1차 답 확인(후속은 아직 숨김) → 2차 답 확인 → [이 표현 써보기] → `w-c2-find`(2~3문장) → 입력·비교(판정 없음) → '← 이 단원으로' → Unit 3 쓰기 완료 → C1 Unit 2로 전환: 미완료 그대로·회상 followUp 없음·모범은 Unit 2 것 → 기록 Unit별 분리.
+- 결과 수치는 handoff 227차(RAM <3GB면 미실행으로 기록).
+- **228차 결과(2026-10-09 02시경, 여유 RAM 4.75GB, 브라우저 1개, vite preview 포트 4193, 더미 env 빌드)**: 227차에서 미룬 브라우저 e2e 재개. `[unit]` 1차 117/1 — "Unit 3 개요: 2단계" FAIL = 제품 결함(`UnitScreen.jsx:246` 개요 헤더가 raw `unit.block` 'C2' 출력, 선택 화면·crumb는 `blockLabelKo` 사용) → `blockLabelKo(unit.block)`로 수정, 2차 **118/0**. `[writing]` **63/0**. `[student-home]` 1차 214/2/1 — m(ii) Pilot A 마을 카드 FAIL이 `dist/` 재빌드(02:05:59)와 겹침 → 환경으로 분류, 안정된 dist 2차 **218/0/1 SKIP**(기존 streak fixture 한계). 미mock 요청 0·mock 오류 0. 정적: build 경고 0, `testPilotUnit`·`testWritingPractice`·`testCommGoals`·`testKeySentenceFlow` PASS, `testQaGate` 17/0, `testLazyChunkGuards` 92/92, `testBundleBudget` 32/0, `testRegistryCoverage` 8/0.
+
+## 관련 항목: 홈 Speaking·Writing 통합 진입 — 6 과정 → 레벨 → 단원/이야기 → 활동 (2026-10-09, 229차)
+
+- 정적: `scripts/testPilotUnit.mjs` +6(6 과정 구성·`reading` 대체, 레벨 '(제안)' 표기, `catalog.js` 섹션 — 회차 배치 ep01~ep10 레벨 하나씩·`placementErrors` 0·빈 레벨 '콘텐츠 준비 중', 선택 화면 핀). `testWritingPractice`·`testKeySentenceFlow`·`testCommGoals`·`testStudentPathContracts`·`testRegistryCoverage` PASS, `testQaGate` 17/0, `testLazyChunkGuards` 92/92, `testBundleBudget` 32/0(UnitScreen 청크 34.5KB, units 청크 20.8KB).
+- e2e 헬퍼 변경: `speaking.spec.mjs`에 `openPicker`(홈 말하기 → 과정 → 레벨 선택 화면)·`openStoryPractice`(선택 화면 → 이야기 카드 연습 시작), `writing.spec.mjs`에 `openItem(wId)`(문항 id → 과정/레벨/회차 경로 매핑), `speaking-exam` 스펙의 `openExam`은 홈 시험 바로가기 사용(시험 바로가기는 선택 화면을 거치지 않음). 기존 메뉴/세트/주제 시나리오는 시험 → 뒤로 경로로 유지.
+- 신규/개정 시나리오: speaking **p1**(6 과정·개수·핵심 문장 토글) · **p2**(복귀 시 선택 유지, ← 홈에서 초기화, 새 localStorage 키 없음) · **p3**(선택 화면 360/390/412/1280 레이아웃); writing **a/d** 재작성(선택 화면 경유); unit **i**(과정 6개·병행 배지·빈 과정 비활성) · **j**(기초/발전 회차·Unit 목록 + 말하기/쓰기 의도별 활동 직행); student-home **j**(쓰기 카드 → 선택 화면). 연습 시나리오는 선택 화면 → ep02로 이동.
+- 흔들림 보강: `[unit]` 1~2차에서 "복귀 직후 `data-completed`를 즉시 읽기"가 시나리오를 바꿔 가며 실패(140/1, 139/2). 추가된 선택 상태 effect와의 타이밍 경합으로 분류해 225차와 같은 방식으로 `waitUntil`(최대 5초)을 넣었고 3차 실행 통과. 제품 코드는 변경 없음.
+- **229차 결과(2026-10-09 02:40~03:20, 여유 RAM 3.9~4.7GB, 브라우저 1개 순차, vite preview 포트 4193, 더미 env 빌드 경고 0)**: `[unit]` 141/0 · `[writing]` 83/0 · `[speaking]` 608/0 · `[speaking-exam]` 216/0(진입 경로 갱신 전 4/26) · `[student-home]` 218/0/1 SKIP(기존 streak fixture 한계). 미mock 요청 0·mock 오류 0. 전부 mock 기반이며 Preview 실화면·실기기는 미검증.
+
+## 관련 항목: 홈 문법 진입 — 공용 선택기 intent 'grammar' → Unit 문형 활동 (2026-10-09, 231차)
+
+- 정적: `scripts/testPilotUnit.mjs` +3 핀(`grammarForUnit`/intent 'grammar' 필터, 선택기 문법 문구, 홈 `student-home-grammar` 버튼). `testQaGate` 17/0, `testStudentPathContracts`, `testLazyChunkGuards` 92/92, `testBundleBudget` 32/0, `testRegistryCoverage`, `testWritingPractice`, `testKeySentenceFlow` ALL PASS. 더미 env 빌드 경고 0.
+- 신규 시나리오: unit **k**(홈 문법 경로 — Conversation → 1단계 → Unit → 문형 활동 직행, 이야기·준비 중 과정 비활성, Unit 부제 `📘 … · 관찰 2 · 문항 3`, '← 단원' = 개요, unitRecords 키 외 새 localStorage 키 없음, 선택기 레이아웃 360×640·412×915 두 뷰포트만) · student-home **r**(📘 버튼 표시 + DOM 순서 town → unit → grammar) · **q**(비QA 계정은 버튼 없음).
+- 테스트 쪽 수정 2건(`[unit]` 1차 173/2, 제품 코드 무변경): ① 머리글 '어떤 단원의 문법을 볼까요?'는 단원 목록에서만 렌더되는데 과정 화면에서 단언 → 단원 목록으로 이동 후 단언. ② localStorage 기준값을 로그인 전에 캡처해 로그인 후 키와 비교됨 → 로그인 뒤로 캡처 위치 이동.
+- **231차 결과(2026-10-09 03:50~04:30, 브라우저 1개 순차, vite preview 포트 4193)**: `[writing]` 83/0 · `[speaking]` 608/0 · `[speaking-exam]` 216/0 · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[unit]` 1차 173/2 → 재실행 176/0(e2e 커밋 `fb7153e4`, 미mock 요청 0·mock 오류 0). 전부 mock 기반, Preview 실화면·실기기 미검증.
+
+### 232차 추가 (2026-10-09): 문법 수준 분리 + 레벨별 문제 세트
+- 신규 시나리오(e2e 커밋 `8b851840`): unit **l**(문법 단계 버튼 '문법 기초/발전' 라벨 → [이 단계 문법 문제 모아 풀기 (N문항)] → GrammarSetScreen. C1 세트 → C2 세트 순서로 확인하고 **문항 수는 데이터(`grammarSetForBlock`)에서 계산**해 비교(C1 12·C2 6은 현재값일 뿐 하드코딩하지 않음). 세트 화면에서 기록·점수·새 localStorage 키 미생성, '← 단원 목록'으로 돌아가면 선택 유지) + l 레이아웃(360/412).
+- 정적 핀 조정: Unit 2 "Where is… 비오답" 핀이 '틀린 문장 찾기' 프롬프트는 면제한다. 그 문항에서는 정답 보기가 곧 틀린 문장이라 비오답 규칙의 의도된 예외다.
+- 정적: 더미 env 빌드 경고 0. `testPilotUnit`·`testQaGate` 17/0·`testStudentPathContracts`·`testLazyChunkGuards` 92/92·`testBundleBudget` 32/0·`testRegistryCoverage`·`testWritingPractice` ALL PASS.
+- **232차 결과(2026-10-09 04:35~05:00, 브라우저 1개 순차, vite preview 포트 4193)**: `[unit]` 227/0(1차) · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[writing]` 83/0 · `[speaking]` 608/0. 미mock 요청 0·mock 오류 0. 전부 mock 기반, Preview 실화면·실기기 미검증. 추가 문항 9개는 교사 검수 전.
+
+### 233차 추가 (2026-10-10): Grammar 5 과정 + 9단계 단원 (`[grammar]` 신규 스펙)
+- 정적: 신규 `scripts/testGrammarCourses.mjs`(registry `extra:false`) — 과정 5개, 단원 34개(ready 3 / 준비 중 31), 모든 id 참조(`prereqIds`·`basicsUnitId`·`fromUnitId`), 빈칸 `___`와 정답 범위, 순서 answers가 words 사용, 교재 브랜드/단원 번호 금지, 예문 8단어 이하. `testPilotUnit`·`testQaGate` 핀 갱신(선택기 문법 intent와 `GrammarSetScreen` 제거 반영, 홈 문법 버튼 라벨). `testBundleBudget` raw 합계 한도 1.6 → 1.7 MB(main gzip 검사 불변).
+- 제거된 시나리오: `[unit]` k(선택기 문법 경로)·l(레벨별 모아 풀기)과 l 레이아웃. 해당 화면이 새 문법 과정 화면으로 대체되어 기능째 삭제됐고, 대체 검증은 `[grammar]` 스펙이다.
+- 신규 `[grammar]` 스펙 a~g: a 5 과정·숙련도/학교 (제안) 배지·ready/전체 개수 / b Easy 목록과 g-easy-01 9섹션 순서·듣기 1회 재생 / c 전체 연습 흐름(빈칸·순서 오답 → 설명 → 다시 풀기 → 정답, 만들기는 비교만·판정어 없음, 풀이 M/M → 연습 다 했어요 → 직접 사용 → 전체 다시 풀기 → 0/M) / d g-int-01 비교 섹션·되묻기 순서 / e 중·고 전 단원 준비 중 비활성·학교 문법 안내 / f 뒤로 가기·저장 없음 / g 360·390·412·1280 레이아웃(잘린 요소 검사 포함). 미작성: 로드 실패 경로, 기초 링크 이동.
+- 테스트 측 수정 2건(`[grammar]` 1차 122/2, 제품 코드 무변경): ① 판정어 검사 정규식이 운영자 규칙 문구 '정답은 아니에요'(예시는 하나의 답일 뿐이라는 안내)를 오탐 → 검사 대상에서 제외. ② 저장 없음 검사가 앱의 기존 동기화 키 `paul_easy_sync_meta`를 새 localStorage 키로 계수 → 기준 키에 포함.
+- **233차 결과(2026-10-10 00:40~01:20, 브라우저 1개 순차, vite preview 포트 4193, 더미 env 빌드 경고 0)**: 정적 `testGrammarCourses`·`testPilotUnit`·`testStudentPathContracts`·`testRegistryCoverage`·`testWritingPractice`·`testKeySentenceFlow` ALL PASS, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/0. mock e2e: `[writing]` 83/0 · `[speaking]` 608/0 · `[speaking-exam]` 216/0 · `[unit]` 141/0 · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[grammar]` 124/0(1차 122/2 → 테스트 측 수정 후 재실행, e2e 커밋 `0689cd92`, 미mock 요청 0·mock 오류 0). 전부 mock 기반, Preview 실화면·실기기 미검증.
+
+### 234차 추가 (2026-10-10): Grammar Easy 03~08 — `[grammar]` 시나리오 h·i, 검수 배지, 어휘 규칙
+- 정적: `testGrammarCourses`가 새 데이터 계약(`reviewStatus`, 단원별 `words`, `practiceCounts`, 어휘 규칙)을 포함해 ALL PASS. 어휘 규칙은 `validateGrammarUnit`이 검사한다: 예문·구조·비교·오류 right·정답 보기·빈칸 문장·순서 단어·만들기와 직접 사용 예시의 영어 단어가 문법어·이름(Paul·Mia)·해당 단원 words·선수 단원 words(Easy는 01·02 포함) 안에 있어야 한다. 틀린 형태의 오답 보기는 검사하지 않는다.
+- `[grammar]` 스펙 갱신: a 과정 문구 / b 검수 배지('검수 전', 과정 버튼 'ready n/total · 검수 r') / c g-easy-01 흐름 / **h(신규)** Easy ready 단원 전부 진입 → 9섹션 순서, 선택·빈칸·순서·만들기 개수 = 데이터, 검수 배지, 화면 영어의 어휘 규칙 / **i(신규)** g-easy-06 전체 연습 흐름(`practiceFlow` 재사용).
+- 1차 실행 235/3: 3건 모두 테스트 측. 시나리오 h의 어휘 검사가 틀린 형태 오답 보기(swimming·jumps·swims·has)까지 대상으로 삼았지만 검증기는 이를 의도적으로 허용한다. 제품 코드는 그대로 두고 스펙을 검증기 규칙에 맞췄다.
+- **234차 결과(2026-10-10 02:10~02:50, 브라우저 1개 순차, vite preview 포트 4193)**: 더미 env 빌드 경고 0(GrammarCourseScreen 청크 43.8 KB, gzip 13.7 KB). 정적 `testGrammarCourses`·`testPilotUnit`·`testStudentPathContracts`·`testRegistryCoverage` ALL PASS, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/0. mock e2e `[grammar]` 최종 238/0(1차 235/3 → 테스트 측 수정, 미mock 요청 0·mock 오류 0, e2e 커밋 `febadb2f`). `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계)도 재실행했다.
+- **재실행하지 않은 스펙**: `[unit]`·`[writing]`·`[speaking]`·`[speaking-exam]`. 변경이 문법 화면과 데이터에 한정되어 233차 결과를 그대로 두었으며, 이 범위는 이번 패스에서 검증하지 않았다. 전부 mock 기반, Preview 실화면·실기기·교사 검수 미완.
+
+### 235차 추가 (2026-10-10): Paul 로고 모자 PNG 8장 — `[hats]` 신규 스펙, `testHatImages`
+- 정적: 신규 `scripts/testHatImages.mjs` — 모자 PNG 8장 존재·파일명(`paul-hat-<color>.png`)·256×256·64 KB 이하, `manifest.json` 일치, `HAT_IMAGE_BY_ID`가 HAT_CATALOG의 모든 id를 덮음, 렌더 위치(StudentHome·Dashboard·HatCollection·HatCeremony·PaulTown 모자 걸이)가 이미지 없을 때의 색 입힌 이모지 폴백을 유지. `testBundleBudget`은 해시된 모자 PNG 8개를 stray-image 규칙에서 제외하도록 조정. `testStudentPathContracts` 번들러에 .png data-URL 로더 추가(모자 이미지를 import하는 컴포넌트 번들용).
+- 신규 `[hats]` 스펙 a~f: a 표시(헤더·대시보드·컬렉션의 8색) / a2 미보유 모자는 🔒 / b 장착 변경 → 대시보드 빨강, 새로고침 후 유지(mock DB 쓰기 기록으로 확인) / c 승급 경계: 정답 단어 9개 → 연출 없음, 10개 → 파란 모자 연출 → 모자 쓰기 → 대시보드 파랑 + 인벤토리 쓰기 / d 폴백 👑, 비QA 계정 무영향 / e 360·1280에서 이미지가 상자 안·가로세로비 ≈ 1·canvas로 모서리 알파 0·컬렉션 가로 넘침 없음·버튼 44px 이상 / e2 밝은·어두운 배경 샘플 / f 색 대응표를 `index.js`에서 읽어 확인.
+- 1차 실행 62/2: HatCollection 장착/해제 버튼이 36px(최소 터치 크기 위반). 이는 제품 결함이라 버튼을 44px로 수정(`e4e622d9`) 후 통과. 테스트 측 수정은 없었다.
+- **235차 결과(2026-10-10 03:00~03:45, 브라우저 1개 순차, vite preview 포트 4193, 더미 env 빌드 경고 0)**: 정적 `testHatImages`·`testHatColorRendering` 63·`testPaulRank`·`testGamificationInvariants` 40·`testStudentPathContracts` 61·`testLazyChunkGuards`·`testBundleBudget` 32/32·`testRegistryCoverage` ALL PASS, `testQaGate` 17/0. mock e2e `[hats]` 67/0 · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[student]` 34/0 · `[town]` 528/0 · `[mobile]` 178/0. 전부 mock 기반, Vercel Preview 실화면(SSO)·실기기 미확인. e2e 커밋 `a97074ef`.
+
+### 237차 추가 (2026-10-10 야간): Grammar 34단원 — `[grammar]` 시나리오 일반화·k·l·m, 번들 한도 1.8 MB
+- 정적: `testGrammarCourses`가 ready 34 / 준비 중 0을 검증하고 신규 25단원을 `validateGrammarUnit`(어휘 규칙 포함)으로 검사한다. `testBundleBudget` raw 합계 한도 1.7 → 1.8 MB(main gzip 검사 불변, grammar lazy 청크 최종 빌드 120.2 KB raw / 33.5 KB gzip, 번들 예산 커밋 `d5c2f1bd`).
+- `[grammar]` 스펙 갱신(커밋 `8f82a313`): **h** 과정별로 일반화 — 각 과정의 ready 단원 전부 진입 → 9섹션 순서, 문항 수 = 데이터, 검수 배지, 어휘 규칙 / **i** 과정별 전체 연습 흐름 / **k(신규)** 중·고 단원의 [기초 설명 보기] → 기초 단원 → ← 돌아가기 / **l(신규)** 문법 청크 로드 실패 시 안내·복귀 / **m(신규)** 준비 중 단원의 안전 화면. `[hats]` e: 헤더 모자 1.25em(360·1280, 겹침 없음·정렬).
+- `e1e799da` 기준 결과: `[grammar]` 431/0/1 SKIP — k는 그 시점에 ready 학교 단원이 없어 건너뜀 / `[hats]` 67/0 / `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) / `[writing]` 83/0 / `[speaking]` 608/0 / `[unit]` 141/0. 정적 스위트는 각 단계마다 ALL PASS.
+- **237차 결과(학교 단원 추가 후, 브라우저 1개 순차, vite preview 포트 4193)**: `[grammar]` 659/0/1 SKIP (h 34단원 전부 진입, i 각 과정 첫 ready 단원 전체 연습, k 모든 학교 단원 기초 링크·← 돌아가기 통과, l 로드 실패 통과, SKIP 1건 = m "준비 중 단원 없음", 학교 단원 커밋 `119e3b89`, 미mock 요청 0·mock 오류 0) · 정적 스위트 전부 PASS · grammar 청크 120.2 KB raw / 33.5 KB gzip. 전부 mock 기반, Vercel Preview 실화면(SSO)·실기기·교사 검수 미확인.
+
+### 238차 추가 (2026-10-10): 문법 한 장씩 덱 + 홈 5카드 — `[grammar]` 덱 스펙, `[student-home]` 갱신
+
+- **`[student-home]`(커밋 `9068800c`)**: 5카드 그리드 반영. Tab 순서 9정지, 카드 5개, 시나리오 r(QA 홈에 문법 카드, `student-home-menu-grammar`)·q(non-QA 학생·QA fixture 학생 홈) 갱신, 작은 `student-home-grammar` 제거 확인. 결과 241/0/1 SKIP(SKIP 1건은 기존 streak fixture 한계).
+- **정적 pin**: `buildDeck` 카드 수 `g-easy-01` 23장(설명 4줄), `g-int-01` 23장(비교 + 설명 3줄), 모든 ready 단원이 덱을 만든다. 정적 스위트 전부 PASS.
+- **`[grammar]` 덱 스펙(커밋 `c769ab8a`)**: 단원 화면이 한 장씩 덱으로 바뀌어 기존 `gu-*` 단일 스크롤 단언을 `gd-*`로 재작성. b 모든 카드 순회(단계·진행·다음 잠금·`gd-next-hint`) / c·i 과정별 연습 흐름(선택·빈칸·순서·만들기, 답 확인 → 같은 카드 정답·이유 → 다음, 틀리면 다시 풀기) / d 이전으로 갔을 때 답 유지 / k 기초 설명 왕복 후 같은 카드·답 복원 / h 34단원 덱 전부 열림 / g 레이아웃 360·390·412·1280(+ 스크린샷, 카드 내부 스크롤 허용·글자 축소 없음).
+- **결과**: `[grammar]` 708/0/1 SKIP(덱 첫 빌드 `34712051` 기준, SKIP 1건 = m "준비 중 단원 없음"). 회귀 재실행(같은 빌드): `[unit]` 141/0, `[hats]` 67/0, `[speaking]` 608/0, `[writing]` 83/0, `[student-home]` 241/0/1. 리드 확인 스크린샷: 홈 5카드 그리드, 목표 1/23, 설명 3/23, 선택 10/23 오답 후, 마무리 23/23, 1280 목표 카드.
+- **360x640 결함·보정**: 선택 카드에서 다음 버튼이 떠 있는 속도 위젯에 일부 가려짐. 1차 `ff82e531`(카드 56vh, 루트 pb-28, g 시나리오에 "다음 하단 <= innerHeight-76" 단언) 후 재실행 705/3(360x640 레이아웃 단언 3건 실패) → 2차 `c47b1e10`(컴팩트 헤더, 카드 52vh).
+- **미검증 변경: `c47b1e10` 레이아웃 보정 — 산술상 537px <= 564px, 브라우저 재실행은 메모리 부족으로 미실행; 운영자/다음 세션이 RAM >=3GB에서 `[grammar]` 재실행 필요.** 그 재실행에서 g 시나리오 360x640 3건이 통과해야 이 항목이 닫힌다.
+- 브라우저는 RAM 게이트로 한 번에 1개. 전부 mock 기반, Vercel Preview 실화면(SSO)·실기기·교사 검수 미확인.
+
+### 239차 추가 (2026-10-10): 그림 상황 미션 시범 단원 — `[grammar-scene]` 신규 스펙, `[grammar]` h 갱신
+
+- **신규 `tests/e2e/grammarScene.spec.mjs` (`[grammar-scene]`, 커밋 `58767b3f`)**: 시나리오 a~l. 발견(탭 전 캡션·영어 문장 없음, Enter 후 캡션 + speak +1), 비교(두 칸의 그림·캡션 = 데이터, 🔊 각 +1), 선택(그림 개수 = 데이터, 다시 풀기, 정답 후 다음 활성), 만들기(나무 1·2·3그루 판정, 다시 놓기, 칸 잠금), 읽기(부분 짝 시 확인 비활성), 듣기(확인 전 영어 문장 없음), 말하기 시험(공개 전 모범 답·다른 표현이 DOM에 없음, 공개 뒤 자동 재생 없음), 마무리(can-do = 데이터), 이전/다음 왕복 시 답 복원, 360×640·1280 스크린샷.
+- **시나리오 d 재작성 (커밋 `e4e8edc6`)**: 틀·보기를 `buildFrame(scene, 0/1/2)`에서 도출. 0그루 = 활성 보기 없음, 1그루 = a/one/two/three + 심기 힌트, 'two' 오답 → 다시 풀기, 'a' 정답, 2그루 = 선택 초기화·힌트 없음. 제품 쪽은 만들기 카드의 "{name}를 {n}그루 심어 보세요." 실시간 안내. 정적만 확인(빌드 경고 0, 스위트 4종 PASS), 브라우저 미실행.
+- **`[grammar]` h**: 장면 단원(`g-easy-05`)은 일반 덱 순회에서 건너뜀(장면 경로는 `[grammar-scene]`이 담당).
+- **정적**: `testGrammarCourses`에 장면 핀 +15(`validateScene`, `layoutSentence`, `buildFrame` 0/1/2/3, 덱 15장, 다른 33단원 불변). 그 밖에 `testPilotUnit`, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/32(GrammarCourseScreen lazy 청크 147.1 KB raw / 42.1 KB gzip), `testRegistryCoverage`, `testStudentPathContracts` ALL PASS. 더미 env 빌드 경고 0.
+- **브라우저 미실행 (RAM <3GB)**: `[grammar-scene]` a~l 전체, `[grammar]` g 360×640 3건(`c47b1e10` 보정), 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]`. 구현자의 서버 렌더 스모크(모든 장면 카드 렌더, 확인/공개 전 영어 없음)만 확인됨. 스펙 자체가 한 번도 돌지 않았으므로 첫 실행의 실패는 스펙 오류일 수도 제품 결함일 수도 있다. 분류 후 갱신할 것.
+- **재실행**: 워크트리 루트, RAM ≥3GB, 한 번에 1개.
+  `VITE_SUPABASE_URL=https://dummy.supabase.co VITE_SUPABASE_ANON_KEY=dummy npm run build && npx vite preview --port 4193 --strictPort` 후 `node <scratchpad>/runOne.mjs grammarScene.spec.mjs` 등(또는 `npm run verify:e2e`).
+
+### 240차 추가 (2026-10-10): 그림 미션 34단원 확장(Scene v2) — `[grammar-scenes]` 신규, 정적 핀 확장
+
+- **신규 `tests/e2e/grammarScenes.spec.mjs` (`[grammar-scenes]`, 커밋 `2b7643d6`, `scripts/testBrowserE2E.mjs`에 등록)**: 34단원 일반 순회. 장면 무대 렌더, 듣기·발견에서 확인 전 영어 없음, 선택·듣기·읽기·만들기 정상 경로, 360×640 가로 넘침 없음, 단원별 스크린샷 `scenes-<id>-explain.png`·`scenes-<id>-practice.png`(34단원 360×640 + 5단원 1280). `[grammar]`은 add 모드 장면 카드도 순회한다. `[grammar-scene]`(시범 a~l)은 그대로.
+- **정적 핀 (`scripts/testGrammarCourses.mjs`, 커밋 `2b7643d6`)**: 장면 단원 34/34, `validateScene` 0 오류 ×34, `validateGrammarUnit` 0 오류 ×34, 기하(전치사 위치·near/far·s/m/l 크기비·같은 자리 분산), add 모드 덱 순서(설명 카드는 구조 뒤, 활동 카드는 오류 뒤·선택 앞), 시범 덱 15장 불변, 듣기 보기 그림 쌍별 상이, 대화 `en`이 정답이 아님. 검수 수정(커밋 `3b3c409e` 이후) 뒤 검증기 34/34 재실행 통과.
+- **번들 예산**: `scripts/testBundleBudget.mjs` 총 코드 1.8 → 2.0 MB. 근거: grammar lazy 청크 254.3 KB raw / 70.7 KB gzip, 메인 청크 gzip 단언은 불변.
+- **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. `testQaGate` 17/0. `testBundleBudget` PASS. `testLazyChunkGuards` 95/95. `testPilotUnit`·`testRegistryCoverage`·`testStudentPathContracts` ALL PASS. 3개 스펙 `node --check` 통과. 구현자 서버 렌더 스모크: 232 장면 카드가 throw 없이 렌더, 확인 전 듣기 영어 없음, NaN/undefined 없음, `neg` 가위표 7장, 통 앞벽 6장, 타임라인 범례 있음.
+- **브라우저 미실행 (RAM)**: 여유 RAM 2.04 GB(<3 GB 규칙, 점유는 운영자의 다른 앱). `[grammar-scenes]` 전체, `[grammar-scene]`, `[grammar]` 및 239차 대기분(`c47b1e10` 360×640 3건)과 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]` 모두 미실행. `[grammar-scenes]`는 한 번도 돈 적이 없어 첫 실행 실패는 스펙 오류일 수도 제품 결함일 수도 있다. 분류 후 갱신할 것. 레이아웃·탭·끌기·음성·360×640 동작은 확인된 바 없다.
+- **재실행**: 239차와 같은 방법(워크트리 루트, RAM ≥3GB, 한 번에 1개). 이후 스크린샷을 모두 열어 그림 명확성을 눈으로 확인한다.
+
+### 241차 추가 (2026-10-10): 폴타운 장소 미션(공원) — 정적 스위트 2종, `[town-mission]` 스펙 신규
+
+- **신규 `scripts/testTownMissions.mjs`**: 순수 모듈 `townMissions.js`(park → `g-easy-05`, ready, 조회 함수)와 소스 핀(App의 세션 한정 상태·`grammarEntry`, `GrammarCourseScreen`의 `initialUnitId`·`returnTo`·`onMissionComplete`, testid `gd-mission-intro`·`gd-to-town`·`grammar-missions`·`grammar-mission-park`·`gu-place-tag`) 15개 점검 PASS. 하네스 등록은 구현자 영역.
+- **신규 `scripts/testTownMissionSpots.mjs`**: `missionSpots.js`의 표지판 좌표·도착 칸 보정·근접 판정·탭 판정 54/54 PASS.
+- **신규 `tests/e2e/townMission.spec.mjs` (`[town-mission]`)**: 마을 → 표지판 터치(CDP 실제 좌표) → 걷기 → '공원 미션 시작' → 덱(상황 소개) → 요약 → '마을로 돌아가기'(표지판 '완료' 칩), 중간에 '← 마을'로 이탈, 문법 홈 입구(뒤로 = 과정 목록), 마무리 이벤트 최대 1회, 저장 키 변화 없음, 360×640·1280×800 스크린샷. 네트워크 전체 mock.
+- **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. 기존 `testProto25d*` 12개 스위트와 스프라이트 스위트 PASS(구현자 실행). `testQaGate` 17/0. `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts`, `testTownEnvAssets` PASS(문법 lazy 청크 256.4 KB raw / 71.3 KB gzip). 스펙 4개 `node --check` 통과. 서버 렌더 스모크: 파일럿 카드에 🔊·✅ 없음, 확인 전 듣기 영어 없음.
+- **브라우저 미실행 (RAM)**: 여유 RAM 2.01 GB(<3 GB 규칙). `[town-mission]`은 한 번도 돈 적이 없어 CDP 터치 탭과 걷기 타이밍이 검증되지 않았고, 첫 실행 실패는 스펙 오류일 수도 제품 결함일 수도 있다. `[grammar-scenes]`, `[grammar-scene]`, `[grammar]`, `[proto25d]` 회귀도 대기. 분류 후 갱신할 것. 화면 동작은 확인된 바 없다.
+- **재실행**: 239차와 같은 방법(워크트리 루트, RAM ≥3GB, 한 번에 1개). `[town-mission]` 먼저, 스크린샷을 눈으로 확인한다.
+
+### 242차 추가 (2026-10-10): 폴타운 아트 키트 반입 — 정적 스위트 신규, 합성 미리보기, 브라우저 미실행
+
+- **신규 `scripts/testTownKitAssets.mjs`**: 1417개 점검 PASS. manifest와 실제 파일 일치(1x·@2x 쌍), 파일별 크기 예산, kebab-case 이름, 허용된 importer(문법 쪽은 `parkArt.js` 하나). 하네스 등록은 구현자 영역.
+- **`testTownMissionSpots`**: 표지판 좌표 변경 뒤 84/84 PASS(241차 54/54에서 증가).
+- **미리보기 `scripts/town/renderScenePreview.mjs/.py`**: g-easy-05의 모든 그림(21장)을 앱과 같은 배치 함수로 합성(Pillow). 기하·가로세로비·투명도 확인 전용이며 **브라우저 테스트가 아니다**. 리드가 모음을 눈으로 확인: 잘림 없음, 발이 잔디 위, 개수 분명, 투명 가장자리 깨끗.
+- **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS(공원 7개 단원 핀 포함: 360×220 안, 겹침 ≤15%, 균등 간격, 이름표 무대 안, 개수 = 문장). `testTownMissions`, `testQaGate` 17/0, `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts`, `testTownEnvAssets`, `testProto25d*` ALL PASS. 파일럿 장면 카드 13장 서버 렌더 스모크 통과. 문법 청크 257.7 KB raw / 72.1 KB gzip, Proto25DScreen 63.3 KB raw / 20.3 KB gzip.
+- **브라우저 미실행 (RAM)**: 여유 RAM 2.62 GB(<3 GB 규칙). `[town-mission]`, `[grammar-scene]`, `[grammar-scenes]`, `[grammar]`, `[proto25d]` 모두 대기. 실화면 미확인: 기기의 이미지 로딩, 실제 카드 너비의 slice 잘림, 누르기·끌기, 음성, 2.5D 마을의 표지판과 Cookie, 모바일 360×640 잘림. 합성 미리보기는 이를 대신하지 않는다. 확인됐다고 쓰지 않는다.
+- **재실행**: 워크트리 루트, RAM ≥3GB, 한 번에 1개. `[town-mission]` 먼저, 스크린샷을 눈으로 확인한다(표지판 옆 Cookie, 공원 배경 slice).
+
+### 243차 추가 (2026-10-10): 문법 마을 지도 — 첫 실제 브라우저 실행, 스펙 하나씩, 일부 회귀 미재실행
+
+- **신규 `scripts/testGrammarVillage.mjs`**: 1608개 점검 PASS(manifest 95개 항목이 지도에서 정확히 한 번, 34단원이 장소 ∪ 문법 노트에 정확히 한 번, 장소 탭 영역 겹침 없음, 360 px에서 44 px 이상). `testGrammarVillageScreen` PASS. 하네스 등록은 구현자 영역. 합성 미리보기 `scripts/town/renderVillagePreview.py`는 배치 확인 전용이며 브라우저 테스트가 아니다.
+- **신규 e2e `[grammar-village]`** (`tests/e2e/grammarVillage.spec.mjs`): 53/53 + 소프트 skip 1(먼 구역 그림이 스크롤 전에 이미 요청됨 → 지연 로딩 확인 못 함). 문법 스펙들은 새 진입 경로(홈 카드 → 마을 → `gv-to-courses`)를 따르도록 수정, 선택지는 섞인 순서에서 `scene-opt-<데이터 인덱스>`로 고르고 렌더된 집합이 데이터 집합과 같은지 본다, 잘린 viewBox의 SVG 자식은 헬퍼로 측정, `[town-mission]` 스토리지 점검은 `paul_easy_`·`paulEasyVoca_` 접두 키를 허용하고 그 밖의 새 키만 실패, `grammar_scene_finish`는 "페이지 로드당 최대 1회"로 점검.
+- **실행 방법(메모리 부족 대응)**: 더미 env 빌드 → `vite preview` → Playwright headless, **스펙 하나씩** 순차 실행(여유 RAM 1.5~2.8 GB). 병렬 실행 금지. 시스템 메모리 정리기가 긴 순차 실행을 중단시킬 수 있으므로 한 번에 한 스펙을 끝까지 돌리고 결과를 기록한 뒤 다음으로 간다.
+- **1차(빌드 `d7b0d5ba`)**: town-mission 21/23, grammar-scene 192/205, grammar-scenes 9/46, speaking 608/608, writing 83/83, unit 141/141, student 34/34, student-home 241/241(+1 skip), speaking-exam 216/216, hats 67/67, town-proto2.5d 1524/1529. 실패는 제품 결함 3건(속도 위젯 7 px 겹침, g-high-03 선택지 줄 뷰포트 이탈, 미니 공원 그림 과소)과 스펙 오류 3건으로 분류해 전부 수정. `[town-proto2.5d]` 실패 5건은 전부 S37(1280x800, 모달 반복 개폐)의 3000 ms `locator.waitFor` 타임아웃이며 메모리 민감 시나리오로 알려져 있다. 재확인하지 않았다.
+- **2차(최종 빌드)**: grammar-village 53/53(+1 skip), town-mission 23/23, grammar-scene 205/205, grammar-scenes 46/46, grammar 769/769(+1 skip: '준비 중' 단원 없음), student-home 242/242(+1 skip).
+- **최종 빌드에서 미재실행**: speaking, writing, unit, student(Voca), speaking-exam, hats, town-proto2.5d. 첫 스펙이 끝나기 전에 시스템 메모리 정리기가 중단시켰다(여유 RAM 약 1.8 GB). 운영자 승인 없이 재시작하지 않는다. 1차 통과는 `App.jsx`에 마을 연결이 들어가기 전 빌드의 결과이며 이 7종을 최종 빌드에서 통과했다고 쓰지 않는다. S37 미확인.
+- **정정**: `grammar_scene_finish`는 페이지 로드 + 하루 단위 메모리 내 중복 제거(`productEvents` `_sentToday`)이며 새로고침을 넘는 하루 1회가 아니다(241차·242차 서술 정정).
+- **정적(최종 빌드)**: 더미 env 빌드 경고 0. `testGrammarCourses`, `testGrammarVillage` 1608/1608, `testGrammarVillageScreen`, `testTownKitAssets` 1418/1418, `testTownMissions`, `testTownMissionSpots` 84/84, `testQaGate` 17/0, `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts` ALL PASS.
+- **미확인**: 지연 로딩, 360 px 이외 너비의 마을 레이아웃, 실기기, 마을 완료의 새로고침 유지(세션 한정이 설계), 위 7종의 최종 빌드 결과.
+- **재실행(승인 후, RAM 여유 시)**: 한 번에 1개, 순서 `[speaking]` → `[writing]` → `[unit]` → `[student]` → `[speaking-exam]` → `[hats]` → `[town-proto2.5d]`(S37 포함), 각 결과를 이 표에 덧붙인다.

@@ -1,0 +1,41 @@
+{
+  "agent_name": "orchestrator",
+  "role": "docs-maintainer",
+  "task_id": "proto25d-economy-stage-a2",
+  "task": "Paul Town 2.5D 경제 단계 A2: 조회 조건에 paulTown2_5d 포함 + Paul Dollar 용어 통일 + 배지 우상단 분리 (PR #62)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-26T15:10:00Z",
+  "updated_at": "2026-09-27T01:40:00Z",
+  "worktree": "C:/voca-wt/paul-town-v2",
+  "branch": "feat/paul-town-v2-clean-pr",
+  "base_commit": "b8423a34",
+  "task_class": "B",
+  "decision_id": "0012",
+  "owner_approval_required": false,
+  "allowed_paths": [
+    "src/App.jsx",
+    "src/components/town/proto2_5d/Proto25DScreen.jsx",
+    "src/utils/town/proto2_5d/coinDisplay.js",
+    "scripts/testProto25dCoin.mjs",
+    "tests/e2e/townProto25d.spec.mjs",
+    "scripts/testTownUiStatic.mjs",
+    "handoff.md",
+    "docs/agent-decisions/0012-proto25d-economy-stage-a-2026-09-26.md",
+    ".ai-status/orchestrator-proto25d-economy-stage-a2.json"
+  ],
+  "files_owned": [
+    "src/App.jsx",
+    "src/components/town/proto2_5d/Proto25DScreen.jsx",
+    "src/utils/town/proto2_5d/coinDisplay.js",
+    "scripts/testProto25dCoin.mjs",
+    "tests/e2e/townProto25d.spec.mjs",
+    "scripts/testTownUiStatic.mjs",
+    "handoff.md",
+    "docs/agent-decisions/0012-proto25d-economy-stage-a-2026-09-26.md",
+    ".ai-status/orchestrator-proto25d-economy-stage-a2.json"
+  ],
+  "summary": "코인 배지 조회 조건에 paulTown2_5d를 포함하고 용어를 Paul Dollar로 통일하기 전, 서버 get_town_shop_state가 SELECT 전용임을 코드로 확인해 안전성을 확보했다. 1차 구현이 배지를 좌상단 HUD 열에 추가해 열 높이가 커지면서 바닥 탭을 가로채는 회귀 8건을 냈고, 배지를 우상단 독립 요소로 분리해 해소했다. verify:e2e 1995/1995, verify:all ALL DOMAINS PASS로 마감했고 정적 테스트 정규식도 갱신했다.",
+  "blocker": null,
+  "next_action": "운영자: 경제 단계 B(구매) 착수 여부, 부가 스위트 간헐/종료 크래시 조사 여부."
+}

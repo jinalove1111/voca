@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(감사·범위·통합) — 목표 매핑/참고 틀 조사는 읽기 전용·웹 서브에이전트",
+  "task_id": "curriculum-independence-2026-10-08",
+  "task": "교재 독립성 감사·보고, 자체 의사소통 목표 모델, 출처 기록, 교사 목표 선택 설계",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-08T02:00:00+09:00",
+  "updated_at": "2026-10-08T03:40:00+09:00",
+  "files_owned": ["src/utils/curriculum/commGoals.js", "scripts/testCommGoals.mjs", "tests/harness/registry.mjs", "docs/design/CURRICULUM_INDEPENDENCE_2026-10-08.md", "handoff.md", "TESTING.md"],
+  "summary": "교재 의존 콘텐츠 0건(연계 미착수). 목표 13×레벨 3 순수 모듈, func 69종 전부 배정, testCommGoals 12/0. 참고 틀은 England KS2만 원문 확인, 나머지 미인용. 화면·DB 무변경.",
+  "blocker": null,
+  "next_action": "운영자: 목표 13개 이름·레벨 승인, 교육부 2022 의사소통 기능 목록 원문 확인 후 대조, 교사 목표 선택 저장·화면 범위 결정, Paul/미아 에셋 저작권 확인"
+}

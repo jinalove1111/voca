@@ -1,0 +1,39 @@
+{
+  "agent_name": "orchestrator",
+  "role": "검증·문서·커밋(구현 코드 수정 없음) — Speaking 이야기 10화 작업의 mock 기반 검증 + QA 게이트 감사",
+  "task_id": "speaking-story-validation-2026-10-05",
+  "task": "HEAD 2e706452 위 미커밋 13개(이야기 10화 x 새 표현 100 + 복습 14)의 build/정적/브라우저(mock) 검증, QA allowlist 실계정 대조, 문서화, 기능별 커밋, PR #62 non-force push",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-05T02:30:00+09:00",
+  "updated_at": "2026-10-05T06:30:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    ".ai-status/orchestrator-speaking-story-validation-2026-10-05.json"
+  ],
+  "files_read": [
+    "src/config/qaTestAccounts.js",
+    "src/App.jsx",
+    "src/config/features.js",
+    "src/utils/supabaseClient.js",
+    "src/utils/situation/storyEpisodes.js",
+    "src/utils/situation/speakingSets.js",
+    "src/components/SpeakingExam.jsx",
+    "src/components/SpeakingPractice.jsx",
+    "src/components/SpeakingPracticeItem.jsx",
+    "src/components/SpeakingPracticeMode.jsx",
+    "tests/e2e/speakingExam.spec.mjs",
+    "tests/e2e/speaking.spec.mjs",
+    "tests/e2e/studentHome.spec.mjs",
+    "tests/e2e/lib/mockRoutes.mjs",
+    "tests/e2e/fixtures/index.mjs",
+    "scripts/testBrowserE2E.mjs",
+    "sql_migrations/v2_5_pilot_20260810/baseline_20260810.json",
+    "supabase_v3_43_ghost_sca_reassign.sql",
+    ".ai-status/duplicate-account-audit-2026-08-07.md"
+  ],
+  "summary": "[mock 기반 검증 — 실제 DB 연결 없음] 콘텐츠 실측: 10화, new 100(회차당 10, en 유일, 기본 5문장 재사용 0), review 14, 기본 5 id(hello/help/sorry/thanks/play)·저장 키 유지. build PASS(경고 0). testSpeakingSets 49/0, testSituationRecall ALL PASS, verify:speaking/audio-tts/attachment EXIT 0, testQaGate 17/0, testLazyChunkGuards 87/0, testBundleBudget 32/0, testRegistryCoverage 8/0, testStudentPathContracts 61/0. 브라우저(headless Chromium 1개, 스펙 1개씩, 포트 4193, installMocks 그대로, 더미 VITE_SUPABASE_URL/ANON_KEY를 build 프로세스 env로만 — .env 미생성): speakingExam 218/0/0, speaking 307/0/0, studentHome 228/0/1(기존 streak fixture SKIP), student 36/0/0, mobileViewports 180/0/0. 첫 speakingExam 실행 26 FAIL은 env 없는 build로 createClient(undefined) → supabaseUrl is required → 빈 화면(환경 원인, 번들 코드로 확정), 더미 env 재빌드 후 해소. [QA 실계정 대조 — 완료, 운영자 제공 증거] 2026-10-05 운영자가 Supabase SQL Editor에서 읽기 전용 select id, name 1회: 정확히 3행 Cookie a63923a1-473d-4ba1-bca6-6b8685848cd3 / Jinaa 738443f3-2676-4b89-9f17-cc7f22aa993c / Paul 335a9560-d1f1-4628-bd8d-26bcaa8eaee7 — allowlist와 일치. 4번째 e2e00000-0000-4000-8000-00000000a001(e2e 합성 fixture)은 실DB에 없음. 이 세션은 DB 접근 0, C:\\voca\\.env 미사용. [커밋] 구현/테스트/문서 3개로 분리, PR #62 브랜치로 non-force push, PR Draft 유지. [미확인] 실기기 마이크 녹음·재생, 이야기 2~10화 브라우저 동작(e2e는 1화만, 2~10화는 정적 검사만), 실제 일반 학생 계정 차단(합성 non-QA UUID e2e + 정적만).",
+  "blocker": null,
+  "next_action": "운영자: Preview(PR #62)에서 Paul/Cookie/Jinaa로 실기기 로그인 → 말하기 → 1~10화 연습·한글 보고 말하기, 마이크 녹음·재생 확인. 일반 학생 계정에서 홈/말하기 미노출 확인. PR #62 Draft 유지."
+}

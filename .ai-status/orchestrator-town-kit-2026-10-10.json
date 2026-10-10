@@ -1,0 +1,28 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "docs-maintainer",
+  "task_id": "town-kit-2026-10-10",
+  "task": "242차 문서 갱신: 폴타운 아트 키트 반입 + 공원 미션 실제 이미지 적용",
+  "status": "in_progress",
+  "progress": 80,
+  "started_at": "2026-10-10T14:55:00+09:00",
+  "updated_at": "2026-10-10T15:10:00+09:00",
+  "files_owned": [
+    "docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md",
+    "handoff.md",
+    "TESTING.md",
+    "ROADMAP.md",
+    ".ai-status/orchestrator-town-kit-2026-10-10.json"
+  ],
+  "files_read": [
+    "scripts/town/kit_map.tsv",
+    "src/assets/town/kit/manifest.json",
+    "handoff.md",
+    "ROADMAP.md",
+    "TESTING.md",
+    "docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md"
+  ],
+  "summary": "아트 키트 95행 반입(94 반입 + paul-portrait 보류), 공원 미션 실제 그림 6종, 마을 표지판+Cookie. 정적 PASS, 브라우저 미실행, 실화면 확인 없음.",
+  "blocker": "RAM <3GB → 브라우저 e2e 미실행",
+  "next_action": "RAM ≥3GB에서 [town-mission]·[grammar-scene]·[grammar-scenes]·[grammar]·[proto25d] 실행 → 스크린샷 확인 → 결과 반영; 운영자: paul-portrait 사용 여부·부족 이미지 제공·장소 연결표 확정"
+}

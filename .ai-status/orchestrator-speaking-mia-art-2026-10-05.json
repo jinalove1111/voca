@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "에셋 분리·구현·검증·문서·push",
+  "task_id": "speaking-mia-art-2026-10-05",
+  "task": "운영자 제공 여성 캐릭터 4포즈를 2화 미아로 적용",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-05T18:00:00+09:00",
+  "updated_at": "2026-10-05T18:40:00+09:00",
+  "files_owned": ["src/assets/speaking/mia_greet.png", "src/assets/speaking/mia_think.png", "src/assets/speaking/mia_surprise.png", "src/assets/speaking/mia_give_pencil.png", "src/components/PencilCaseScene.jsx", "scripts/testKeySentenceFlow.mjs", "scripts/testBundleBudget.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "handoff.md"],
+  "summary": "[mock 기반] 알파 실측(검은 배경 없음, 내부 250~253→255), 4포즈 분리·얼굴 크기 통일, 미아 장면 think→give→greet. e2e speaking 424/0, speaking-exam 216/0, 정적 PASS.",
+  "blocker": null,
+  "next_action": "운영자: Preview에서 2화 회상 단계 미아 확인, 놀람 포즈 사용처 결정"
+}

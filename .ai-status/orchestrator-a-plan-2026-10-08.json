@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(A안: 보류 결함 2건·교사 검수표·ROADMAP·검증) — 검수표 초안은 읽기 전용 교육 설계 담당",
+  "task_id": "a-plan-2026-10-08",
+  "task": "A안 — 쓰기 Unit 복귀, Unit 청크 실패 안내, 교사용 콘텐츠 검수표, ROADMAP 통합 과정 섹션, 브라우저 검증, push",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-08T15:40:00+09:00",
+  "updated_at": "2026-10-08T16:25:00+09:00",
+  "files_owned": ["src/App.jsx", "src/components/WritingPractice.jsx", "scripts/testPilotUnit.mjs", "tests/e2e/unit.spec.mjs", "docs/design/TEACHER_REVIEW_SHEET_PILOT_UNITS_2026-10-08.md", "ROADMAP.md", "TESTING.md", "handoff.md"],
+  "summary": "[mock 기반] 커밋 6개(82162bbc, b212824e, 49ea5bb3, 04338930, 1634a84a, 6589d7a7) + 문서. 정적 PASS. e2e unit 99/0(1차 90/2 = 환경·설계 순서, 제품 보완 1건: 새로고침 안내·버튼), writing 63/0, student-home 218/0/1 SKIP. 검수표는 기본 미검수. 세 번째 Unit·파닉스·Bell 미착수.",
+  "blocker": null,
+  "next_action": "운영자: Preview 로그인 후 Unit 2 쓰기 → 비교 → '← 이 단원으로' 확인; 교사 검수표 작성. (2026-10-08 16:25 기준; 이후 세션은 handoff 최신 섹션 우선)"
+}

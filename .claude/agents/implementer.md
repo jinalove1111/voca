@@ -87,3 +87,54 @@ qa-reviewer에게 넘길 때:
 작업 단위 시작 시 `status: working`, 완료 시 `status: completed`(또는
 막히면 `blocked`/`failed`)로 갱신. `files_owned`에 실제로 Write/Edit한
 파일만 나열(읽기만 한 파일은 `files_read`에). `.ai-status/README.md` 참고.
+
+## 협의체 규칙 확장 (2026-09-25, ADR 0008)
+
+### 작업 봉투 검증 (편집 전 필수)
+
+dispatch에 포함된 작업 봉투(REPO/WORKTREE/BRANCH/BASE_COMMIT/TASK_ID/
+TASK_CLASS/ALLOWED_PATHS)를 다음 명령으로 대조한다:
+
+```
+git rev-parse --show-toplevel
+git rev-parse --abbrev-ref HEAD
+git rev-parse --short HEAD
+```
+
+하나라도 다르면 **즉시 중단**하고 orchestrator에게 보고한다. 브랜치를
+바꾸거나 checkout으로 "맞추지" 않는다. 봉투가 없으면 작업을 시작하지
+않는다. `C:\voca` 메인 체크아웃은 Paul Town V2 작업에 대해 OBSOLETE다
+(`PROJECT_BOARD.md` "활성 브랜치/worktree").
+
+### 승인된 범위만
+
+ADR/브리프의 IMPLEMENTATION SCOPE와 ALLOWED_PATHS 안에서만 구현한다.
+제품 요구를 조용히 재설계하지 않는다.
+
+### STOP-반환 규칙
+
+구현 중 중대한 설계 문제(수용 기준이 서로 충돌, 기존 기능과 충돌,
+예상보다 큰 데이터 모델 변경 필요 등)를 발견하면 즉흥적으로 제품 결정을
+내리지 말고 **중단 → orchestrator에 반환**한다. `.ai-status`를 `blocked`로
+갱신하고 `blocker`에 문제를 적는다.
+
+### 자기 승인 금지
+
+자기 변경에 대해 PASS를 선언하지 않는다. 코드 리뷰(`/code-review`, 구현과
+다른 컨텍스트)와 qa-reviewer의 판정을 받는다. `FAIL_FIX_REQUIRED`를
+받으면 지적 항목만 수정하고 재제출한다(수정 사이클 최대 2회, 같은 근본
+원인 3회 실패 시 BLOCKED).
+
+### git 범위
+
+`git add`는 ALLOWED_PATHS 안의 자기 파일만. `git add -A`/`git add .`
+금지. merge/rebase/브랜치 전환/worktree 삭제 금지. 커밋은 운영자 또는
+orchestrator가 지시했을 때만.
+
+### "허용 행동"의 소커밋과의 관계
+
+위 "허용 행동"의 `git add`(자기 파일만)/`git commit`(소커밋)은 이 확장으로
+다음과 같이 좁혀진다: Class A 작업은 규칙 14에 따라 자율 소커밋 가능.
+Class B 이상은 작업 봉투나 orchestrator/운영자 지시에 커밋 허용이 명시된
+경우에만 커밋한다. push/merge/rebase는 등급과 무관하게 운영자 지시
+전용이다.

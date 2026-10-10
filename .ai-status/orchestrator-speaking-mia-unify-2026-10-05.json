@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "구현·검증·문서·push",
+  "task_id": "speaking-mia-unify-2026-10-05",
+  "task": "핵심 한 문장 흐름의 임시 제이미 그림을 승인된 여성 캐릭터(미아)로 통일",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-05T18:50:00+09:00",
+  "updated_at": "2026-10-05T19:30:00+09:00",
+  "files_owned": ["src/utils/situation/storyEpisodes.js", "src/components/PencilCaseScene.jsx", "src/components/KeySentenceFlow.jsx", "scripts/testSpeakingSets.mjs", "scripts/testKeySentenceFlow.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "handoff.md"],
+  "summary": "[mock 기반] 흐름 = Paul+미아 두 사람(내 필통 숟가락→미아 연필, 연필심 부러짐, 다음 날 필통 두고 옴). 미아 4포즈, 제이미·SVG 임시 인물 제거. e2e speaking 429/0, speaking-exam 216/0, 정적 8종 PASS.",
+  "blocker": null,
+  "next_action": "운영자: Preview 2화 흐름 확인, 연습 문항(s02-01·02·03·09·10) 제이미 줄거리를 흐름에 맞출지 결정"
+}

@@ -63,3 +63,31 @@ EOF
 
 Node/Python 어느 쪽으로 써도 무방합니다 — 이 저장소는 특정 런타임을
 강제하지 않습니다. 예시는 `EXAMPLE-implementer-doc-os-setup.json` 참고.
+
+## 협의체 확장 필드 (2026-09-25, ADR 0008)
+
+기존 필드는 그대로. 다음 필드를 **선택적**으로 추가한다(없어도 기존
+파일은 유효). Class B 이상 구현/검수 작업에서는 채우는 것을 권장한다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `worktree` | string | 작업 중인 worktree 절대 경로(`git rev-parse --show-toplevel`) |
+| `branch` | string | 브랜치명 |
+| `base_commit` | string | 작업 시작 시점 HEAD(short sha) |
+| `task_class` | enum `A`\|`B`\|`C`\|`D` | 작업 등급(`MULTI_AGENT_WORKFLOW.md`) |
+| `allowed_paths` | string[] | 작업 봉투의 ALLOWED_PATHS(`files_owned`와 같은 의미 — 시작 시 계획, `files_owned`는 실제 결과) |
+| `decision_id` | string \| null | 연관 ADR(`docs/agent-decisions/000N`) |
+| `owner_approval_required` | boolean | Class D 또는 승인 경계 해당 여부 |
+
+`agent_name`은 `.claude/agents/*.md`의 `name` 중 하나여야 한다(현재
+14개: planner, implementer, qa-reviewer, security-reviewer,
+docs-maintainer, orchestrator, mission-guardian, product-guardian,
+learning-designer, child-experience-designer, deployment-engineer,
+student-analytics, game-designer, devils-advocate). 메인 세션이 여러
+역할을 겸할 때는 그 시점의 역할명을 쓴다(`"lead"` 같은 비등록 이름은
+쓰지 않는다 — 2026-09-24/25 파일들의 표류를 바로잡음, 기존 파일은
+수정하지 않는다).
+
+`status` enum에 다음을 추가한다: `fix_required`(QA/리뷰 반려로
+implementer 수정 대기), `owner_decision_required`(운영자 결정 대기 —
+`DECISIONS_PENDING.md`에 대응 행 필요).

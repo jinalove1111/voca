@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Paul Town — Lv.4 mockup (390x741)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #e9e4d8;
+    font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  }
+  .page {
+    padding: 24px 0 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .caption {
+    font-size: 13px;
+    color: #6b6153;
+    margin-bottom: 10px;
+  }
+  .stage {
+    position: relative;
+    width: 390px;
+    height: 741px;
+    overflow: hidden;
+    background: #bfe6f7; /* sky fallback */
+  }
+  .stage svg#terrain {
+    position: absolute;
+    inset: 0;
+    width: 390px;
+    height: 741px;
+    display: block;
+  }
+  .objLayer {
+    position: absolute;
+    inset: 0;
+    width: 390px;
+    height: 741px;
+  }
+  .obj {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    pointer-events: none;
+  }
+  .obj img { display: block; width: 100%; height: auto; }
+  .locked img {
+    filter: grayscale(1) blur(1px) brightness(1.05);
+    opacity: .45;
+  }
+  .shadow {
+    position: absolute;
+    transform: translate(-50%, -35%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%);
+    pointer-events: none;
+  }
+  .haze {
+    position: absolute;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255,250,232,0.62) 0%, rgba(255,250,232,0.30) 55%, rgba(255,250,232,0) 78%);
+    filter: blur(5px);
+  }
+  .sign { position: absolute; transform: translate(-50%, -100%); pointer-events: none; }
+  .bubble {
+    position: absolute;
+    background: #fff;
+    border-radius: 14px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #5b4a2f;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .bubble::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 22px;
+    width: 0; height: 0;
+    border: 6px solid transparent;
+    border-top-color: #fff;
+    border-bottom: 0;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="caption">Paul Town — Lv.4 mockup — 390 &times; 741 (home + book shop unlocked; café/square/bridge/school/tower locked)</div>
+  <div class="stage" id="stage">
+
+    <!-- ============ LAYER B: painted terrain (SVG, viewBox matches 390x741 px 1:1) ============ -->
+    <svg id="terrain" viewBox="0 0 390 741" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#bfe6f7"/>
+          <stop offset="55%" stop-color="#d7ecec"/>
+          <stop offset="100%" stop-color="#fdeccb"/>
+        </linearGradient>
+        <linearGradient id="grassGrad" x1="0" y1="88" x2="0" y2="741" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#c3dd93"/>
+          <stop offset="35%" stop-color="#94c268"/>
+          <stop offset="70%" stop-color="#6ea347"/>
+          <stop offset="100%" stop-color="#4d7f34"/>
+        </linearGradient>
+        <filter id="blurS" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="5"/>
+        </filter>
+        <filter id="blurM" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.5"/>
+        </filter>
+        <filter id="blurXS" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.1"/>
+        </filter>
+        <pattern id="cobble" width="9" height="9" patternUnits="userSpaceOnUse">
+          <rect width="9" height="9" fill="#d3c3a4"/>
+          <circle cx="2.3" cy="2.3" r="1.5" fill="#b39d76" opacity="0.85"/>
+          <circle cx="6.6" cy="1.6" r="1.3" fill="#ecdfc4" opacity="0.75"/>
+          <circle cx="4.5" cy="6.5" r="1.6" fill="#ac9670" opacity="0.85"/>
+          <circle cx="7.8" cy="7" r="1.2" fill="#f0e3c8" opacity="0.7"/>
+          <circle cx="0.6" cy="6" r="1.1" fill="#b8a27c" opacity="0.7"/>
+        </pattern>
+        <filter id="blurTiny" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="0.3"/>
+        </filter>
+      </defs>
+
+      <!-- sky -->
+      <rect x="0" y="0" width="390" height="105" fill="url(#skyGrad)"/>
+      <!-- distant hills -->
+      <ellipse cx="130" cy="92" rx="220" ry="42" fill="#a9c9a6" opacity="0.55" filter="url(#blurS)"/>
+      <ellipse cx="320" cy="96" rx="190" ry="36" fill="#8fb587" opacity="0.5" filter="url(#blurS)"/>
+      <ellipse cx="40" cy="98" rx="150" ry="32" fill="#b8d3ab" opacity="0.45" filter="url(#blurS)"/>
+
+      <!-- grass base -->
+      <rect x="0" y="86" width="390" height="655" fill="url(#grassGrad)"/>
+      <!-- tonal grass patches (darker, under tree groups) -->
+      <ellipse cx="72" cy="245" rx="100" ry="62" fill="#527c34" opacity="0.42" filter="url(#blurS)"/>
+      <ellipse cx="300" cy="185" rx="105" ry="50" fill="#4a7530" opacity="0.4" filter="url(#blurS)"/>
+      <ellipse cx="55" cy="600" rx="105" ry="70" fill="#3f6a2b" opacity="0.4" filter="url(#blurS)"/>
+      <!-- warm lighter patches near the lane -->
+      <ellipse cx="150" cy="430" rx="90" ry="52" fill="#cfe0a0" opacity="0.32" filter="url(#blurS)"/>
+      <ellipse cx="250" cy="500" rx="85" ry="50" fill="#d7e3a8" opacity="0.30" filter="url(#blurS)"/>
+      <ellipse cx="180" cy="620" rx="110" ry="60" fill="#c9dc98" opacity="0.30" filter="url(#blurS)"/>
+      <ellipse cx="320" cy="600" rx="100" ry="76" fill="#3f6a2b" opacity="0.30" filter="url(#blurS)"/>
+      <ellipse cx="210" cy="700" rx="170" ry="90" fill="#3c5f28" opacity="0.30" filter="url(#blurS)"/>
+
+      <!-- river: generated by script from the corrected centre-line (§ sync) -->
+      <g id="riverLayer"></g>
+      <g id="riverHighlights"></g>
+      <g id="wallLayer"></g>
+
+      <!-- tower green rise (grounds the clock tower; now naturally on land, kept for the "rise" styling) -->
+      <ellipse cx="296" cy="163" rx="30" ry="20" fill="#7fa25c" opacity="0.7" filter="url(#blurS)"/>
+      <ellipse cx="292" cy="168" rx="20" ry="12" fill="#93b46f" opacity="0.6" filter="url(#blurM)"/>
+
+      <!-- school hill with terraced steps -->
+      <ellipse cx="179" cy="192" rx="78" ry="36" fill="#87a862" opacity="0.65" filter="url(#blurS)"/>
+      <ellipse cx="179" cy="206" rx="62" ry="15" fill="#a6c17c" opacity="0.55" filter="url(#blurM)"/>
+      <ellipse cx="179" cy="218" rx="50" ry="12" fill="#93af6c" opacity="0.55" filter="url(#blurM)"/>
+      <ellipse cx="179" cy="228" rx="40" ry="10" fill="#7f9a5e" opacity="0.55" filter="url(#blurM)"/>
+
+      <!-- village square paving (locked, hazed via HTML overlay later) -->
+      <ellipse cx="214.5" cy="407.6" rx="52" ry="34" fill="#c8ab7e" opacity="0.4" filter="url(#blurM)"/>
+      <ellipse cx="214.5" cy="407.6" rx="44" ry="28" fill="#cbb488" opacity="0.88"/>
+
+      <!-- cobblestone path network (generated by script) -->
+      <g id="pathLayer"></g>
+
+      <!-- doorstep flagstones (generated along the smoothed trunk curve) -->
+      <g id="flagstoneLayer"></g>
+
+      <!-- garden soil patches -->
+      <ellipse cx="98" cy="440" rx="34" ry="16" fill="#8a6b4a" opacity="0.45" filter="url(#blurM)"/>
+      <ellipse cx="150" cy="450" rx="30" ry="14" fill="#8a6b4a" opacity="0.4" filter="url(#blurM)"/>
+      <ellipse cx="118" cy="470" rx="26" ry="12" fill="#7c5f42" opacity="0.4" filter="url(#blurM)"/>
+
+      <!-- fence -->
+      <g id="fenceLayer"></g>
+      <!-- hedges -->
+      <g id="hedgeLayer"></g>
+      <!-- background painted trees (filler) -->
+      <g id="bgTreeLayer"></g>
+      <!-- shrubs / flower clusters -->
+      <g id="shrubLayer"></g>
+    </svg>
+
+    <!-- ============ HAZE overlays for locked regions (two stacked layers = deeper distance read) ============ -->
+    <div class="haze" style="left:22%; top:0%; width:46%; height:30%; filter:blur(9px); opacity:.7;"></div>
+    <div class="haze" style="left:28%; top:5%; width:34%; height:22%;"></div>   <!-- school hill -->
+    <div class="haze" style="left:62%; top:-1%; width:42%; height:30%; filter:blur(9px); opacity:.7;"></div>
+    <div class="haze" style="left:68%; top:4%; width:32%; height:22%;"></div>   <!-- tower green -->
+    <div class="haze" style="left:60%; top:20%; width:44%; height:24%; filter:blur(9px); opacity:.65;"></div>
+    <div class="haze" style="left:66%; top:24%; width:34%; height:18%;"></div>  <!-- bridge -->
+    <div class="haze" style="left:32%; top:28%; width:56%; height:42%; filter:blur(9px); opacity:.6;"></div>
+    <div class="haze" style="left:38%; top:33%; width:46%; height:34%;"></div>  <!-- square + cafe -->
+
+    <!-- ============ LAYER A: real + locked assets, DOM order = back to front by anchor y ============ -->
+    <div class="objLayer" id="objLayer">
+
+      <!-- Lv.8 sign (tower green entry) -->
+      <div class="sign" style="left:74%; top:27%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.8</text>
+        </svg>
+      </div>
+      <!-- clock tower (locked) -->
+      <div class="obj locked" style="left:76%; top:21%; width:47px;">
+        <img src="../../../../src/assets/town/special/clock-tower@2x.webp" alt="clock tower (locked)">
+      </div>
+
+      <!-- Lv.7 sign (school entry) -->
+      <div class="sign" style="left:50%; top:28%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.7</text>
+        </svg>
+      </div>
+      <!-- english school (locked, on its terraced hill; width per corrected §2 table) -->
+      <div class="obj locked" style="left:46%; top:24%; width:117px;">
+        <img src="../../../../src/assets/town/special/english-school@2x.webp" alt="english school (locked)">
+      </div>
+
+      <!-- Lv.6 sign (bridge entry) -->
+      <div class="sign" style="left:80%; top:38%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.6</text>
+        </svg>
+      </div>
+      <!-- bridge (locked) -->
+      <div class="obj locked" style="left:86%; top:34%; width:78px;">
+        <img src="../../../../src/assets/town/special/bridge@2x.webp" alt="bridge (locked)">
+      </div>
+
+      <!-- background painted/real trees (upper) -->
+      <div class="shadow" style="left:4%; top:30%; width:30px; height:6px;"></div>
+      <div class="obj" style="left:4%; top:30%; width:40px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+      <div class="shadow" style="left:44%; top:36%; width:28px; height:6px;"></div>
+      <div class="obj" style="left:44%; top:36%; width:38px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+
+      <!-- loose row of smaller, desaturated trees behind the cottage -->
+      <div class="shadow" style="left:8%; top:46%; width:20px; height:4px;"></div>
+      <div class="obj" style="left:8%; top:46%; width:28px; filter:saturate(.55) brightness(1.08); opacity:.85;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+      <div class="shadow" style="left:18%; top:44%; width:18px; height:4px;"></div>
+      <div class="obj" style="left:18%; top:44%; width:26px; filter:saturate(.55) brightness(1.08); opacity:.82;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+      <div class="shadow" style="left:29%; top:45%; width:22px; height:4px;"></div>
+      <div class="obj" style="left:29%; top:45%; width:30px; filter:saturate(.55) brightness(1.08); opacity:.85;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+      <div class="shadow" style="left:39%; top:47%; width:19px; height:4px;"></div>
+      <div class="obj" style="left:39%; top:47%; width:27px; filter:saturate(.55) brightness(1.08); opacity:.82;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+
+      <!-- Lv.5 sign (square/cafe entry) -->
+      <div class="sign" style="left:52%; top:59%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.5</text>
+        </svg>
+      </div>
+      <!-- cafe (locked) -->
+      <div class="obj locked" style="left:68%; top:47%; width:78px;">
+        <img src="../../../../src/assets/town/buildings/cafe@2x.webp" alt="cafe (locked)">
+      </div>
+      <!-- stone fountain (locked) -->
+      <div class="obj locked" style="left:55%; top:55%; width:47px;">
+        <img src="../../../../src/assets/town/decorations/stone-fountain@2x.webp" alt="fountain (locked)">
+      </div>
+
+      <!-- house lawn tree (outside fence, background) -->
+      <div class="shadow" style="left:2%; top:60%; width:34px; height:7px;"></div>
+      <div class="obj" style="left:2%; top:60%; width:44px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+      <div class="obj" style="left:16%; top:50%; width:20px;">
+        <img src="../../../../src/assets/town/decorations/street-lamp@2x.webp" alt="street lamp">
+      </div>
+
+      <!-- two smaller trees near the book shop courtyard (repositioned off the new river/shop footprint) -->
+      <div class="shadow" style="left:66%; top:58%; width:24px; height:5px;"></div>
+      <div class="obj" style="left:66%; top:58%; width:34px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree near shop">
+      </div>
+      <div class="shadow" style="left:72%; top:72%; width:22px; height:5px;"></div>
+      <div class="obj" style="left:72%; top:72%; width:30px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree near shop">
+      </div>
+
+      <!-- ivy on my-house left wall -->
+      <div class="obj" style="left:14%; top:48%; width:26px;">
+        <svg width="26" height="26" viewBox="0 0 26 26">
+          <circle cx="6" cy="18" r="6" fill="#4a7a3c" opacity="0.75"/>
+          <circle cx="4" cy="10" r="4.5" fill="#568a45" opacity="0.7"/>
+          <circle cx="10" cy="6" r="3.6" fill="#4a7a3c" opacity="0.65"/>
+        </svg>
+      </div>
+
+      <!-- My House contact shadow -->
+      <div class="shadow" style="left:22%; top:53%; width:120px; height:22px;"></div>
+      <!-- My House -->
+      <div class="obj" style="left:22%; top:53%; width:133px;">
+        <img src="../../../../src/assets/town/buildings/my-house@2x.webp" alt="My House">
+      </div>
+
+      <!-- flower gardens inside fence -->
+      <div class="obj" style="left:10%; top:58%; width:64px;">
+        <img src="../../../../src/assets/town/nature/flower-garden@2x.webp" alt="flower garden">
+      </div>
+      <div class="obj" style="left:34%; top:59%; width:60px;">
+        <img src="../../../../src/assets/town/nature/flower-garden@2x.webp" alt="flower garden">
+      </div>
+
+      <!-- bench + post box in front garden -->
+      <div class="obj" style="left:7%; top:53%; width:44px;">
+        <img src="../../../../src/assets/town/decorations/bench@2x.webp" alt="bench">
+      </div>
+      <div class="obj" style="left:39%; top:60%; width:20px;">
+        <img src="../../../../src/assets/town/decorations/red-post-box@2x.webp" alt="post box">
+      </div>
+
+      <!-- My House sign board (drawn after garden objects so it stays legible) -->
+      <div class="sign" style="left:15%; top:67%;">
+        <svg width="46" height="34" viewBox="0 0 46 34">
+          <rect x="21" y="16" width="4" height="18" fill="#7c5a34"/>
+          <rect x="1" y="1" width="44" height="17" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.4"/>
+          <text x="23" y="13" font-family="Georgia, serif" font-size="9.5" font-weight="700" fill="#4a2f16" text-anchor="middle">My House</text>
+        </svg>
+      </div>
+
+      <!-- lawn connector: lamp, bench, tree -->
+      <div class="obj" style="left:46%; top:64%; width:20px;">
+        <img src="../../../../src/assets/town/decorations/street-lamp@2x.webp" alt="street lamp">
+      </div>
+      <div class="obj" style="left:47%; top:70%; width:46px;">
+        <img src="../../../../src/assets/town/decorations/bench@2x.webp" alt="bench">
+      </div>
+      <div class="shadow" style="left:49%; top:70%; width:36px; height:7px;"></div>
+      <div class="obj" style="left:49%; top:70%; width:48px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+
+      <!-- Book Shop contact shadow + building (moved off the river bank per corrected §2 anchor) -->
+      <div class="shadow" style="left:78%; top:63%; width:68px; height:14px;"></div>
+      <div class="obj" style="left:78%; top:63%; width:78px;">
+        <img src="../../../../src/assets/town/buildings/book-shop@2x.webp" alt="Book Shop">
+      </div>
+
+      <!-- signpost 4-arm -->
+      <div class="sign" style="left:42%; top:82%;">
+        <svg width="64" height="82" viewBox="0 0 64 82">
+          <rect x="29" y="14" width="5" height="66" fill="#7c5a34"/>
+          <rect x="6" y="16" width="34" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M40,16 L47,21.5 L40,27 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="23" y="24.5" font-family="Georgia, serif" font-size="7.5" font-weight="700" fill="#4a2f16" text-anchor="middle">Learn</text>
+
+          <rect x="24" y="31" width="34" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M24,31 L17,36.5 L24,42 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="41" y="39.5" font-family="Georgia, serif" font-size="7.5" font-weight="700" fill="#4a2f16" text-anchor="middle">Grow</text>
+
+          <rect x="6" y="46" width="38" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M44,46 L51,51.5 L44,57 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="25" y="54.5" font-family="Georgia, serif" font-size="7" font-weight="700" fill="#4a2f16" text-anchor="middle">Be Kind</text>
+
+          <rect x="22" y="61" width="40" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M22,61 L15,66.5 L22,72 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="42" y="69.5" font-family="Georgia, serif" font-size="6.6" font-weight="700" fill="#4a2f16" text-anchor="middle">Go Further</text>
+        </svg>
+      </div>
+
+      <!-- foreground trees (right-side one moved off the new river water) -->
+      <div class="shadow" style="left:80%; top:86%; width:44px; height:9px;"></div>
+      <div class="obj" style="left:80%; top:86%; width:56px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+      <div class="shadow" style="left:3%; top:88%; width:46px; height:9px;"></div>
+      <div class="obj" style="left:3%; top:88%; width:58px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+
+      <!-- To the Sea sign -->
+      <div class="sign" style="left:80%; top:92%;">
+        <svg width="70" height="50" viewBox="0 0 70 50">
+          <rect x="6" y="18" width="4.5" height="30" fill="#7c5a34"/>
+          <rect x="1" y="1" width="60" height="20" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.4"/>
+          <path d="M61,1 L69,11 L61,21 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <text x="31" y="15" font-family="Georgia, serif" font-size="9" font-weight="700" fill="#4a2f16" text-anchor="middle">To the Sea &#8594;</text>
+        </svg>
+      </div>
+
+      <!-- Paul + speech bubble -->
+      <div class="bubble" style="left:1%; top:71%; max-width:104px; white-space:normal; font-size:10px; line-height:1.25;">Welcome to Paul Town!</div>
+      <div class="obj" style="left:9%; top:92%; width:96px;">
+        <img src="../../../../src/assets/paul/paul_hello.png" alt="Paul">
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SX = 3.9;   // px per world-x unit (390 / 100)
+  var SY = 7.41;  // px per world-y unit (741 / 100), y is % of world height
+  function toPx(x, y) { return [x * SX, y * SY]; }
+  function wpx(w) { return w * SX; } // widths are % of world WIDTH
+
+  var svgNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs) {
+    var n = document.createElementNS(svgNS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  // ---------- Catmull-Rom smoothing helpers ----------
+  function cr1(p0, p1, p2, p3, t) {
+    var t2 = t * t, t3 = t2 * t;
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  }
+  // open (clamped) chain: pts = [{x,y,hw}, ...] in px; returns dense sampled array
+  function sampleOpen(pts, samplesPerSeg) {
+    var out = [];
+    var n = pts.length;
+    for (var i = 0; i < n - 1; i++) {
+      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || pts[i + 1];
+      for (var s = 0; s < samplesPerSeg; s++) {
+        var t = s / samplesPerSeg;
+        out.push({
+          x: cr1(p0.x, p1.x, p2.x, p3.x, t),
+          y: cr1(p0.y, p1.y, p2.y, p3.y, t),
+          hw: cr1(p0.hw, p1.hw, p2.hw, p3.hw, t)
+        });
+      }
+    }
+    out.push(pts[n - 1]);
+    return out;
+  }
+  // closed loop chain: pts = [{x,y,wx,wy}] in px (+ original world coords); returns dense wrapped samples
+  function sampleClosed(pts, samplesPerSeg) {
+    var out = [];
+    var n = pts.length;
+    for (var i = 0; i < n; i++) {
+      var p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+      for (var s = 0; s < samplesPerSeg; s++) {
+        var t = s / samplesPerSeg;
+        out.push({
+          x: cr1(p0.x, p1.x, p2.x, p3.x, t),
+          y: cr1(p0.y, p1.y, p2.y, p3.y, t),
+          wx: cr1(p0.wx, p1.wx, p2.wx, p3.wx, t),
+          wy: cr1(p0.wy, p1.wy, p2.wy, p3.wy, t)
+        });
+      }
+    }
+    return out;
+  }
+  function offsetRibbon(sampled, hwFn, closed) {
+    var left = [], right = [];
+    var n = sampled.length;
+    for (var i = 0; i < n; i++) {
+      var dx, dy, a, b;
+      if (closed) { a = sampled[(i - 1 + n) % n]; b = sampled[(i + 1) % n]; }
+      else if (i === 0) { a = sampled[0]; b = sampled[1]; }
+      else if (i === n - 1) { a = sampled[i - 1]; b = sampled[i]; }
+      else { a = sampled[i - 1]; b = sampled[i + 1]; }
+      dx = b.x - a.x; dy = b.y - a.y;
+      var len = Math.hypot(dx, dy) || 1;
+      var nx = -dy / len, ny = dx / len;
+      var hw = hwFn(sampled[i].hw, i);
+      left.push([sampled[i].x + nx * hw, sampled[i].y + ny * hw]);
+      right.push([sampled[i].x - nx * hw, sampled[i].y - ny * hw]);
+    }
+    var d = 'M' + left.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L');
+    d += 'L' + right.slice().reverse().map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L');
+    d += 'Z';
+    return d;
+  }
+
+  // ---------- cobblestone lane network: smoothed + unioned per layer ----------
+  var branches = [
+    [[22,53,6],[27,58,7],[33,61,8],[44,65,9],[50,62,9]],                                   // trunk: door -> doorstep -> GATE -> fork
+    [[50,62,9],[55,58,8],[62,52,7.5],[68,47,7],[78,40,6],[84,34,6],[74,26,5],[50,26,4]],    // -> square -> cafe -> bridge -> school
+    [[50,62,9],[60,68,8],[72,67,7.5],[78,63,7]],                                            // -> book shop (corrected anchor 78,63)
+    [[50,62,9],[47,76,9],[52,84,9.5],[64,90,10],[80,92,10],[100,96,10]]                     // -> sea (corrected S-curve, no vertical run)
+  ];
+
+  var pathLayer = document.getElementById('pathLayer');
+  var edgeDs = [], fillDs = [], centreDs = [];
+  var trunkSampled = null;
+  branches.forEach(function (pts, bi) {
+    var P = pts.map(function (p) { var xy = toPx(p[0], p[1]); return { x: xy[0], y: xy[1], hw: wpx(p[2]) / 2 }; });
+    var samplesPerSeg = Math.max(8, Math.ceil(44 / (P.length - 1)));
+    var sampled = sampleOpen(P, samplesPerSeg);
+    if (bi === 0) trunkSampled = sampled;
+    edgeDs.push(offsetRibbon(sampled, function (hw) { return hw + 2.4; }));
+    fillDs.push(offsetRibbon(sampled, function (hw) { return hw; }));
+    centreDs.push(offsetRibbon(sampled, function (hw) { return hw * 0.4; }));
+  });
+  var gEdge = el('g', { fill: '#a8987a' });
+  edgeDs.forEach(function (d) { gEdge.appendChild(el('path', { d: d })); });
+  pathLayer.appendChild(gEdge);
+  var gFill = el('g', { fill: '#d9cbb4' });
+  fillDs.forEach(function (d) { gFill.appendChild(el('path', { d: d })); });
+  pathLayer.appendChild(gFill);
+  var gCobble = el('g', { fill: 'url(#cobble)', opacity: '0.65' });
+  fillDs.forEach(function (d) { gCobble.appendChild(el('path', { d: d })); });
+  pathLayer.appendChild(gCobble);
+  var gCentre = el('g', { fill: '#efe3c9', opacity: '0.5' });
+  centreDs.forEach(function (d) { gCentre.appendChild(el('path', { d: d })); });
+  pathLayer.appendChild(gCentre);
+
+  // ---------- doorstep flagstones along the smoothed trunk start ----------
+  var flagLayer = document.getElementById('flagstoneLayer');
+  [3, 8, 14, 20].forEach(function (idx, k) {
+    var p = trunkSampled[Math.min(idx, trunkSampled.length - 1)];
+    flagLayer.appendChild(el('ellipse', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), rx: (6.5 - k * 0.4).toFixed(1), ry: (3.6 - k * 0.2).toFixed(1), fill: '#cfc4ab', opacity: (0.85 - k * 0.05).toFixed(2) }));
+  });
+
+  // ---------- organic picket fence hugging the garden, real gate at the lane crossing ----------
+  var FENCE_LOOP = [
+    [6,55],[8,51],[15,50],[23,50],[30,51],[36,53],
+    [40,56],[41,59],[38,61.5],
+    [33,62.5],
+    [27,61],
+    [20,62],[12,62.5],[6,61],[4,57],[4,55.5]
+  ];
+  var fenceCtrl = FENCE_LOOP.map(function (p) {
+    var xy = toPx(p[0], p[1]);
+    return { x: xy[0], y: xy[1], wx: p[0], wy: p[1] };
+  });
+  var fenceSamples = sampleClosed(fenceCtrl, 8);
+  var fn = fenceSamples.length;
+  var cx0 = 0, cy0 = 0;
+  fenceSamples.forEach(function (p) { cx0 += p.x; cy0 += p.y; });
+  cx0 /= fn; cy0 /= fn;
+  var gatePx = toPx(33, 61);
+  var gateIdx = 0, bestD = Infinity;
+  for (var gi = 0; gi < fn; gi++) {
+    var dd = Math.hypot(fenceSamples[gi].x - gatePx[0], fenceSamples[gi].y - gatePx[1]);
+    if (dd < bestD) { bestD = dd; gateIdx = gi; }
+  }
+  var GATE_WIN = 5;
+  function inGate(i) {
+    var d1 = Math.abs(i - gateIdx);
+    var d2 = fn - d1;
+    return Math.min(d1, d2) <= GATE_WIN;
+  }
+  function fenceNormal(i) {
+    var a = fenceSamples[(i - 1 + fn) % fn], b = fenceSamples[(i + 1) % fn];
+    var dx = b.x - a.x, dy = b.y - a.y;
+    var len = Math.hypot(dx, dy) || 1;
+    var nx = -dy / len, ny = dx / len;
+    var p = fenceSamples[i];
+    if ((p.x - cx0) * nx + (p.y - cy0) * ny < 0) { nx = -nx; ny = -ny; }
+    return [nx, ny];
+  }
+  var fenceLayer = document.getElementById('fenceLayer');
+  var POST_H = 7.2;
+  // the gate cuts the closed loop into exactly ONE contiguous open arc; walk it in order (no bucket/sign logic)
+  var gapCount = 2 * GATE_WIN + 1;
+  var arcStart = (gateIdx + GATE_WIN + 1) % fn;
+  var arcLen = fn - gapCount;
+  var arcOrder = [];
+  for (var k = 0; k < arcLen; k++) arcOrder.push((arcStart + k) % fn);
+
+  var railPts = [];
+  for (var ai = 0; ai < arcOrder.length; ai += 2) {
+    var idx = arcOrder[ai];
+    var p = fenceSamples[idx];
+    var nrm = fenceNormal(idx);
+    var top = { x: p.x + nrm[0] * POST_H, y: p.y + nrm[1] * POST_H };
+    railPts.push(top);
+    // tapered picket (wide base -> narrow top)
+    var bx = nrm[1], by = -nrm[0]; // perpendicular-to-normal (along fence direction) for post thickness
+    var baseHw = 1.15, topHw = 0.55;
+    var d = 'M' + (p.x - bx * baseHw).toFixed(1) + ',' + (p.y - by * baseHw).toFixed(1) +
+      'L' + (p.x + bx * baseHw).toFixed(1) + ',' + (p.y + by * baseHw).toFixed(1) +
+      'L' + (top.x + bx * topHw).toFixed(1) + ',' + (top.y + by * topHw).toFixed(1) +
+      'L' + (top.x - bx * topHw).toFixed(1) + ',' + (top.y - by * topHw).toFixed(1) + 'Z';
+    fenceLayer.appendChild(el('path', { d: d, fill: '#f5f0e2', stroke: '#c4bb9f', 'stroke-width': '0.4', opacity: '0.92' }));
+  }
+  var railD = 'M' + railPts.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join('L');
+  fenceLayer.appendChild(el('path', { d: railD, fill: 'none', stroke: '#efe8d6', 'stroke-width': '1.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: '0.9' }));
+
+  // gate posts + crossbar (the two ends of the open arc) — plain vertical posts read most clearly as "a gate"
+  var gA = fenceSamples[(gateIdx - GATE_WIN + fn) % fn];
+  var gB = fenceSamples[(gateIdx + GATE_WIN) % fn];
+  var GATE_POST_H = 12;
+  var gateTops = [gA, gB].map(function (gp) {
+    var top = { x: gp.x, y: gp.y - GATE_POST_H };
+    fenceLayer.appendChild(el('line', { x1: gp.x.toFixed(1), y1: gp.y.toFixed(1), x2: top.x.toFixed(1), y2: top.y.toFixed(1), stroke: '#a97c46', 'stroke-width': '2.4', 'stroke-linecap': 'round' }));
+    fenceLayer.appendChild(el('circle', { cx: top.x.toFixed(1), cy: top.y.toFixed(1), r: '1.6', fill: '#c9a06a' }));
+    return top;
+  });
+  fenceLayer.appendChild(el('path', { d: 'M' + gateTops[0].x.toFixed(1) + ',' + (gateTops[0].y + 2.5).toFixed(1) + 'L' + gateTops[1].x.toFixed(1) + ',' + (gateTops[1].y + 2.5).toFixed(1), stroke: '#c9a06a', 'stroke-width': '1.8', fill: 'none', opacity: '0.9' }));
+
+  // ---------- hedges: outside the fence on the left/back, plus a run beside the square ----------
+  var hedgeLayer = document.getElementById('hedgeLayer');
+  function hedgeBlobPx(px, py, r) {
+    var g = el('g', { filter: 'url(#blurXS)' });
+    g.appendChild(el('circle', { cx: px.toFixed(1), cy: py.toFixed(1), r: r, fill: '#527d3e' }));
+    g.appendChild(el('circle', { cx: (px - r * 0.3).toFixed(1), cy: (py - r * 0.35).toFixed(1), r: (r * 0.6).toFixed(1), fill: '#6fa054' }));
+    hedgeLayer.appendChild(g);
+  }
+  for (var hi = 0; hi < fn; hi += 3) {
+    var hp = fenceSamples[hi];
+    var isLeftOrBack = hp.wx <= 9 || hp.wy <= 51.5;
+    if (!isLeftOrBack || inGate(hi)) continue;
+    var hn = fenceNormal(hi);
+    hedgeBlobPx(hp.x + hn[0] * 4.2, hp.y + hn[1] * 4.2, 5.2);
+  }
+  for (var hx = 40; hx <= 70; hx += 4.5) hedgeBlobPx(toPx(hx, 65.5)[0], toPx(hx, 65.5)[1], 5.5);
+
+  // ---------- background painted trees (filler, distinct from real tree asset) ----------
+  var bgLayer = document.getElementById('bgTreeLayer');
+  var bgTreeSpecs = [
+    [7,15,4.5,'#4f7a4a'], [18,20,3.8,'#6a9459'], [30,14,4.2,'#3f6a3f'],
+    [56,30,4,'#557f4d'], [64,18,3.4,'#729960'], [66,16,4.4,'#456e40'],
+    [62,22,3.6,'#638a52'], [22,32,3.2,'#5c8a4b'], [38,30,3.6,'#3f6a3f'],
+    [50,32,3,'#6a9459']
+  ];
+  bgTreeSpecs.forEach(function (t) {
+    var xy = toPx(t[0], t[1]);
+    var g = el('g', { filter: 'url(#blurXS)', opacity: '0.62' });
+    g.appendChild(el('ellipse', { cx: xy[0].toFixed(1), cy: (xy[1]+t[2]*1.6).toFixed(1), rx: (t[2]*1.1).toFixed(1), ry: (t[2]*2.4).toFixed(1), fill: '#5c4632' }));
+    g.appendChild(el('circle', { cx: xy[0].toFixed(1), cy: xy[1].toFixed(1), r: t[2], fill: t[3] }));
+    g.appendChild(el('circle', { cx: (xy[0]-t[2]*0.5).toFixed(1), cy: (xy[1]-t[2]*0.3).toFixed(1), r: (t[2]*0.55).toFixed(1), fill: '#88ab6e' }));
+    bgLayer.appendChild(g);
+  });
+
+  // ---------- shrubs / flower clusters (dense: cottage base, lane edges, shop, foreground) ----------
+  var shrubLayer = document.getElementById('shrubLayer');
+  var greens = ['#4f7a3c', '#3f6a30'];
+  var palette = [['#e88aa0','#ffffff'], ['#f2d24b','#e0524f'], ['#b79ee0','#ffffff'], ['#e0524f','#f2d24b'], ['#ffffff','#e88aa0']];
+  var clusters = [
+    [9,65],[20,66],[33,64],[40,62],          // cottage base
+    [24,70],[52,66],[58,72],[70,66],[82,70], // lane edges
+    [66,58],[72,72],                          // book shop (moved off new shop footprint/water)
+    [15,90],[62,80],[48,95]                   // foreground
+  ];
+  clusters.forEach(function (c, idx) {
+    var xy = toPx(c[0], c[1]);
+    var count = 5 + (idx % 3) * 2; // 5, 7 or 9 circles
+    var cols = palette[idx % palette.length];
+    var g = el('g', { filter: 'url(#blurTiny)' });
+    g.appendChild(el('ellipse', { cx: xy[0].toFixed(1), cy: xy[1].toFixed(1), rx: '6.5', ry: '3.4', fill: greens[0], opacity: '0.85' }));
+    g.appendChild(el('ellipse', { cx: (xy[0]-1.6).toFixed(1), cy: (xy[1]-1.2).toFixed(1), rx: '4.6', ry: '2.4', fill: greens[1], opacity: '0.8' }));
+    for (var i = 0; i < count; i++) {
+      var ang = (i / count) * Math.PI * 2;
+      var rad = 2.4 + (i % 2) * 1.4;
+      var fx = xy[0] + Math.cos(ang) * rad;
+      var fy = xy[1] - 1 + Math.sin(ang) * rad * 0.55;
+      g.appendChild(el('circle', { cx: fx.toFixed(1), cy: fy.toFixed(1), r: '1.2', fill: cols[i % 2] }));
+    }
+    shrubLayer.appendChild(g);
+  });
+
+  // ---------- river: generated ribbon along the corrected centre-line (93,12)->(88,26)->(86,34)->(91,44)->(94,60)->(95,100) ----------
+  var RIVER_PTS = [[93,12,10],[88,26,10],[86,34,10],[91,44,10],[94,60,10],[95,100,10]];
+  var riverCtrl = RIVER_PTS.map(function (p) { var xy = toPx(p[0], p[1]); return { x: xy[0], y: xy[1], hw: wpx(p[2]) / 2 }; });
+  var riverSamplesPerSeg = Math.max(8, Math.ceil(44 / (riverCtrl.length - 1)));
+  var riverSampled = sampleOpen(riverCtrl, riverSamplesPerSeg);
+  var riverLayer = document.getElementById('riverLayer');
+  riverLayer.appendChild(el('path', { d: offsetRibbon(riverSampled, function (hw) { return hw + 7.8; }), fill: '#dfe6c9', opacity: '0.55', filter: 'url(#blurM)' }));
+  riverLayer.appendChild(el('path', { d: offsetRibbon(riverSampled, function (hw) { return hw; }), fill: '#8fc7d6' }));
+  function riverSideLine(sampled, sign) {
+    var pts = [];
+    for (var i = 0; i < sampled.length; i++) {
+      var a = sampled[Math.max(0, i - 1)], b = sampled[Math.min(sampled.length - 1, i + 1)];
+      var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+      var nx = -dy / len, ny = dx / len;
+      pts.push([sampled[i].x + nx * sampled[i].hw * sign, sampled[i].y + ny * sampled[i].hw * sign]);
+    }
+    return 'M' + pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L');
+  }
+  riverLayer.appendChild(el('path', { d: riverSideLine(riverSampled, 1), fill: 'none', stroke: '#6fa7b8', 'stroke-width': '2.4', opacity: '0.55' }));
+  riverLayer.appendChild(el('path', { d: riverSideLine(riverSampled, -1), fill: 'none', stroke: '#dff1f2', 'stroke-width': '2.6', opacity: '0.5' }));
+
+  // ---------- river bank wall + highlights (sampled from the same generated centre-line) ----------
+  function riverAt(t) {
+    var idx = Math.min(riverSampled.length - 1, Math.max(0, Math.round(t * (riverSampled.length - 1))));
+    return [riverSampled[idx].x, riverSampled[idx].y];
+  }
+  var wallLayer = el('g', { filter: 'url(#blurXS)', opacity: '0.5' });
+  document.getElementById('wallLayer').appendChild(wallLayer);
+  for (var wt = 0.12; wt <= 0.62; wt += 0.05) {
+    var wp = riverAt(wt);
+    wallLayer.appendChild(el('rect', { x: (wp[0] - 24).toFixed(1), y: wp[1].toFixed(1), width: '5', height: '7', rx: '1.6', fill: '#9a978c', stroke: '#83806f', 'stroke-width': '0.5' }));
+  }
+  var riverHi = el('g', { filter: 'url(#blurXS)' });
+  document.getElementById('riverHighlights').appendChild(riverHi);
+  for (var i2 = 0; i2 < 11; i2++) {
+    var rt = 0.06 + (i2 / 10) * 0.88;
+    var rp = riverAt(rt);
+    var rx = rp[0] + (i2 % 2 === 0 ? -8 : 8);
+    var ry = rp[1];
+    riverHi.appendChild(el('line', { x1: rx.toFixed(1), y1: ry.toFixed(1), x2: (rx + 7).toFixed(1), y2: (ry - 6).toFixed(1), stroke: '#ffffff', 'stroke-width': '1.2', opacity: '0.42', 'stroke-linecap': 'round' }));
+  }
+})();
+</script>
+</body>
+</html>

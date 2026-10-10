@@ -1,0 +1,96 @@
+# src	original	target (under src/assets/town/kit/)	place	learning use
+dl	배경	backgrounds/park-backdrop	park	공원 미션 배경 (E05, E04, I04, M05)
+dl	road	backgrounds/plaza-topdown	plaza	마을 광장 지도(위에서 본 길) — 마을 화면 후보, 학습 장면 미사용
+dl	쿠키	character/cookie-stand	park/town	Cookie 서 있는 모습 — dog 세기(E05), 마을 표지판 옆
+dl	dog	character/cookie-sit	park/town	Cookie 앉은 모습 — dog 세기, 벤치 장면
+dl	폴얼굴	character/paul-portrait	-	인물 사진풍 초상 — 학습 장면 미사용(운영자 확인 필요)
+dl	tree	nature/tree	park	나무 세기·심기(E05), behind the tree(I06)
+dl	bush	nature/hedge	park/garden	생울타리 — 배경 장식, 위치 표현 기준물
+dl	flower	props/sunflower-pot	park/flower shop	꽃 세기(E05, 공 대신), I like(E06)
+dl	flower2	props/flower-cart	flower shop/park	꽃수레 — 장식, 꽃집 장면
+root	flower	props/flower-wheelbarrow	garden	정원 장식
+root	flower22222	props/flower-urn	park/garden	공원 장식
+dl	strawberries	props/strawberry-pot	fruit shop	과일 가게 I like(E06)
+dl	lettuce	props/vegetable-bed	vegetable shop/garden	채소 — I like, There are
+dl	bench	props/bench	park	벤치 세기(E05), on the bench(H06)
+dl	picnictable	props/picnic-table	park	공원 소품, on/under 위치(E02 대체 장면)
+dl	swing	props/swing	park	놀이 동작 can(E04, I04)
+dl	balloons	props/balloons	park/toy shop	개수 세기 후보(There are), 장식
+dl	present	props/gift-box	toy shop	Would you like(I08), This/That(E08)
+dl	chest	props/treasure-chest	-	보상 연출 후보(학습 장면 미사용)
+dl	award	props/star-trophy	-	마무리 카드 후보(보상 규칙 변경 없음)
+dl	sign	props/signpost	town	마을 미션 표지판
+dl	fence	props/fence	park/garden	울타리 — 위치 기준물
+root	fence222	props/stile	park	울타리 디딤대 — 장식
+root	gate22	props/garden-gate	garden	문 open/close(M02, M05)
+dl	arch	props/rose-arch	park/garden	공원 입구 장식
+root	stair	props/stone-steps	park	장식
+root	stones	props/stepping-stones	park	길 장식
+root	sundial	props/sundial	plaza/park	시간 표현(M01) 후보
+root	bee	props/beehive	garden	장식
+root	birds	props/birdhouse	park	장식, There is 후보
+root	water	props/water-barrel	garden	장식
+root	pot	props/compost-box	garden	장식
+root	tools	props/tool-rack	garden	장식
+root	kettle	props/watering-can	garden	현재진행(I05 watering) 후보
+root	bicycle parking	props/bike-rack	street	장식
+root	시계탑	props/street-clock	plaza	시간·일정(M01, H01)
+dl	가로등	props/bollard	street	장식
+dl	post lamp	props/street-lamp	street	장식
+dl	쓰레기통	props/recycling-bin	street	should/have to(A05) 후보
+dl	bin	props/litter-bin	street/park	should/have to(A05) 후보
+dl	공중전화	props/phone-box	street	간접화법·메시지(H05) 후보
+dl	red post box	props/post-box	street	메시지 전달(H05)
+dl	fountains	props/bird-bath	park	장식, There is 후보
+dl	fountain	props/fountain	plaza	현재진행(I05) 광장
+dl	fountain222	props/wall-fountain	plaza	장식
+dl	bridge	props/stone-bridge	river	분사구문(H06) 다리
+dl	ship	props/sailboat	harbour	장식, going to(A01) 후보
+dl	tent	props/tent	park	going to 계획(A01) 후보
+dl	dog house	props/dog-house	park/home	Cookie 집 — in/next to 위치(E02, I06)
+dl	squirrel	animals/squirrel	park	동물 세기·can 후보
+dl	rabbit	animals/rabbit	park	동물 세기·can 후보
+dl	fox	animals/fox	park	동물 세기 후보
+dl	duck	animals/duck	park	동물 세기 후보
+dl	owl	animals/owl	park	동물 후보
+dl	train	buildings/train-engine	station	기차역 — have ever been(A06) (역 건물 그림은 없음)
+dl	ticket	buildings/ticket-booth	station	매표소 — 주문/요청, A06
+dl	bus stop	buildings/bus-stop	street	일정·시간표(M01) 후보
+dl	bakery	buildings/bakery	bakery	빵집 주문(I03)
+dl	cafe	buildings/cafe	cafe	Would you like(I08), Do you like(E07)
+dl	fruit store	buildings/fruit-shop	fruit shop	I like(E06)
+dl	vegetable store	buildings/greengrocer	vegetable shop	I like 확장
+dl	flower store	buildings/flower-shop	flower shop	I like·This/That 후보
+dl	ice cream	buildings/ice-cream-stall	plaza	Would you like 후보
+dl	bookshop	buildings/bookshop	bookshop	This/That(E08)
+dl	school1	buildings/school	school	E01, E03, A01, A05, M02, M03
+dl	TOy sstore	buildings/toy-shop	toy shop	This/That·Can I 후보
+dl	pet shop	buildings/pet-shop	pet shop	동물·좋아해요 후보
+dl	music store	buildings/music-shop	music shop	can(play/sing) 후보
+dl	art store	buildings/art-shop	art shop	현재진행(painting) 후보
+dl	bicycle	buildings/bike-shop	bike shop	can ride 후보
+dl	bell shop	buildings/bell-shop	street	장식
+dl	string	buildings/tailor-shop	street	장식
+dl	poceline	buildings/china-shop	street	장식
+dl	shop1	buildings/gift-shop	street	장식(간판 글자 SHOP 구워져 있음)
+dl	druggg	buildings/clinic	street	should(A05) 후보
+dl	drug store	buildings/potion-shop	street	장식
+dl	alchemist	buildings/fire-station	street	must/have to(M02) 후보
+dl	aqua	buildings/aquarium-shop	street	장식
+dl	bones	buildings/museum	plaza	수동태 기사(H02) 후보
+dl	council	buildings/town-hall	plaza	뉴스·공지(H02, M06) 후보
+dl	시계탑	buildings/clock-tower	plaza	시제·기간(M01, H01)
+dl	천문대	buildings/observatory	hill	가정법·계획 후보
+dl	lighthouse	buildings/lighthouse	harbour	장식
+dl	mill	buildings/windmill	farm	수동태(is made) 후보
+dl	마굿간	buildings/stable	farm	장식
+dl	stage	buildings/barn	farm	장식
+dl	shipp	buildings/boathouse	harbour	장식
+dl	castle gate	buildings/castle-gate	town gate	마을 입구 장식
+dl	팔각정	buildings/gazebo	park	공원 정자 — 장식
+dl	reading spot	buildings/reading-pavilion	park	읽기 활동 장소 후보
+dl	가든	buildings/greenhouse	garden	정원 장식
+dl	tre ehouse	buildings/treehouse	park	going to·can 후보
+dl	집	buildings/cottage-large	home	home(E02, I02)
+dl	house22	buildings/cottage-clock	home	장식
+dl	cottage3	buildings/my-cottage	home	my house(E02) (간판 글자 구워져 있음)

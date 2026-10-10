@@ -37,3 +37,19 @@ supabase_v3_28_roster_container_dup_rename.sql
 # 실명이 든 로스터 정리 체크포인트(위 SQL과 동일 사유)
 .ai-status/roster-cleanup-sql-2026-08-09.json
 .ai-status/roster-cleanup-v328-2026-08-09.json
+
+# Paul Town V2 환경 아트 배치 ingest 스테이징 산출물(scripts/town-art/ingest.py
+# 산출물 — src/assets/town/의 확정본이 아니라 검수 전 후보만 들어가는 임시
+# 폴더, 2026-09-17)
+art-staging/
+
+# Python bytecode cache (scripts/town-art/ingest.py 실행 산출물, 2026-09-17)
+__pycache__/
+
+# Paul Town V2 recompose 하네스 스크린샷(PR 용량 절감을 위해 커밋하지 않음,
+# 2026-09-19). previews/는 `node docs/design/town/mockup/shoot.mjs`로 다시
+# 만든다. previews-pending/는 당시 batch1-pending 입력이 삭제되어 재생성 불가한
+# 과거 검수 증거이며, 원본은 feat/paul-town-v2-world-contract-2026-09-17
+# (c763273)에 보존되어 있다.
+docs/design/town/mockup/previews/
+docs/design/town/mockup/previews-pending/

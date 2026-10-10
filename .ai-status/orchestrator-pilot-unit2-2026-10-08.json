@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(첫 Unit 독립 검수 반영·두 번째 Unit 통합·격리 검증·브라우저 e2e 재개) — 독립 QA·교육 설계·참고문헌 검증·교사 가이드·파닉스 스펙은 읽기 전용 서브에이전트",
+  "task_id": "pilot-unit2-2026-10-08",
+  "task": "첫 Unit 독립 검수 → 결함 수정, 두 번째 통합 Unit(잃어버린 물건 위치 묻기, asking-info), Unit 간·계정 간 격리 검증, 브라우저 e2e 5스펙, 문서·커밋·push",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-08T05:38:00+09:00",
+  "updated_at": "2026-10-08T13:10:00+09:00",
+  "files_owned": ["src/utils/curriculum/units.js", "src/utils/curriculum/unitLostBag.js", "src/utils/curriculum/unitBorrow.js", "src/components/UnitScreen.jsx", "src/components/WritingPractice.jsx", "src/utils/writing/writingItems.js", "src/App.jsx", "scripts/testPilotUnit.mjs", "scripts/testWritingPractice.mjs", "tests/e2e/unit.spec.mjs", "tests/e2e/writing.spec.mjs", "docs/design/INTEGRATED_CURRICULUM_IMPL_2026-10-08.md", "docs/design/TEACHER_GUIDE_PILOT_UNITS_2026-10-08.md", "docs/design/PHONICS_PILOT_SPEC_2026-10-08.md", "TESTING.md", "handoff.md"],
+  "summary": "[mock 기반] 05시 세션 커밋 9개(eda71e10까지 push) + 12:52 재개(RAM 4.1GB): e2e unit 1차 80/6 → 제품 결함 1건(목록에서 다른 Unit 열 때 복귀 기록 누출) 수정 53a57ac7, 스펙 수정 feb1a6aa → unit 88/0 ×2, student-home 218/0/1 SKIP, speaking 540/0, speaking-exam 216/0, writing 63/0(1차 1 FAIL = 주제 수 계약 드리프트). 정적 핀 PASS. 파닉스 순서는 학원 프로그램 원칙 유지(운영자 결정), Bell 약관은 별도 보류.",
+  "blocker": null,
+  "next_action": "운영자: Preview 로그인 후 QA 홈 [오늘의 학습] → Unit 목록 2개 → 각 7활동 실화면 확인(Unit 2 말하기 3단계·답 확인 전 영어 없음·Unit 전환 시 기록 불변). (2026-10-08 13:10 기준; 이후 세션은 handoff 최신 섹션 우선)"
+}

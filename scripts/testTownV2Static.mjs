@@ -241,6 +241,18 @@ const V2_FILE_NAMES = [
   'TownScreenV2.jsx', 'TownHud.jsx', 'PaulGuide.jsx', 'TownSheet.jsx',
   'TownScene.jsx', 'TownGroundLayer.jsx', 'TownPathLayer.jsx', 'TownAmbientLayer.jsx',
   'TownFogLayer.jsx', 'TownPlacementOverlay.jsx', 'TownObjectLayer.jsx', 'TownSprite.jsx',
+  // 2026-09-18(작업 지시서 STEP 4) — 세계 좌표 렌더러 전환의 첫 신규 파일.
+  'TownEnvImage.jsx',
+  // 2026-09-18(작업 지시서 STEP 5) — ENV_PLACEMENTS 항목 렌더 공유
+  // 컴포넌트 + 강/길 레이어.
+  'TownEnvPlacement.jsx', 'TownWaterLayer.jsx',
+  // 2026-09-18(작업 지시서 STEP 6) — 울타리·생울타리/클러스터/항상 보이는
+  // 소품/표지판 레이어.
+  'TownSceneryLayer.jsx',
+  // 2026-09-18(작업 지시서 STEP 7) — 씬 로컬 UI z-index 상수(순수 데이터
+  // 파일이지만 v2/* 디렉터리 소속이라 다른 신규 파일과 동일하게 존재
+  // 확인 + §8 불변식 스캔 대상에 포함한다).
+  'sceneZ.js',
 ]
 const v2Raw = {}
 for (const name of V2_FILE_NAMES) {
@@ -254,10 +266,18 @@ const v2CombinedCode = Object.values(v2Code).join('\n')
 
 const townSceneSrcForInvariants = readSrc('src/utils/town/townScene.js')
 const sceneCodeForInvariants = stripComments(townSceneSrcForInvariants)
+// 2026-09-18(작업 지시서 STEP 4) — 세계 좌표 렌더러의 새 순수 모듈 2개도
+// 이 불변식 스캔 범위에 포함한다(townScene.js와 동일한 취급 — v2/*가
+// 소비하는 순수 도메인 모듈이라 같은 금지 패턴 계약을 받는다).
+const worldRenderSrcForInvariants = readSrc('src/utils/town/worldRender.js')
+const worldScenerySrcForInvariants = readSrc('src/utils/town/worldScenery.js')
+const worldRenderCodeForInvariants = stripComments(worldRenderSrcForInvariants)
+const worldSceneryCodeForInvariants = stripComments(worldScenerySrcForInvariants)
 const combinedWithScene = v2CombinedCode + '\n' + sceneCodeForInvariants
+  + '\n' + worldRenderCodeForInvariants + '\n' + worldSceneryCodeForInvariants
 
-// ── 8. 불변식 — v2 컴포넌트 + townScene.js 전체 ──────────────────────────
-section('8. 불변식(v2/* + townScene.js) — 금지 패턴 0개')
+// ── 8. 불변식 — v2 컴포넌트 + townScene.js + worldRender.js + worldScenery.js ──
+section('8. 불변식(v2/* + townScene.js + worldRender.js + worldScenery.js) — 금지 패턴 0개')
 check('v2/* + townScene.js — isFeatureEnabled( 호출 없음(플래그는 App.jsx 한 곳에서만 읽음)', !/isFeatureEnabled\(/.test(combinedWithScene))
 check('v2/* + townScene.js — fetch( 없음', !/fetch\(/.test(combinedWithScene))
 check('v2/* + townScene.js — supabase 없음', !/supabase/i.test(combinedWithScene))
@@ -267,6 +287,26 @@ check('v2/* + townScene.js — total_stars/totalStars 산술 없음(잔액 역�
 check('v2/* + townScene.js — assets/paul import 없음', !/from\s+['"][^'"]*assets\/paul[^'"]*['"]/i.test(combinedWithScene))
 check('v2/* + townScene.js — <img>에 "paul" 경로/문자열 없음', !/<img[^>]*paul/i.test(combinedWithScene))
 check('v2/* + townScene.js — Hogwarts/Harry/Potter 문자열 없음(저작권 회피)', !/Hogwarts|Harry|Potter/i.test(combinedWithScene))
+// 2026-09-18(작업 지시서 STEP 6) — 승인된 카피(worldScenery.js SIGNS)만
+// 노출되고, Paul 환영 말풍선 문자열이 v2/* + worldScenery.js 어디에도
+// 없는지 기계적으로 고정한다.
+check('v2/* + worldScenery.js — "Welcome to Paul" 문자열 없음(환영 말풍선은 PaulGuide.jsx 몫이 아니라 이 세계 데이터/렌더러 범위 밖)', !combinedWithScene.includes('Welcome to Paul'))
+// 2026-09-18(사전 보정 패스 — 오너 결정) — 4-arm 안내판이 SIGNS.fourWay로
+// 추가되면서 "Learn"/"Be Kind" 금지는 더 이상 유효한 계약이 아니다(그
+// 문자열이 이제 승인된 카피의 일부다) — 대신 "Go Further"(하네스 원본
+// 4번째 칸 문구, 오너가 "Explore"로 교체하기로 결정)만 금지어로 남기고,
+// 승인된 4개 라벨이 실제로 존재하는지 + TownSceneryLayer.jsx가 SIGNS.fourWay
+// 를 렌더하는지 양성(positive) 계약을 추가한다(worldScenery.js가 그
+// 데이터를, TownSceneryLayer.jsx가 그 렌더를 각각 소유 — Step 6 헤더 참고).
+check('v2/* + worldScenery.js — "Go Further" 문자열 없음(오너 결정으로 "Explore"로 교체됨, 하네스 원본 문구는 승인된 카피가 아님)', !combinedWithScene.includes('Go Further'))
+check(
+  'worldScenery.js — 4-arm 안내판 승인된 라벨 4개(Learn/Grow/Be Kind/Explore) 전부 존재',
+  ['Learn', 'Grow', 'Be Kind', 'Explore'].every((label) => worldSceneryCodeForInvariants.includes(label)),
+)
+check(
+  'TownSceneryLayer.jsx — SIGNS.fourWay를 렌더함(<WorldSign sign={SIGNS.fourWay} /> 패턴)',
+  /<WorldSign\s+sign=\{SIGNS\.fourWay\}/.test(v2Code['TownSceneryLayer.jsx'] || ''),
+)
 
 // ── 9. TownScene.jsx / TownGroundLayer.jsx — 격자(grid) 레이아웃 금지 ────
 section('9. TownScene.jsx / TownGroundLayer.jsx — grid-cols류 금지(스토리북 장면, 격자 아님)')
@@ -424,14 +464,32 @@ check(
   'TownObjectLayer.jsx — for-sale placeholder 박스 클래스(대시) + "for sale" 문구 여전히 존재(무변경)',
   objectLayerCode.includes('bg-[#d9d2c5]/50 border-2 border-dashed border-[#1e2a5a]/40') && objectLayerCode.includes('for sale'),
 )
+// 2026-09-18(작업 지시서 STEP 7, 세계 좌표 렌더러 전환) — 아래 두 단언은
+// 옛 district-stack 변수/함수(districtLocalToGlobal의 결과 `g`, 구역별
+// zIndexFor(row, district))를 검사했으나 그 지오메트리 체계 자체가
+// 퇴역했다(TownObjectLayer.jsx가 이제 worldRender.landmarkBox()/
+// worldZIndex('architecture', ...)를 쓴다) — 원래 단언의 "의도"(로트
+// 지오메트리/ z 계산 블록이 상태(built/for-sale/hidden)별로 중복
+// 구현되지 않고 한 곳에서만 온다)는 그대로 유지한 채, 대상 리터럴만
+// 새 구현의 공유 헬퍼(landmarkGeometryStyle()/landmarkZ(), TownObjectLayer.jsx
+// 안에 정의되어 built/for-sale/hidden/My House 네 분기가 전부 호출한다)
+// 로 옮겨 다시 고정한다. 테스트를 느슨하게 만든 게 아니라, 승인된 설계가
+// 실제로 바뀐 사실(district-stack → world-coordinate)을 반영한 갱신이다.
+// box.leftPct는 정확히 2곳에서만 등장해야 한다 — 1) landmarkGeometryStyle()
+// (랜드마크 본체 박스, built/for-sale/hidden/My House 네 분기가 전부
+// 이 함수 하나를 공유) 2) LotShadow(그림자 타원 — 하네스도 obj와 shadow를
+// 별개의 두 style 블록으로 그린다, renderLandmark()의 shadow.style.left
+// 와 obj.style.left가 서로 다른 변수라는 점을 그대로 반영). 이 이상
+// 늘어나면(3곳 이상) 어딘가 지오메트리 계산이 다시 중복 구현된 것이다.
 check(
-  'TownObjectLayer.jsx — 로트 지오메트리(left/top/width/aspectRatio/transform/zIndex) 스타일 블록이 hasArt 분기로 중복되지 않음(양쪽이 같은 wrapper div를 공유 — g.leftPct 1회만 등장)',
-  (objectLayerCode.match(/\$\{g\.leftPct\}%/g) || []).length === 1,
-  `count=${(objectLayerCode.match(/\$\{g\.leftPct\}%/g) || []).length}`,
+  'TownObjectLayer.jsx — box.leftPct가 정확히 2곳에서만 등장(landmarkGeometryStyle 본체 1 + LotShadow 그림자 1, 그 이상 중복 없음)',
+  (objectLayerCode.match(/\$\{box\.leftPct\}%/g) || []).length === 2,
+  `count=${(objectLayerCode.match(/\$\{box\.leftPct\}%/g) || []).length}`,
 )
 check(
-  'TownObjectLayer.jsx — zIndexFor(2, lot.district) 1회만 등장(geometry 분기 미중복 재확인)',
-  (objectLayerCode.match(/zIndexFor\(2,\s*lot\.district\)/g) || []).length === 1,
+  'TownObjectLayer.jsx — 로트 z-index가 공유 헬퍼 landmarkZ() 안에서만 계산됨(분기별 중복 없음 — worldZIndex(\'architecture\', ...) 1회만 등장)',
+  (objectLayerCode.match(/worldZIndex\(\s*'architecture'/g) || []).length === 1,
+  `count=${(objectLayerCode.match(/worldZIndex\(\s*'architecture'/g) || []).length}`,
 )
 
 // 2026-09-14 — 배치 팝오버 바깥 탭 백드롭(TownScene.jsx) 회귀 방지. 이
@@ -451,6 +509,55 @@ check(
   'TownObjectLayer.jsx — 팝오버 이동/보관 버튼에 pointer-events-auto',
   (objectLayerCode.match(/pointer-events-auto[^"]*btn-press/g) || []).length === 2,
 )
+
+// 2026-09-18(D1 정정 — landmarkRenderSource 전면 교체) —
+// TownObjectLayer.jsx는 이제 landmarkRenderSource를 전혀 참조하지 않고
+// (잘못된 규칙, 완전 삭제), 대신 isFixedLandmarkId로 배치 루프의 list를
+// 걸러낸다 — 고정 로트(LOTS)는 항상 lotState()만 보고 그린다(배치
+// 데이터 유무와 무관, D1 정정 이전 동작으로 복귀).
+check(
+  'TownObjectLayer.jsx — landmarkRenderSource 참조가 완전히 사라짐(D1 정정)',
+  !objectLayerCode.includes('landmarkRenderSource'),
+)
+check(
+  'TownObjectLayer.jsx — isFixedLandmarkId를 worldRender에서 import',
+  /import\s*\{[^}]*isFixedLandmarkId[^}]*\}\s*from\s*['"]\.\.\/\.\.\/\.\.\/utils\/town\/worldRender['"]/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — 배치 루프 list가 isFixedLandmarkId로 고정 랜드마크를 걸러냄',
+  /placements\.filter\(\s*\(p\)\s*=>\s*p\s*&&\s*!isFixedLandmarkId\(p\.itemId\)\s*\)/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — LOTS 루프가 배치 유무와 무관하게 항상 그림(landmarkRenderSource 기반 조건부 return null 없음)',
+  !/===\s*'placement'\)\s*return null/.test(objectLayerCode),
+)
+// LOTS 루프 밖에 built 로트를 그리는 또 다른 경로가 없는지 — 이 파일이
+// 로트 렌더 지오메트리를 쓰는 지점은 landmarkGeometryStyle() 호출부
+// (이미 위에서 "정확히 2곳"으로 고정) 하나뿐이라는 사실 자체가 "다른
+// 경로 없음"의 증거다(중복 정의됐다면 3곳 이상이 됐을 것 — 위 체크가
+// 이미 실패했을 것).
+check(
+  'TownObjectLayer.jsx — landmarkGeometryStyle 리터럴이 정확히 4곳(함수 정의 1 + 호출 3: hidden/built-or-for-sale/MyHouse, 다른 built 렌더 경로 없음 — 위 box.leftPct===2곳 체크와 함께 이중 확인)',
+  (objectLayerCode.match(/landmarkGeometryStyle\(/g) || []).length === 4,
+  `count=${(objectLayerCode.match(/landmarkGeometryStyle\(/g) || []).length}`,
+)
+
+// 2026-09-18(사전 보정 패스, 플레이어 배치 아이템 스케일 수정) —
+// WORLD_FOOTPRINT_WIDTH_PCT(옛 {12,8,5.5} 상수)가 완전히 사라지고
+// worldRender.placedItemWidthPct()로 대체됐는지, px 캡/뷰포트별 clamp()
+// 가 섞여 들어오지 않았는지(전부 % 단위 하나로만 계산 — 작업 지시서
+// 명시) 확인한다.
+check(
+  'TownObjectLayer.jsx — placedItemWidthPct를 worldRender에서 import',
+  /import\s*\{[^}]*placedItemWidthPct[^}]*\}\s*from\s*['"]\.\.\/\.\.\/\.\.\/utils\/town\/worldRender['"]/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — placedItemWidthPct(sprite.footprint, anchor.depthY) 호출 존재',
+  /placedItemWidthPct\(\s*sprite\.footprint,\s*anchor\.depthY\s*\)/.test(objectLayerCode),
+)
+check('TownObjectLayer.jsx — WORLD_FOOTPRINT_WIDTH_PCT(옛 px 캡 발자국 상수) 완전히 제거됨', !objectLayerCode.includes('WORLD_FOOTPRINT_WIDTH_PCT'))
+check('TownObjectLayer.jsx — max-w-[ 없음(아이템 크기에 px 캡 없음, % 단독)', !objectLayerCode.includes('max-w-['))
+check('TownObjectLayer.jsx — clamp( 없음(뷰포트별 다른 크기 없음, 360/390/430 동일 비율)', !objectLayerCode.includes('clamp('))
 
 // ── 20. TownSprite.jsx ────────────────────────────────────────────────────
 section('20. TownSprite.jsx — 에셋/이모지 폴백')
@@ -484,6 +591,69 @@ const screenV2Code = v2Code['TownScreenV2.jsx'] || ''
 check('TownScreenV2.jsx — data-testid="town-screen-v2"', /data-testid="town-screen-v2"/.test(screenV2Code))
 check('TownScreenV2.jsx — "← Paul Town" 뒤로가기 버튼 텍스트', screenV2Code.includes('← Paul Town'))
 check('TownScreenV2.jsx — 모드 배너 "취소" 버튼', /취소/.test(screenV2Code))
+
+// 2026-09-18 D1 정정 — 뷰모델 필터링(A2). isFixedLandmarkId import,
+// freeCatalog/freeOwnedIds/renderPlacements 파생, TownScene/TownInventory
+// prop 배선이 지시서대로인지 확인한다. TownShopPanel은 전체 catalog를
+// 그대로 유지해야 한다(구매=소유권, 걸러내지 않음).
+check(
+  'TownScreenV2.jsx — isFixedLandmarkId를 worldRender에서 import',
+  /import\s*\{\s*isFixedLandmarkId\s*\}\s*from\s*['"]\.\.\/\.\.\/\.\.\/utils\/town\/worldRender['"]/.test(screenV2Code),
+)
+check(
+  'TownScreenV2.jsx — freeCatalog = catalog.filter(... !isFixedLandmarkId(it.id))',
+  /freeCatalog\s*=\s*useMemo\(\(\)\s*=>\s*catalog\.filter\(\(it\)\s*=>\s*!isFixedLandmarkId\(it\.id\)\)/.test(screenV2Code),
+)
+check(
+  'TownScreenV2.jsx — freeOwnedIds = ownedIds.filter(... !isFixedLandmarkId(id))',
+  /freeOwnedIds\s*=\s*useMemo\(\(\)\s*=>\s*ownedIds\.filter\(\(id\)\s*=>\s*!isFixedLandmarkId\(id\)\)/.test(screenV2Code),
+)
+check(
+  'TownScreenV2.jsx — renderPlacements = placements.filter(... !isFixedLandmarkId(p.itemId))',
+  /renderPlacements\s*=\s*useMemo\(\(\)\s*=>\s*placements\.filter\(\(p\)\s*=>\s*p\s*&&\s*!isFixedLandmarkId\(p\.itemId\)\)/.test(screenV2Code),
+)
+check(
+  'TownScreenV2.jsx — unplacedCount가 freeOwnedIds/renderPlacements 기준',
+  /unplacedOwnedIds\(freeOwnedIds,\s*renderPlacements\)/.test(screenV2Code),
+)
+check(
+  'TownScreenV2.jsx — <TownScene placements={renderPlacements} occupancyPlacements={placements} ...>',
+  /<TownScene\s+placements=\{renderPlacements\}\s+occupancyPlacements=\{placements\}/.test(screenV2Code),
+)
+check(
+  'TownScreenV2.jsx — <TownInventory items={freeCatalog} ... placements={renderPlacements} ...>',
+  /<TownInventory\s+items=\{freeCatalog\}[\s\S]{0,120}placements=\{renderPlacements\}/.test(screenV2Code),
+)
+check(
+  'TownScreenV2.jsx — <TownShopPanel items={catalog} ...>(상점은 전체 카탈로그 그대로, 걸러내지 않음)',
+  /<TownShopPanel\s+items=\{catalog\}/.test(screenV2Code),
+)
+
+// ── 23. TownScene.jsx — occupancyPlacements(점유 판정용 전체 목록) ───────
+section('23. TownScene.jsx — occupancyPlacements prop')
+check(
+  'TownScene.jsx — occupancyPlacements prop 수신',
+  /function TownScene\(\{[\s\S]{0,200}occupancyPlacements/.test(sceneCompCode),
+)
+check(
+  'TownScene.jsx — freeWorldAnchors(occupancyPlacements, level) 호출(placements가 아니라 전체 목록으로 점유 판정)',
+  /freeWorldAnchors\(occupancyPlacements,\s*level\)/.test(sceneCompCode),
+)
+check(
+  'TownScene.jsx — TownObjectLayer는 여전히 placements(렌더용, 걸러진 목록)를 받음',
+  /<TownObjectLayer[\s\S]{0,80}placements=\{placements\}/.test(sceneCompCode),
+)
+
+// ── 24. TownPlacementOverlay.jsx — D5 겹침 해소(layoutPlacementControls) ──
+section('24. TownPlacementOverlay.jsx — layoutPlacementControls 겹침 해소')
+check(
+  'TownPlacementOverlay.jsx — layoutPlacementControls를 worldRender에서 import',
+  /import\s*\{[^}]*layoutPlacementControls[^}]*\}\s*from\s*['"]\.\.\/\.\.\/\.\.\/utils\/town\/worldRender['"]/.test(placementCode),
+)
+check('TownPlacementOverlay.jsx — ResizeObserver로 씬 박스 측정', /ResizeObserver/.test(placementCode))
+check('TownPlacementOverlay.jsx — layoutPlacementControls( 호출 존재', /layoutPlacementControls\(/.test(placementCode))
+check('TownPlacementOverlay.jsx — offset일 때만 그리는 leader line(aria-hidden svg)', /aria-hidden[\s\S]{0,40}(svg|line)|svg[\s\S]{0,120}aria-hidden/i.test(placementCode))
+check('TownPlacementOverlay.jsx — data-anchor 버튼이 여전히 44x44(min-h/min-w 44)', /min-h-\[44px\][^"]*min-w-\[44px\]|min-w-\[44px\][^"]*min-h-\[44px\]/.test(placementCode))
 
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed} / SKIP ${totalSkipped}`)

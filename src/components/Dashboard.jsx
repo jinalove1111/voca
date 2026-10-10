@@ -48,6 +48,7 @@ import { fetchCurrentSeason } from '../utils/seasonApi'
 // hatTintStyle(2026-08-26) — 모자 8종은 같은 🎩라 색이 colorHex 틴트로만
 // 구분된다. 이 화면이 틴트를 빠뜨려 장착 모자가 항상 검게 보였다.
 import { hatById, HAT_CATALOG, hatTintStyle } from '../utils/attachment/hatSystem'
+import { hatImageFor, HAT_IMG_CLASS } from '../assets/hats'
 import { pickPaulMemory } from '../utils/attachment/paulMemory'
 // Paul Town v2.0(2026-07-22) — 오늘의 발견(하루 1개 결정론 메시지, 폴의
 // 기억 카드 안의 한 줄) + 홈 밴드 요약/별→씨앗(전부 history 파생 — 새
@@ -60,7 +61,6 @@ import HatCeremony from './HatCeremony'
 // 플래그(기본 OFF)일 때만 진입 버튼이 렌더되고, 화면 전환은 App.jsx를
 // 건드리지 않는 Dashboard 로컬 state 풀스크린 렌더 방식(아래 showWritingCoach
 // 주석 참고). 플래그 OFF면 이 import 한 줄 말고는 기존 화면 변화 0.
-import WritingCoach from './WritingCoach'
 import { isFeatureEnabled } from '../config/features'
 import { trackEvent, EV } from '../utils/productEvents'
 // Reward System V1(2026-08-15, Phase 2) — 순수 표시 컴포넌트, props만 받음
@@ -304,7 +304,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, wallet = null }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, wallet = null, onHome }) {
   const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -454,34 +454,9 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   // 그 단어들로 열린다는 안내만(기존 getStudentWords 동작을 표시로 강화).
   const hasTodaysHomework = className && getTodaysAssignmentWordIds(className).length > 0
 
-  // Writing Coach(2026-08-09) — App.jsx의 screen 라우팅을 건드리지 않는
-  // 최소 방식: Dashboard 로컬 state로 풀스크린 렌더(HatCeremony 오버레이와
-  // 같은 "Dashboard가 자기 위에 다른 화면을 얹는" 계열, 다만 이건 홈 전체를
-  // 대체하는 조건부 렌더). onGo 라우팅 편입은 운영자 승인 후속 —
-  // 플래그(writingCoachEnabled) OFF가 기본이라 이 state는 기본적으로 죽어
-  // 있는 코드 경로다.
-  const [showWritingCoach, setShowWritingCoach] = useState(false)
-  if (showWritingCoach) {
-    return (
-      <WritingCoach
-        // targetWords(2026-08-10 P0-2 연결): 오늘 실제로 학습한 단어 =
-        // round.wordsViewed(오늘 본 단어 id, 자정 리셋·멀티기기 병합 참여)의
-        // 마지막 2개를 wordTextById로 텍스트 변환해 전달 — "오늘 배운 단어
-        // 2개로 문장 만들기"(운영자 스펙). 오늘 학습 전이면 빈 배열 →
-        // 자유 문장 모드(WritingCoach가 칩 없이 동작). 읽기 전용 파생 —
-        // 저장/기록 없음.
-        targetWords={(studentData?.round?.wordsViewed || [])
-          .slice(-2)
-          .map((id) => wordTextById?.get?.(id))
-          .filter(Boolean)}
-        onBack={() => setShowWritingCoach(false)}
-        // 완료 요약({ attemptCount, selfCorrectedCount, errorTypes })의
-        // Supabase 저장(writing_submissions — 설계 SQL만 존재)은 후속 작업.
-        // MVP는 화면만 닫는다 — DB 접근 0.
-        onComplete={() => setShowWritingCoach(false)}
-      />
-    )
-  }
+  // 2026-10-02 학생 홈 개편 — Writing Coach 풀스크린 렌더가 Dashboard 로컬
+  // state에서 App의 screen 'writingCoach'로 이동했다(새 홈의 ✍️ 카드와
+  // 이 화면의 메뉴가 같은 화면을 공유해야 해서). 아래 NavBtn은 onGo만 부른다.
 
   // pb-24(2026-09-06 야간 QA): 고정 SpeedBtn(bottom-5 right-5, ~44px)이
   // 하단 콘텐츠 탭을 가로채던 문제 — 스크롤이 버튼 아래까지 여유를 두고
@@ -489,19 +464,27 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   return (
     <div className="min-h-screen p-4 pb-24">
       {/* Header */}
-      <div className="max-w-lg mx-auto pt-2 mb-4 flex items-center justify-between">
+      <div className={`max-w-lg mx-auto pt-2 mb-4 flex items-center justify-between${onHome ? ' flex-wrap gap-y-2' : ''}`}>
         {/* 제품 리뷰(문서 10) S티어 #1 — 다른 모든 화면의 "←"는 화면 이동인데
             홈의 이 버튼만 세션 삭제(로그아웃)였다. 뒤로가기로 착각한 아이가
             이름+PIN 재입력 벽에 부딪히는 유일한 구멍이라, 라벨을 실제 동작
             그대로 "로그아웃"으로 바꾸고 확인 1탭을 추가한다. */}
-        <button
+        {/* 2026-10-02 학생 홈 개편 — onHome이 오면(새 홈 플래그 ON) 좌측은
+            "← 홈", 로그아웃은 우측으로 옮긴다. onHome이 없으면(플래그 OFF)
+            기존 배치 그대로. */}
+        {onHome && (
+          <button onClick={onHome} className="min-h-[44px] py-3 px-2 text-purple-600 text-sm font-bold btn-press hover:text-purple-800">
+            ← 홈
+          </button>
+        )}
+        {!onHome && <button
           onClick={() => {
             if (window.confirm('정말 로그아웃할까요?\n다시 들어오려면 이름과 PIN이 필요해요.')) onLogout()
           }}
           className="py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">
           🚪 로그아웃
-        </button>
-        <div className="flex items-center gap-2">
+        </button>}
+        <div className={onHome ? 'flex flex-wrap justify-end items-center gap-2 min-w-0' : 'flex items-center gap-2'}>
           {streak > 0 && (
             <div className="flex items-center gap-1 bg-orange-100 px-3 py-2 rounded-2xl">
               <span className="text-lg">🔥</span>
@@ -532,6 +515,15 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
               <span className="font-black text-emerald-700 text-lg">{formatDollars(wallet.dollarsAvailable)}</span>
             </div>
           )}
+          {onHome && (
+            <button
+              onClick={() => {
+                if (window.confirm('정말 로그아웃할까요?\n다시 들어오려면 이름과 PIN이 필요해요.')) onLogout()
+              }}
+              className="min-h-[44px] py-3 px-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">
+              🚪 로그아웃
+            </button>
+          )}
         </div>
       </div>
       {wallet === null && clearedStars > 0 && (
@@ -546,13 +538,17 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           {/* 애착 시스템 — 장착한 모자가 아바타가 된다(미장착이면 기존 👑) */}
           <div className="text-5xl mb-2">
             {equippedHat
-              ? <span style={hatTintStyle(equippedHat.colorHex)}>{equippedHat.emoji}</span>
+              ? (hatImageFor(equippedHat.id)
+                ? <img data-testid="dashboard-hat-img" data-hat={equippedHat.id} src={hatImageFor(equippedHat.id)} alt={equippedHat.name} draggable={false} className={HAT_IMG_CLASS} />
+                : <span style={hatTintStyle(equippedHat.colorHex)}>{equippedHat.emoji}</span>)
               : '👑'}
           </div>
           <h1 className="text-3xl font-black">{studentName}</h1>
           {equippedHat && (
             <p className="text-purple-200 text-xs mt-0.5">
-              <span style={hatTintStyle(equippedHat.colorHex)}>{equippedHat.emoji}</span> {equippedHat.name} 착용 중
+              {hatImageFor(equippedHat.id)
+                ? <img data-testid="dashboard-hat-label-img" src={hatImageFor(equippedHat.id)} alt="" draggable={false} className={HAT_IMG_CLASS} />
+                : <span style={hatTintStyle(equippedHat.colorHex)}>{equippedHat.emoji}</span>} {equippedHat.name} 착용 중
             </p>
           )}
           {/* 2026-08-06 P1(운영자 지시) — 반/교재/유닛 3줄 분리. 예전엔
@@ -836,9 +832,9 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             <NavBtn emoji="🎮" label="미니 게임"    sub="풍선/낚시/피자/기차 중 랜덤"          color="from-sky-400 to-indigo-500"    onClick={onPlayGame} />
             {/* Writing Coach MVP(2026-08-09) — 플래그 기본 OFF: 버튼 자체가
                 렌더되지 않는다(애착 시스템 버튼들과 동일한 게이팅 패턴).
-                onGo 라우팅이 아니라 Dashboard 로컬 state 전환(위 주석 참고). */}
+                2026-10-02: onGo('writingCoach')로 App 라우팅 편입. */}
             {isFeatureEnabled('writingCoachEnabled') && (
-              <NavBtn emoji="✍️" label="문장 만들기" sub="쓰고 스스로 고쳐봐요" color="from-teal-400 to-emerald-600" onClick={() => setShowWritingCoach(true)} />
+              <NavBtn emoji="✍️" label="문장 만들기" sub="쓰고 스스로 고쳐봐요" color="from-teal-400 to-emerald-600" onClick={() => onGo('writingCoach')} />
             )}
           </div>
         </details>

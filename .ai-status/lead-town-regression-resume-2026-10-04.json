@@ -1,0 +1,18 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PR #62 마을 회귀 검증 재개(리드, Claude Fable 5.1) — S37 BLOCKED 해소, townProto25d 전체, verify:all, 5f 마커 드리프트 수정(Sonnet 서브에이전트 구현)",
+  "task_id": "town-regression-resume-2026-10-04",
+  "task": "203차: 메모리 확보 후 S37 단독·townProto25d 전체·verify:all 재실행, testTextbookIsolation 5f 정적 마커 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-04T04:00:00+09:00",
+  "updated_at": "2026-10-04T05:30:00+09:00",
+  "worktree": "C:\\voca-wt\\paul-town-v2-night-audit",
+  "branch": "audit/paul-town-v2-2026-09-29",
+  "base_commit": "e0690c3f",
+  "files_owned": ["handoff.md", "TESTING.md", ".ai-status/lead-town-regression-resume-2026-10-04.json"],
+  "files_read": ["scripts/testTextbookIsolation.mjs", "tests/e2e/townProto25d.spec.mjs", ".ai-status/README.md"],
+  "summary": "free RAM 2.94->4.32 GB. 워크트리 clean, HEAD=PR #62 head e0690c3f. 더미 env로 재빌드(경고 0; env 없는 첫 빌드는 supabaseUrl is required로 S37 로그인 FAIL=환경). S37 단독 48/48 PASS(4뷰포트, 미mock 0) — 202차 §4-추기 BLOCKED 해소(메모리 탓 단정 안 함). [town-proto2.5d] 전체 1572/1572 PASS(34분). verify:all 33섹션/220스위트: .env ENOENT 환경 의존 하네스는 기존 패턴, 실제 실패 1건 = testTextbookIsolation 5f(3238df49의 getStudentClassAssignments 동기 래퍼 전환에 정적 마커 미추종) -> 커밋 2510d13c 1줄 수정, 43/43. 마지막 섹션 [harness:e2e]는 호스트가 메모리 압박으로 종료, 재시작 안 함 -> 학생/관리자 브라우저 E2E는 이 HEAD 미실행. Preview 별칭 https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app (e0690c3f 배포 https://voca-awl8yvael-jina4926952s-projects.vercel.app), 새 배포 URL은 push 후 운영자 확인. C:\\voca/다른 워크트리/DB/SQL/Supabase/Production/.env 무접촉, PR #62 Draft 유지.",
+  "blocker": null,
+  "next_action": "(a) 메모리 여유 + 운영자 요청 시 [harness:e2e] 재실행(이 HEAD), (b) C:\\voca 손상 SQL 파일 처리는 운영자 결정 대기"
+}

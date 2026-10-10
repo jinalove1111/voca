@@ -1,0 +1,341 @@
+// src/components/town/proto2_5d/ProtoShopScreen.jsx — Paul Town 2.5D 캐릭터
+// 프로토타입(Phase 2, 2026-09-26, 가게 경험 v1 / 2026-09-27, 경제 단계 B)
+// 가게 내부 오버레이.
+//
+// 경제 단계 B(2026-09-27) — 화면 상태만 차감, 서버/DB 쓰기 없음. 구매
+// 성공/실패 판정은 shopInteraction.js의 순수 함수 tryPurchase(부모
+// Proto25DScreen.jsx가 balance/spent를 들고 그 함수를 호출)에 전부
+// 맡긴다 — 이 컴포넌트는 그 결과(ok/insufficient)를 받아 확인 다이얼로그 →
+// 토스트로 보여주는 UI만 담당. Paul Town 기존 팔레트(TownShopPanel.jsx의
+// emerald/white/rounded-full/btn 관례)를 그대로 재사용한다(새 색상 체계
+// 발명 없음).
+//
+// 리뷰 수정 1차(2026-09-26, child-experience-designer) — 안내 문구를 탭한
+// 카드 아래 작은 텍스트(text-xs)에서, 가게 다이얼로그 한가운데 뜨는 하나의
+// 큰 토스트로 바꿨다(카드마다 따로 뜨면 어떤 카드를 눌렀는지 시선이
+// 갈라지고, 글자가 작아 아이가 읽기 어렵다는 지적). data-testid/문구는
+// 그대로라 기존 유닛/E2E 셀렉터는 안 바뀐다.
+import { useEffect, useRef, useState } from 'react'
+import { townAsset } from '../../../assets/town'
+import { formatDollars } from '../../../utils/townShop'
+import { objParticle } from '../../../utils/town/proto2_5d/shopInteraction'
+import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
+
+// 안내 토스트가 화면에 머무는 시간(ms) — 요구사항 "약 2초" 그대로.
+const PURCHASE_NOTICE_MS = 2000
+
+// 리뷰 대응(2026-10-01, F6) — 성공 안내의 다음 행동 버튼이 뜬 직후 이 시간(ms)
+// 동안은 그 버튼 클릭을 무시한다. 버튼들이 바로 직전 프레임의 구매 확인
+// 다이얼로그 "확인" 버튼과 거의 같은 화면 위치에 떠서, 아이가 "확인"을
+// 더블탭하면 두 번째 탭이 "계속 쇼핑하기"(안내 닫힘)/"내 물건 보기"(가게
+// 닫힘)에 떨어졌다(S21 항목b 실측 FAIL). 레이아웃을 옮겨도 더블탭은 어디든
+// 닿을 수 있어 가드가 근본 수정 — Proto25DScreen SHOP_REENTRY_GUARD_MS와 같은 400.
+const CTA_GUARD_MS = 400
+
+export default function ProtoShopScreen({ products, onBack, closing, balance, purchasedIds, onPurchase, onViewMyItems }) {
+  const [noticeText, setNoticeText] = useState(null)
+  // 리뷰 대응(2026-09-30, 2차, stage 3 "구매 경험 연결") — 지금 뜬 안내가
+  // "구매 성공" 안내일 때만 true(부족/이미 구매 안내에는 false) — 이
+  // 값만으로 아래 두 다음-행동 버튼("🎒 내 물건 보기"/"계속 쇼핑하기")의
+  // 노출을 제어한다. 성공 안내는 자동 숨김 없이 sticky(2026-10-01 F3 —
+  // 아래 showNotice 참고), 오류 안내의 타이머가 이 값도 함께 내린다.
+  // 아래 원문 주석은 당시(2초 자동 숨김) 기준이다 — 기존 noticeTimerRef가 noticeText를
+  // null로 되돌리는 순간(PURCHASE_NOTICE_MS 뒤) 렌더 조건(`noticeText &&
+  // purchaseNoticeActive`)이 자동으로 false가 되어 버튼도 함께 사라진다
+  // (새 타이머를 안 만드는 게 재구현보다 낫다는 ponytail 원칙 — 기존
+  // noticeText 생명주기를 그대로 얹어 쓴다).
+  const [purchaseNoticeActive, setPurchaseNoticeActive] = useState(false)
+  const [confirmProduct, setConfirmProduct] = useState(null)
+  const noticeTimerRef = useRef(null)
+  const ctaArmedAtRef = useRef(0)
+  // 2026-10-01 모바일 감사(a11y) — 포커스 이동 대상들. aria-modal 다이얼로그는
+  // 열릴 때 포커스가 안으로 들어와야 키보드/스크린리더 사용자가 배경에 갇히지
+  // 않는다. (inert는 쓰지 않기로 문서화된 결정 — 추가하지 않는다.)
+  const rootRef = useRef(null)
+  const confirmNoRef = useRef(null)
+  const continueRef = useRef(null)
+  const backRef = useRef(null)
+
+  // (a) 가게 열림 — 안쪽에 이미 포커스가 있으면 건드리지 않는다.
+  useEffect(() => {
+    const el = rootRef.current
+    if (el && !el.contains(document.activeElement)) el.focus()
+  }, [])
+  // (b) 구매 확인 열림 — 취소 버튼에 포커스(Enter 한 번에 구매되지 않게 "확인"이 아님).
+  useEffect(() => {
+    if (confirmProduct) confirmNoRef.current?.focus()
+  }, [confirmProduct])
+  // (c) 성공 안내 등장 — "계속 쇼핑하기"에 포커스. CTA_GUARD_MS 안의 Enter는
+  // handleDismissNotice가 무시하므로 확인 더블탭/Enter 연타로 바로 닫히지 않는다.
+  useEffect(() => {
+    if (purchaseNoticeActive) continueRef.current?.focus()
+  }, [purchaseNoticeActive])
+
+  // 언마운트 시 예약된 안내 타이머 정리(setState-after-unmount 방지 —
+  // Proto25DScreen.jsx의 기존 타이머 정리 관례와 동일).
+  useEffect(() => () => {
+    if (noticeTimerRef.current != null) clearTimeout(noticeTimerRef.current)
+  }, [])
+
+  // 리뷰 대응(2026-10-01, F3) — 구매 성공 안내(다음 행동 버튼 포함)는 sticky:
+  // 2초 뒤 자동으로 사라지면 아이가 읽고 누르기 전에 버튼이 없어지고
+  // 키보드 포커스도 증발한다. "계속 쇼핑하기"(handleDismissNotice)나 가게
+  // 언마운트로만 사라진다. 오류 안내는 기존대로 2초 자동 숨김 — 타이머가
+  // 안내 텍스트와 purchaseNoticeActive를 함께 내려 둘이 어긋나지 않게 한다.
+  function showNotice(text, { sticky = false } = {}) {
+    if (noticeTimerRef.current != null) clearTimeout(noticeTimerRef.current)
+    noticeTimerRef.current = null
+    setNoticeText(text)
+    setPurchaseNoticeActive(sticky)
+    if (sticky) { ctaArmedAtRef.current = performance.now(); return }
+    noticeTimerRef.current = setTimeout(() => {
+      noticeTimerRef.current = null
+      setNoticeText(null)
+      setPurchaseNoticeActive(false)
+    }, PURCHASE_NOTICE_MS)
+  }
+
+  function handleBuy(item) {
+    setConfirmProduct(item)
+  }
+
+  function handleConfirmCancel() {
+    setConfirmProduct(null)
+  }
+
+  // 2026-09-27 리뷰 수정 — 연타/더블탭 방지는 별도 busy ref가 아니라 이
+  // 핸들러가 동기라는 사실 자체에서 나온다: React 18은 같은 discrete
+  // 이벤트(클릭) 안의 state 업데이트를 한 커밋으로 flush하므로,
+  // setConfirmProduct(null)이 확인 버튼을 이 함수 리턴 즉시 언마운트하고
+  // (성공 시) purchasedIds가 같은 커밋에서 Buy를 비활성화한다 — 두 번째
+  // 클릭이 도착할 시점엔 이미 누를 대상이 없다(S21 항목b/c가 더블클릭/
+  // 빠른 연속 터치탭으로 $32(⟵37-5)를 실측, $27(두 번 차감)이 아님을
+  // 확인). ponytail: sync handler relies on unmount; if onPurchase becomes
+  // async, hold a ref until it resolves(같은 패턴을 Proto25DScreen.jsx의
+  // shopBusyRef가 가게 닫기 경로에서 이미 씀).
+  //
+  // 2026-09-27(실기기 결함 수정) — purchasedIds는 이제 부모(Proto25DScreen)
+  // state이므로 여기선 setState하지 않는다. onPurchase가 이미 산 상품이면
+  // { ok:false, reason:'purchased' }를 돌려주고(재차감 없음), 그 외
+  // 실패는 기존과 동일하게 잔액 부족으로 취급한다.
+  function handleConfirmYes() {
+    if (!confirmProduct || closing) return // B6 — 닫히는 600ms 동안 구매되면 sticky 안내가 사라진다
+    const item = confirmProduct
+    const result = onPurchase(item)
+    setConfirmProduct(null)
+    if (!result.ok) rootRef.current?.focus() // B8 — 실패 안내엔 버튼이 없어 확인 버튼 언마운트 시 포커스가 body로 빠진다
+    if (result.ok) {
+      // 2026-10-01 모바일 감사 — 가게 안에 실제로 보이는 CTA(🎒 내 물건 보기)를 안내("구매 완료" 접두 유지).
+      showNotice('구매 완료! 🎒 내 물건 보기를 눌러 놓아요', { sticky: true })
+    } else if (result.reason === 'purchased') {
+      showNotice('이미 구매했어요')
+    } else {
+      showNotice('Paul Dollar가 부족해요. 더 모아서 다시 와요')
+    }
+  }
+
+  // 리뷰 대응(stage 3, 요구사항4) — "계속 쇼핑하기": 안내만 즉시 지우고
+  // 가게에는 그대로 남는다(다른 부수효과 없음 — 새 구매/닫기 없음).
+  function handleDismissNotice() {
+    if (performance.now() - ctaArmedAtRef.current < CTA_GUARD_MS) return // F6
+    if (noticeTimerRef.current != null) { clearTimeout(noticeTimerRef.current); noticeTimerRef.current = null }
+    // (d) 안내 버튼이 사라지기 전에 포커스를 돌려놓는다(body로 증발 방지).
+    if (backRef.current && !backRef.current.disabled) backRef.current.focus()
+    else rootRef.current?.focus()
+    setNoticeText(null)
+    setPurchaseNoticeActive(false)
+  }
+
+  const balanceWallet = { dollarsAvailable: balance }
+
+  return (
+    <div
+      ref={rootRef}
+      data-testid="proto25d-shop"
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      aria-label="가게"
+      className="absolute inset-0 z-[9000] bg-[#dff3ea] flex flex-col outline-none"
+    >
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+        <h2 className="text-center text-lg font-black text-emerald-700">🏪 Paul's Shop</h2>
+        {/* 2026-09-27 리뷰 수정 — balance가 null(미확인/pre-fetch)이면 HUD
+            배지와 동일한 규칙으로 이 줄 자체를 렌더하지 않는다(이전엔
+            "$0"으로 표시해 "잔액이 0"과 "아직 모름"을 혼동시켰다). */}
+        {balance !== null && (
+          <p
+            data-testid="proto25d-shop-balance"
+            role="status"
+            aria-label={coinBadgeAriaLabel(balanceWallet)}
+            className="text-center text-sm font-black text-amber-600"
+          >
+            💵 {coinBadgeText(balanceWallet)}
+          </p>
+        )}
+        {products.map((item) => {
+          const url = townAsset(item.assetKey)
+          const purchased = purchasedIds.has(item.id)
+          // ↑ purchasedIds는 부모 prop(가게를 닫아도 유지) — 이 컴포넌트
+          // 자체 state가 아니다(2026-09-27 실기기 결함 수정).
+          // F1(2026-09-28) — 잔액 미확인(null)이면 Buy를 막는다(이전엔 눌리고
+          // tryPurchase가 null을 잔액 부족으로 판정해 거짓 "부족해요"가 떴다).
+          const balanceUnknown = balance === null
+          return (
+            <div
+              key={item.id}
+              data-testid="proto25d-shop-product"
+              data-product-id={item.id}
+              className="bg-white/90 rounded-2xl shadow p-3 flex flex-col gap-2"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center rounded-xl bg-emerald-50 overflow-hidden">
+                  {url ? (
+                    <img src={url} alt="" className="w-full h-full object-contain" />
+                  ) : (
+                    <span aria-hidden="true" data-placeholder="true" className="text-2xl">🎁</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-sm font-black text-gray-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.nameKo || item.nameEn}</p>
+                  {item.nameKo && <p className="text-[11px] text-gray-400">{item.nameEn}</p>}
+                  <p className="text-xs text-gray-500">{item.descKo || item.descEn}</p>
+                  <p className="text-xs font-bold text-emerald-600">{formatDollars(item.price)}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-testid="proto25d-shop-buy"
+                data-product-id={item.id}
+                onClick={() => handleBuy(item)}
+                disabled={purchased || balanceUnknown || closing}
+                aria-busy={!purchased && balanceUnknown ? 'true' : undefined}
+                className="min-h-[44px] w-full rounded-xl bg-purple-500 text-white text-sm font-black shadow btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {purchased ? '구매 완료' : balanceUnknown ? '내 돈 확인 중' : '사기'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 경제 단계 B(2026-09-27) — 구매 확인 다이얼로그. 오버레이 안쪽
+          중앙에 뜨는 카드 하나(role="dialog", 뒤로가기/가게 다이얼로그와
+          별도 role) — 취소는 이 패널만 닫고, 뒤로가기 버튼/Escape는 여전히
+          가게 전체를 그대로 닫는다(이 패널은 언마운트로 함께 사라짐). */}
+      {confirmProduct && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 px-6">
+          <div
+            data-testid="proto25d-shop-confirm"
+            role="dialog"
+            aria-label="구매 확인"
+            aria-modal="true"
+            // B5 — 포커스가 다이얼로그 안(취소 버튼)에 있으므로 Escape는 여기서 받아
+            // 이 패널만 닫는다. React 합성 stopPropagation은 루트 컨테이너에서 네이티브
+            // 전파를 끊어 window keydown(Proto25DScreen)에 도달하지 않는다.
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); handleConfirmCancel() } }}
+            className="w-full max-w-xs rounded-2xl bg-white shadow-lg p-4 flex flex-col gap-3"
+          >
+            <p className="text-sm font-black text-gray-800 text-center">
+              {confirmProduct.nameKo || confirmProduct.nameEn}{objParticle(confirmProduct.nameKo || confirmProduct.nameEn)} {formatDollars(confirmProduct.price)}에 살까요?
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                ref={confirmNoRef}
+                data-testid="proto25d-shop-confirm-no"
+                onClick={handleConfirmCancel}
+                className="min-h-[44px] flex-1 rounded-xl bg-gray-200 text-gray-700 text-sm font-black shadow btn-press"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                data-testid="proto25d-shop-confirm-yes"
+                onClick={handleConfirmYes}
+                disabled={closing}
+                className="min-h-[44px] flex-1 rounded-xl bg-emerald-600 text-white text-sm font-black shadow btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 리뷰 수정 1차 — 카드별 작은 문구 대신 다이얼로그 한가운데 뜨는
+          단일 토스트. role="status"+aria-live="polite" — 스크린리더가
+          문구 등장을 조용히 알림(포커스 강탈 없음). pointer-events-none —
+          토스트 자체를 눌러도 아무 동작이 없어야 하고, 뒤의 카드/뒤로가기
+          버튼 탭도 막지 않는다.
+          리뷰 대응(stage 3, 요구사항4) — 구매 성공 안내일 때만(purchaseNoticeActive)
+          다음 행동 버튼 2개를 그 아래 덧붙인다. bottom-16(=64px)만큼 아래
+          여백을 비워(inset-0 대신 inset-x-0 top-0 bottom-16) 하단 고정
+          "🏘️ 마을로 돌아가기" 버튼(52px)과 절대 겹치지 않는다(기하학적으로
+          보장 — 뷰포트 높이와 무관). 버튼 2개만 pointer-events-auto로
+          되돌린다(컨테이너 자체는 여전히 none — 문구 아래 빈 공간을 눌러도
+          가게 배경/카드로 그대로 전달됨). */}
+      {/* 2026-10-02 상점 안내 live region — 알림 영역(<p>)은 항상 마운트해 둔다.
+          live region이 텍스트와 함께 DOM에 새로 삽입되면 스크린리더가 그 문구를
+          읽지 않는 경우가 흔하다(Proto25DScreen의 place toast가 이미 같은
+          패턴). 문구가 없을 땐 빈 텍스트 + 박스 클래스 없음(padding/border/
+          background/shadow 전부 제거 → 높이 0, Playwright isVisible()=false)이라
+          화면은 이전과 동일하고, role/aria-live/aria-atomic은 절대 토글하지 않는다.
+          테스트 계약 변경: 안내 없음 상태가 count()===0 에서 "count()===1 이지만
+          텍스트 비어 있음/보이지 않음"으로 바뀐다. CTA 버튼은 여전히
+          purchaseNoticeActive일 때만 DOM에 존재한다. DOM 수준 변경일 뿐이며
+          실제 스크린리더로 검증하지는 않았다. */}
+      <div className="absolute inset-x-0 top-0 bottom-16 z-10 flex flex-col items-center justify-center gap-3 pointer-events-none px-6">
+        <p
+          data-testid="proto25d-shop-notice"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={noticeText
+            ? 'pointer-events-none rounded-2xl bg-orange-50 border-2 border-orange-300 text-orange-600 text-base font-black px-5 py-3 shadow-lg text-center'
+            : 'pointer-events-none'}
+        >
+          {noticeText}
+        </p>
+        {noticeText && purchaseNoticeActive && (
+          <div className="flex flex-wrap gap-2 justify-center pointer-events-auto">
+            <button
+              type="button"
+              data-testid="proto25d-shop-notice-viewitems"
+              onClick={() => { if (performance.now() - ctaArmedAtRef.current >= CTA_GUARD_MS) onViewMyItems() }} // F6
+              className="min-h-[44px] px-4 rounded-xl bg-emerald-600 text-white text-sm font-black shadow btn-press"
+            >
+              🎒 내 물건 보기
+            </button>
+            <button
+              type="button"
+              ref={continueRef}
+              data-testid="proto25d-shop-notice-continue"
+              onClick={handleDismissNotice}
+              className="min-h-[44px] px-4 rounded-xl bg-white text-gray-700 text-sm font-black shadow btn-press"
+            >
+              계속 쇼핑하기
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 리뷰 수정 1차 — history.back() popstate가 도착할 때까지(비동기
+          창) 뒤로가기 버튼을 disabled+aria-busy로 보여준다(연타 방지의
+          실제 정합성은 Proto25DScreen.jsx의 shopBusyRef 가드가 담당하고,
+          이 disabled는 그 위에 얹는 시각적 확인일 뿐 — 버튼이 아직
+          렌더되기 전의 아주 짧은 창에서는 ref 가드가 유일한 방어선). */}
+      <button
+        type="button"
+        ref={backRef}
+        data-testid="proto25d-shop-back"
+        onClick={onBack}
+        disabled={closing}
+        aria-busy={closing ? 'true' : 'false'}
+        className="min-h-[52px] w-full bg-emerald-600 text-white text-base font-black shadow-inner disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        🏘️ 마을로 돌아가기
+      </button>
+    </div>
+  )
+}

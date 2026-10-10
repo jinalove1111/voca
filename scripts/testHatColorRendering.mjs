@@ -202,7 +202,7 @@ check('임계값(HAT_THRESHOLDS)이 그대로다',
   HAT_THRESHOLDS.explorerCleared === 10 && HAT_THRESHOLDS.chefStreak === 7
   && HAT_THRESHOLDS.scientistQuizCorrect === 100 && HAT_THRESHOLDS.wizardMastered === 30
   && HAT_THRESHOLDS.crownCleared === 200 && HAT_THRESHOLDS.roseWeekDays === 5)
-check('hatById 조회가 정상이다', hatById('hat_scientist')?.name === '하얀색 폴 모자' && hatById('nope') === null)
+check('hatById 조회가 정상이다', hatById('hat_scientist')?.name === '주황색 폴 모자' && hatById('nope') === null)
 
 // 획득 규칙 결정론·멱등·no-revoke — 표시 계층 수정이 여기 닿지 않았음을 증명.
 {

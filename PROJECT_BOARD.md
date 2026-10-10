@@ -20,6 +20,31 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   자기 작업의 카드 이동은 직접 반영해도 됩니다(append 원칙과 달리 이
   보드는 "현재 상태" 스냅샷이라 덮어쓰기가 정상 동작입니다).
 
+## 활성 브랜치/worktree (2026-09-25, ADR 0008 — 작업 봉투 발급 기준)
+
+| 브랜치 | worktree | 상태 | 용도 |
+|---|---|---|---|
+| `feat/paul-town-v2-clean-pr` | `C:\Users\jinal\AppData\Local\Temp\claude\C--voca\d95369ce-02f1-41e7-9e92-41e2cb3ce37a\scratchpad\wt-clean-pr` (HEAD `3c26a5bb`, PR #62 Draft) | **ACTIVE** | Paul Town V2 / 2.5D 프로토타입의 유일한 활성 브랜치 |
+| `feat/paul-town-v2-world-contract-2026-09-17` | `C:\voca` (메인 체크아웃, HEAD `c7632737`) | **OBSOLETE** | 9/18에서 멈춘 구 브랜치. Paul Town 작업 봉투 발급 금지. 그 트리의 미추적 SQL 17개는 무관 워크스트림(운영자 결정 대기) |
+| `main` | — | 베이스 | PR base. 머지는 운영자 승인 |
+
+- 활성 worktree가 세션 임시 경로에 있다 — 고정 경로 이전 여부는 운영자
+  결정(`DECISIONS_PENDING.md`).
+- 그 외 약 30개 잔여 worktree(2026-09-04 ops/overnight 세션 산물)는
+  삭제하지 않는다(운영자 결정).
+
+## READY 큐 — 야간 안전 큐 (2026-09-25 신설)
+
+_진입 조건: Class A/B, 또는 Class C/D인데 ADR ACCEPT + 운영자 승인 기록.
+상태: READY → IN_PROGRESS → REVIEW → QA → (FIX_REQUIRED →) DONE | BLOCKED |
+OWNER_DECISION_REQUIRED. 각 항목은 TASK_ID / TASK_CLASS / BRANCH /
+BASE_COMMIT / ALLOWED_PATHS / ACCEPTANCE_CRITERIA / OWNER_APPROVAL_REQUIRED /
+DEPENDENCIES / NEXT_SAFE_TASK를 적는다. 비어 있으면 야간 세션은 정지한다._
+
+(현재 비어 있음 — 2026-09-25. Paul Town 2.5D는 179차 기준 운영자 결정
+10건 대기 상태라 READY 항목이 없다. `DECISIONS_PENDING.md` 결정 후
+orchestrator가 항목을 추가한다.)
+
 ---
 
 ## BLOCKED

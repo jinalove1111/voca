@@ -1,0 +1,29 @@
+{
+  "agent_name": "orchestrator",
+  "role": "206차 리드(Claude) — Speaking 그림 진단·전용 일러스트 명세 보완(문서만)",
+  "task_id": "speaking-illustration-spec-2026-10-04",
+  "task": "임시 그림 10장 360px 진단, 장면별 제작 명세·프롬프트, 대표 장면 sorry-b, 시험 한국어 상황 안내 설계, 교사용 장면별 인정 표현, 근거 보완",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-04T19:00:00+09:00",
+  "updated_at": "2026-10-04T19:40:00+09:00",
+  "worktree": "C:/voca-wt/paul-town-v2-night-audit",
+  "files_owned": [
+    "docs/design/SPEAKING_UX_V2_2026-10-04.md",
+    "docs/teacher/SITUATION_RECALL_CHECKLIST_2026-10-04.md",
+    "handoff.md"
+  ],
+  "test_and_verify_results": {
+    "testSituationRecall": "ALL PASS (문서만 변경)",
+    "capture": "360x640 scene-card 10장 스크래치 캡처, 10/10 data-final=false"
+  },
+  "image_generation": "도구 없음, 유료 API 금지 → 제작 대기, 임시 재조합 완료 처리 안 함",
+  "code_changes": 0,
+  "db_sql_production_changes": 0,
+  "pr": "#62 Draft",
+  "remaining": [
+    "sorry-b 대표 장면 제작·검수",
+    "나머지 9장",
+    "§9.5 상황 안내 구현 여부 결정"
+  ]
+}

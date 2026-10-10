@@ -15,6 +15,7 @@
 // 진입 자격이 오직 로그인 UUID로만 결정된다는 것이 이 스펙의 핵심.
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.mjs'
 // 승인 UUID 5개는 src/config/pilotTown.js(진실 원천)를 그대로 읽는다 —
 // 이 스펙이 별도로 UUID를 다시 타이핑하면 표류 위험이 생긴다.
@@ -37,6 +38,7 @@ async function loginStudent(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page) // 로그인 직후 첫 화면은 학생 홈 — 단어 카드로 대시보드 진입(홈 없으면 no-op)
 }
 
 async function goToPaulTownScreen(page) {

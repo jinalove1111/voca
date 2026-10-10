@@ -1,0 +1,186 @@
+// src/utils/town/proto2_5d/paulSpriteManifest.js — Paul Town 2.5D "Paul"
+// 캐릭터 전용 v2 스프라이트 매니페스트 빌더(2026-09-24).
+//
+// 목적: `characterSpriteContract.js`(v2 계약, validator/resolver)는
+// 캐릭터를 특정하지 않는 범용 계약이다. 이 파일은 그 계약 위에서 "Paul"
+// 캐릭터 하나에 특화된 파일명/기본 앵커/기본 캔버스/라이선스 골격을
+// 고정해두는 얇은 어댑터다 — 계약 자체(validateSpriteManifest 등)는
+// 재구현하지 않고 그대로 가져다 쓴다(CLAUDE.md 규칙 3).
+//
+// 이미지 import 0 — 이 파일 어디에도 `.png`/`.webp` import가 없다(이 사실은
+// 지금도 그대로다 — 아래 §2 실측 결과와는 무관하게, 이 파일 자신은 여전히
+// 순수 데이터 어댑터로 남는다). 작성 당시(Phase 6B)는 실제 스프라이트
+// PNG 8장이 아직 `src/assets/town/character/`에 없어, 이미지가 없으면
+// `buildPaulSpriteManifest`가 만드는 manifest의 `frames.*.src`가 비어 있고
+// `validateSpriteManifest`가 그 매니페스트를 무효 판정해 호출부
+// (`resolveSpriteFrame`)가 이모지로 폴백하는 것이 "의도된 안전망"이었다
+// (throw도, 빌드 실패도 없음 — 이 안전망 설계 자체는 지금도 유효하다).
+//
+// 흐름(작성 당시엔 전부 미래형이었다 — 지금은 실현된 상태): 16장의 PNG(8
+// 프레임 × 1x/@2x, walk-side-b는 2026-09-25 운영자 결정으로 v2 파일로 교체)
+// 가 `src/assets/town/character/`에 존재하고, 그 디렉터리의
+// `index.js`(에셋 레지스트리, env 레지스트리(V2 환경 아트 index.js)와 동일한
+// 격리 패턴)가 이를 import해 `PAUL_SPRITE_SOURCES`/`PAUL_SPRITE_SOURCES_2X`
+// 맵으로 노출한다
+//   → `characterSpriteManifest.default.js`가 `buildPaulSpriteManifest({
+//     sources: PAUL_SPRITE_SOURCES, ... })`를 호출해 `PAUL_SPRITE_MANIFEST`를
+//     만들고
+//   → `Proto25DScreen.jsx`가 이를 `spriteManifest` prop의 프로덕션 기본값으로
+//     쓴다(Phase 6C, 2026-09-24).
+// 이 파일 자신은 그 경로의 가운데 단계(순수 빌더 함수)만 구현한다 —
+// 레지스트리/prop 배선은 다른 파일이 소유한다.
+//
+// PROPOSED 표시가 붙은 수치(캔버스 크기, 프레임 지속시간, footAnchor,
+// sitSeatAnchor)는 전부 스펙 §4/§5의 제안값을 그대로 가져온 것으로, 실제
+// 8장의 PNG가 도착해 `scripts/spriteIngestPaul.mjs --check`가 알파 채널을
+// 실측하기 전까지는 잠정값이다 — 실측 결과가 이 값과 다르면(특히 sit의
+// seatAnchor는 스펙 §5.2가 "기본값 없음, 사람 확정 필요"라고 명시)
+// 실측값으로 교체해야 한다.
+
+import { SPRITE_FRAME_IDS, EXPECTED_FRAME_META, SPRITE_MANIFEST_VERSION } from './characterSpriteContract.js'
+
+// PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md §10 "v2 매니페스트 최소
+// 필드" 표의 characterId 관례(카탈로그 캐릭터 하나당 안정적 문자열 id) —
+// 새 명명 규칙 발명 없이 townAsset류 key와 같은 kebab-case를 따른다.
+export const PAUL_CHARACTER_ID = 'paul-town-paul-v1'
+
+// 문서화용 상수(repo-relative) — 실제 import 경로는 코드가 아니라 사람이
+// 읽는 참고용. §8 라이선스 문서(LICENSE.txt/NOTICE.md)도 같은 디렉터리에
+// 놓인다.
+export const PAUL_SPRITE_DIR = 'src/assets/town/character'
+
+// frameId -> 파일명(stem, §2 표 그대로). SPRITE_FRAME_IDS를 순회하며
+// 구성해서 "PAUL_SPRITE_FILES의 key 순서가 SPRITE_FRAME_IDS와 정확히
+// 같다"는 불변식을 하드코딩된 리터럴 순서에 기대지 않고 구조적으로
+// 보장한다(테스트가 `Object.keys(PAUL_SPRITE_FILES)`를
+// `SPRITE_FRAME_IDS`와 deep-equal 비교하면 이 불변식을 그대로 검증할 수
+// 있음) — SPRITE_FRAME_IDS 자체의 순서가 바뀌면 이 맵의 키 순서도 자동으로
+// 따라간다.
+const PAUL_SPRITE_FILENAME_BY_FRAME_ID = Object.freeze({
+  'idle-front': 'paul-idle-front.png',
+  'walk-front-a': 'paul-walk-front-a.png',
+  'walk-front-b': 'paul-walk-front-b.png',
+  'walk-back-a': 'paul-walk-back-a.png',
+  'walk-back-b': 'paul-walk-back-b.png',
+  'walk-side-a': 'paul-walk-side-a.png',
+  // v2가 walk-side-b 아트를 대체한다(2026-09-25 운영자 결정). 레거시 파일
+  // (paul-walk-side-b.png/@2x)은 디스크에 보존되지만 더 이상 등록하지
+  // 않는다 — frameId('walk-side-b')는 변경 없음.
+  'walk-side-b': 'paul-walk-side-b-v2.png',
+  sit: 'paul-sit.png',
+})
+
+export const PAUL_SPRITE_FILES = Object.freeze(
+  SPRITE_FRAME_IDS.reduce((acc, frameId) => {
+    acc[frameId] = PAUL_SPRITE_FILENAME_BY_FRAME_ID[frameId]
+    return acc
+  }, {}),
+)
+
+// §4/§5의 PROPOSED 기본값 그대로(측정 전 잠정치). canvas/footAnchor는
+// walk-front-a 실측이 96x128과 다르면 교체, sitSeatAnchor는 §5.2가
+// "기본값 없음, 사람 확정 필요"라고 명시하므로 여기 값은 순수
+// placeholder다 — `spriteIngestPaul.mjs --check`의 "사람 확정 필요"
+// 라벨이 붙은 출력을 사람이 보고 교체하기 전까지만 쓴다.
+export const PAUL_SPRITE_DEFAULTS = Object.freeze({
+  canvas: Object.freeze({ w: 96, h: 128 }), // PROPOSED — 실측 전
+  pixelRatio: 1,
+  frameDurationMs: 150, // PROPOSED — §3 참고, 실측/사람 확정 전
+  mirrorX: true,
+  reducedMotion: Object.freeze({ freezeFrameIndex: 0 }),
+  footAnchor: Object.freeze({ x: 48, y: 128 }), // PROPOSED — §5.1, 실측 전
+  sitSeatAnchor: Object.freeze({ x: 48, y: 96 }), // PROPOSED — §5.2, 반드시 사람 확정 필요
+  license: Object.freeze({
+    source: 'ChatGPT image generation (operator-directed), 2026-09',
+    author: 'Paul Easy Voca (operator) — TO FILL',
+    licenseName: 'proprietary — TO FILL',
+    generatedBy: 'ChatGPT — TO FILL model/version',
+    approvedBy: '',
+    approvedAt: '',
+  }),
+})
+
+function isPlainObject(v) {
+  return v != null && typeof v === 'object' && !Array.isArray(v)
+}
+
+/**
+ * frameId -> {src, src2x?, state, direction, footAnchor, seatAnchor?} 형태의
+ * v2 manifest(`characterSpriteContract.js`의 `validateSpriteManifest`가
+ * 기대하는 shape)를 조립한다. 절대 throw하지 않는다 — `sources`에 프레임이
+ * 빠져 있으면(오늘 항상 그렇다, 이미지가 없으므로) 그 프레임의 `src`가
+ * 비어 반환되고, 이후 `validateSpriteManifest`가 그 매니페스트를 무효
+ * 판정해 호출부가 이모지로 폴백하는 것이 의도된 안전망이다.
+ * @param {object} [p]
+ * @param {Record<string,string>} [p.sources] - frameId -> url(미래의 에셋 레지스트리가 공급). 비어있거나 일부 누락이어도 안전.
+ * @param {Record<string,string>} [p.sources2x] - frameId -> @2x url(선택, 2026-09-24 추가). 생략하면 frame.src2x는 기존과 동일하게 undefined — 기존 호출부(sources2x 없이 호출하던 모든 곳)는 동작이 전혀 바뀌지 않는다.
+ * @param {{w:number,h:number}} [p.canvas]
+ * @param {Record<string,{footAnchor?:{x:number,y:number},seatAnchor?:{x:number,y:number}}>} [p.anchors] - frameId -> 앵커 override.
+ * @param {number} [p.frameDurationMs]
+ * @param {object} [p.license] - PAUL_SPRITE_DEFAULTS.license 위에 shallow-merge.
+ * @param {1|2} [p.pixelRatio]
+ * @returns {object} v2 manifest(항상 객체를 반환, throw 없음)
+ */
+export function buildPaulSpriteManifest(p) {
+  const opts = isPlainObject(p) ? p : {}
+  const { sources, sources2x, canvas, anchors, frameDurationMs, license, pixelRatio } = opts
+  const safeSources = isPlainObject(sources) ? sources : {}
+  const safeSources2x = isPlainObject(sources2x) ? sources2x : {}
+  const safeAnchors = isPlainObject(anchors) ? anchors : {}
+  const safeCanvas = isPlainObject(canvas) ? canvas : PAUL_SPRITE_DEFAULTS.canvas
+  const safeLicense = isPlainObject(license)
+    ? { ...PAUL_SPRITE_DEFAULTS.license, ...license }
+    : PAUL_SPRITE_DEFAULTS.license
+
+  const frames = {}
+  for (const frameId of SPRITE_FRAME_IDS) {
+    const meta = EXPECTED_FRAME_META[frameId]
+    const anchorOverride = isPlainObject(safeAnchors[frameId]) ? safeAnchors[frameId] : {}
+    const frame = {
+      src: safeSources[frameId],
+      src2x: safeSources2x[frameId],
+      state: meta.state,
+      direction: meta.direction,
+      footAnchor: anchorOverride.footAnchor || PAUL_SPRITE_DEFAULTS.footAnchor,
+      file: PAUL_SPRITE_FILES[frameId],
+    }
+    if (frameId === 'sit') {
+      frame.seatAnchor = anchorOverride.seatAnchor || PAUL_SPRITE_DEFAULTS.sitSeatAnchor
+    }
+    frames[frameId] = frame
+  }
+
+  return {
+    version: SPRITE_MANIFEST_VERSION,
+    characterId: PAUL_CHARACTER_ID,
+    license: safeLicense,
+    canvas: safeCanvas,
+    pixelRatio: pixelRatio === 1 || pixelRatio === 2 ? pixelRatio : PAUL_SPRITE_DEFAULTS.pixelRatio,
+    frameDurationMs:
+      typeof frameDurationMs === 'number' && Number.isFinite(frameDurationMs) && frameDurationMs > 0
+        ? frameDurationMs
+        : PAUL_SPRITE_DEFAULTS.frameDurationMs,
+    mirrorX: PAUL_SPRITE_DEFAULTS.mirrorX,
+    reducedMotion: PAUL_SPRITE_DEFAULTS.reducedMotion,
+    frames,
+  }
+}
+
+/**
+ * `sources`(frameId -> url)를 8개 필수 프레임과 대조해, 비어 있는 프레임마다
+ * `BLOCKED_BY_ASSET: ...` 문자열을 하나씩 반환한다. 전부 채워져 있으면 빈
+ * 배열 — 오늘(이미지 0장) 기준 이 함수는 항상 8개짜리 배열을 반환한다.
+ * @param {Record<string,string>} [sources]
+ * @returns {string[]}
+ */
+export function paulSpriteBlockers(sources) {
+  const safeSources = isPlainObject(sources) ? sources : {}
+  const blockers = []
+  for (const frameId of SPRITE_FRAME_IDS) {
+    const src = safeSources[frameId]
+    if (typeof src !== 'string' || src.length === 0) {
+      blockers.push(`BLOCKED_BY_ASSET: ${frameId} (${PAUL_SPRITE_FILES[frameId]}) 없음`)
+    }
+  }
+  return blockers
+}

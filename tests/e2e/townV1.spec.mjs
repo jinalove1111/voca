@@ -17,6 +17,7 @@
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 // PHASE 10(2026-09-11) — "가장 긴 카탈로그 이름" 카드 오버플로우 회귀용.
 // 새 이름을 여기서 발명하지 않고 townCatalog.js(진실 원천, 다른 세션
 // 소유 파일 — import만 하고 수정하지 않는다)의 메타를 그대로 읽는다.
@@ -121,6 +122,7 @@ async function login(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page)
 }
 
 // 대시보드(Paul Town 홈 밴드, 항상 노출 — attachmentWorldGarden/paulTownHomeBand
@@ -250,6 +252,7 @@ export async function run(browser, baseURL) {
       //     localStorage로 복원되지만 화면(screen state)은 복원되지 않아
       //     TownScreen이 재마운트되지 않는다는 사실 자체가 검증 대상). ──
       await page.reload({ waitUntil: 'domcontentloaded' })
+      await enterVocaFromHome(page)
       const backOnDashboard = await page.getByRole('button', { name: '구경가기' }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
       r.check(`${name} 새로고침 — 세션 복원되어 대시보드로 돌아옴`, backOnDashboard)
       r.check(`${name} 새로고침 후 — claim_town_welcome 호출 카운트가 1로 유지(재지급 없음)`,
@@ -542,6 +545,7 @@ export async function run(browser, baseURL) {
       const placedLabel = (await treeCell.getAttribute('aria-label').catch(() => '')) || ''
 
       await page.reload({ waitUntil: 'domcontentloaded' })
+      await enterVocaFromHome(page)
       await page.getByRole('button', { name: '구경가기' }).waitFor({ state: 'visible', timeout: 20000 })
       await goToPaulTownScreen(page)
       const card3 = await enterTownV1(page)

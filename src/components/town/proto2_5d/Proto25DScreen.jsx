@@ -1,0 +1,2424 @@
+// src/components/town/proto2_5d/Proto25DScreen.jsx — Paul Town 2.5D 캐릭터
+// 프로토타입(Stage 1 2026-09-22 + Stage 2 2026-09-22 + Stage 3 2026-09-22 +
+// Stage 4 2026-09-23) 씬 컨테이너.
+//
+// Stage 4(벤치 walk-to-sit, 그 이상 만들지 않는다 — Stage 5는 이 세션 범위
+// 밖) — 상태 머신을 idle/walking 2개에서 idle/walking/sitting/leaving 4개로
+// 확장한다. 기존 src/components/town/v2/TownScene.jsx의 벤치 앉기 상태 머신
+// *패턴*(seq 가드 타이머 체인, "이미 실행 중이면 새 탭 무시" 정책)만
+// 재사용하고 그 파일/TownCharacter.jsx/townInteractions.js는 여전히 전혀
+// import/수정하지 않는다(격리 유지). 새 기하/타이밍 상수는
+// src/utils/town/proto2_5d/benchInteraction.js(신규, 순수 함수)가 소유—
+// 이 파일은 그 결과를 상태로 옮기고 타이머를 예약하는 오케스트레이션만
+// 한다.
+//
+// seq 카운터(seqRef) — TownScene.jsx interactionSeqRef와 동일 정신: 사용자가
+// 새 탭으로 명령을 낼 때마다 증가하는 단조 카운터. 모든 예약된 타이머
+// 콜백은 실행 시점에 "내가 예약됐을 때의 seq === 지금의 seqRef.current"를
+// 먼저 확인하고, 다르면 아무 것도 하지 않는다(스테일 타이머가 최신 상태를
+// 덮어쓰는 사고 방지 — 이 세션이 재사용하는 유일한 새 관례, 나머지는 전부
+// Stage 1~3에서 이미 쓰던 것 그대로).
+//
+// characterRef — setTimeout 콜백은 "예약된 시점의 컴포넌트 렌더"를 클로저로
+// 붙잡으므로, 그 안에서 component-scope의 `character` state 변수를 직접
+//읽으면 오래된(stale) 값을 볼 수 있다(예: enterLeaving이 "지금 캐릭터가
+// 어디 앉아있는지"를 알아야 그 지점에서부터 걸어 나가는 경로를 계산할 수
+// 있는데, 이 함수 자체는 enterSitting이 걸어둔 타이머가 나중에 호출하므로
+// 그 사이 렌더가 여러 번 일어났을 수 있다). updateCharacter()가 setState와
+// 동시에 이 ref도 항상 최신으로 유지해(TownScene.jsx interactionRef와 동일
+// 정신) 타이머 콜백은 character가 아니라 characterRef.current를 읽는다.
+//
+// 정책(항목7/8, 팀장 지시 원문 그대로 구현) — 아래 handleGroundPointerUp
+// 참고:
+//  - sitting/leaving 동안은 어떤 탭(벤치든 바닥이든)도 무시(idle 복귀까지
+//    입력 잠금).
+//  - walking 동안 벤치를 향해 걷는 중(pendingSit)에 같은 벤치를 다시 탭하면
+//    중복 시퀀스를 만들지 않고 무시(항목7).
+//  - 그 외의 walking 중 새 탭(바닥이든, 다른/같은 벤치든 원래 목적지가
+//    벤치가 아니었다면)은 항상 현재 시퀀스를 취소하고 새 목적지로
+//    재지정한다(항목8 — Stage 2의 "최신 탭이 항상 우선" 원칙을 그대로
+//    확장).
+//
+// Stage 3 — 데모 장애물(OBSTACLES)도 depthOrder.js의 Y-랭킹 콘텐츠 티어에
+// 편입한다(고정 zIndex:100 제거). 그렇지 않으면 캐릭터(ProtoCharacter.jsx가
+// 'character' 레이어로 Y-랭킹된 z-index를 계산)가 무엇과도 비교할 Y-랭킹된
+// 대상이 없어 "Y에 따라 가려지고 가린다"는 이 단계의 요구 자체를 시각적으로
+// 검증할 방법이 없다(고정 z-index 장애물은 캐릭터의 y와 무관하게 항상
+// 위거나 항상 아래에만 있게 된다). 각 장애물의 바운딩 박스 하단(y1, 지면
+// 접점)을 depth y로 쓴다 — worldRender.js의 landmarkBox/worldZIndex가
+// 랜드마크의 bottom-center y를 depth 기준으로 쓰는 것과 동일한 "바닥 접점이
+// Y-sort 기준" 관례(읽기 전용 참고, V2 코드는 import하지 않는다).
+//
+// 완전히 격리된 실험 — 기존 src/components/town/v2/* 파일을 하나도
+// import/수정하지 않는다(docs/design/town/ASTRA_HANDOFF_2026-09-21.md §12
+// 권장 구조). paulTownV1/paulTownV2/파일럿 허용목록과 무관하게 자체 플래그
+// (paulTown2_5d)로만 게이팅된다. 구매/저장 API 호출 없음 — 전부 마운트
+// 스코프 로컬 state(영속화 없음, 새로고침하면 초기 위치로 리셋).
+//
+// Stage 1 요구사항(그대로 유지):
+//  1. 캐릭터 1명, 마운트 즉시 항상 보임(idle).
+//  2. 유효한 바닥(ground) 탭 → 그 지점까지 점진적으로 걸어감(순간이동 없음).
+//  3. UI(정보 배지 버튼 등) 클릭은 캐릭터를 움직이지 않음 — 이동 핸들러를
+//     바닥 레이어 엘리먼트에만 직접 건다(문서 레벨/광역 delegation 금지).
+//
+// Stage 2 추가 요구사항(장애물 회피): 탭 지점이 world 경계 밖이면 clamp,
+// 장애물 안이면 가장 가까운 걸을 수 있는 지점으로 보정, 시작 위치에서
+// 보정된 목적지까지 장애물을 우회하는 경로(pathfinding.js)를 따라
+// 웨이포인트별로 순차 이동한다. 경로가 없으면(완전히 도달 불가) 아무 것도
+// 하지 않는다(제자리 유지, 크래시 없음).
+//
+// Phase 6B(2026-09-24, v2 스프라이트 방향/facing 어댑터) — 두 가지를
+// 추가한다:
+//  1. `character.direction`('front'|'back'|'side', 기본 'front') — 모든
+//     걷기 구간(walkLeg, 그리고 walkPath의 reduced-motion 점프)에서 이동
+//     벡터(dx,dy)로부터 characterSpriteContract.js `directionForMove`를
+//     불러 매 구간마다 갱신한다. **모드와 무관하게(emoji든 v2든) 항상
+//     계산**한다 — 방향 계산 자체는 순수 이동 로직 소관이라 항상 최신으로
+//     유지해 두고, emoji 모드에서는 ProtoCharacter.jsx가 이 값을 전혀
+//     읽지 않으므로(v2 렌더 분기 전용) 시각적으로 아무 효과가 없다.
+//  2. `character.facing` 갱신을 일반 바닥 탭(startPlainWalk가 부르는
+//     walkLeg/walkPath)에도 추가하되, **v2 스프라이트 매니페스트가 실제로
+//     유효할 때만**(`spriteManifest` prop + validateSpriteManifest(...).ok)
+//     `facingForMove`를 적용한다. 게이팅 이유 — 오늘 emoji 모드에서 일반
+//     걷기 중 facing이 전혀 바뀌지 않는 게 기존 동작이고(벤치 접근
+//     startWalkToBench만 facingToward로 facing을 세팅, 아래 그 함수 그대로
+//     유지), 왼쪽으로 걷는 순간 이모지가 좌우 반전되면 오늘 시각적으로
+//     눈에 띄는 변화가 생긴다 — spriteManifest가 없는 한(오늘 모든
+//     프로덕션 호출부) 이 게이트가 항상 막아 emoji 모드의 기존 렌더가
+//     100% 그대로 유지된다.
+// facingToward(벤치 접근 전용, benchInteraction.js)는 이 작업이 손대지
+// 않는다 — 그 함수가 세팅하는 pendingSit walking 구간의 facing과 이번에
+// 새로 추가한 "일반 걷기 facing"은 서로 다른 코드 경로(startWalkToBench vs
+// startPlainWalk)라 충돌하지 않는다.
+//
+// Phase 6A(2026-09-23, 씬 구성) — 장애물 3개짜리 회색 점선 상자 + 벤치 하나
+// 뿐이던 "빈 마당"을 sceneFixture.js SCENE_FIXTURE(씬 구성 단일 진실
+// 원천) 기반 범용 오브젝트 레이어로 확장한다. walkGrid.js OBSTACLES는 이제
+// 이 SCENE_FIXTURE에서 파생되고(byte-identical, walkGrid.js 헤더 주석
+// 참고), 이 파일은 그 각 항목을 실제 아트(townAsset)+그림자로 렌더한다 —
+// 벤치는 기존 전용 블록(BENCH_ASSET_MIN_WIDTH_PX 등)을 그대로 두고 범용
+// 루프에서는 건너뛴다(sceneFixture.js 'demo-bench' 항목 주석 참고, 기존
+// 계약 무변경). 상태 머신/워크그리드/경로탐색/좌석 상호작용 로직은 전혀
+// 손대지 않았다(위 Stage 1~4/Stage5 감사 절 전부 그대로 유효).
+//
+// Phase 6C(2026-09-24, 기본 매니페스트 배선) — 운영자 승인 Paul 캐릭터
+// 스프라이트 8장(+@2x)이 도착해 `scripts/spriteIngestPaul.mjs --check`
+// 68개 항목 전부 PASS했다. `spriteManifest` prop이 이제
+// `characterSpriteManifest.default.js`의 `PAUL_SPRITE_MANIFEST`를
+// 기본값으로 갖는다 — 즉 이 파일 위 Phase 6B 주석의 "오늘 모든 프로덕션
+// 호출부에서 spriteManifest는 undefined"라는 전제가 더 이상 참이 아니며,
+// `isSpriteV2ManifestActive`가 기본적으로 true가 된다(App.jsx가 여전히
+// prop을 넘기지 않아도 이 기본값이 적용된다 — App.jsx는 수정하지 않음).
+// 새 플래그는 추가하지 않았다 — 기존 `paulTown2_5d` 플래그 게이팅 하나로만
+// 계속 제어된다. `spriteManifest`를 명시적으로 넘기면(예: 테스트) 여전히
+// 그 값이 기본값을 덮어쓴다.
+// - Phase 6C-1(2026-09-25): facing 갱신 조건 — side 구간 & |dx|≥1.0%만.
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import ProtoCharacter, { WALK_TRANSITION_MS, REDUCED_MOTION_TRANSITION_MS } from './ProtoCharacter'
+import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
+import { WORLD } from '../../../utils/town/worldContract'
+import { OBSTACLES, nearestWalkablePoint, classifyPoint } from '../../../utils/town/proto2_5d/walkGrid'
+import { findPath } from '../../../utils/town/proto2_5d/pathfinding'
+import { obstacleZIndex } from '../../../utils/town/proto2_5d/depthVisual'
+import { SCENE_FIXTURE, objectRenderedWidthPx } from '../../../utils/town/proto2_5d/sceneFixture'
+import { townAsset } from '../../../assets/town'
+// 2026-10-04 마을 시각 보정(제한 범위) — V1 TownGrid.jsx와 동일한 import 패턴.
+import cobblestoneTile from '../../../assets/town/backgrounds/village-cobblestone-tile.webp'
+import gardenAccent1 from '../../../assets/town/backgrounds/garden-accent-1.webp'
+import gardenAccent2 from '../../../assets/town/backgrounds/garden-accent-2.webp'
+import { validateSpriteManifest, directionForMove, facingForMove } from '../../../utils/town/proto2_5d/characterSpriteContract'
+import {
+  SIT_HOLD_MS,
+  REDUCED_MOTION_SIT_HOLD_MS,
+  BENCH_ASSET_MIN_WIDTH_PX,
+  benchArrivalPoint,
+  benchSeatPoint,
+  benchRenderedSizePx,
+  isBenchTap,
+  benchTapPad,
+  facingToward,
+} from '../../../utils/town/proto2_5d/benchInteraction'
+import { PAUL_SPRITE_MANIFEST } from '../../../utils/town/proto2_5d/characterSpriteManifest.default'
+import {
+  computeWorldSizePx,
+  computeCameraTarget,
+  stepCamera,
+  cameraSettled,
+  readWalkModePreference,
+  writeWalkModePreference,
+} from '../../../utils/town/proto2_5d/camera'
+import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase, findTappedShop, shopArrivalOk } from '../../../utils/town/proto2_5d/shopInteraction'
+import ProtoShopScreen from './ProtoShopScreen'
+import { MISSION_ART, missionArtUrl } from '../../../assets/town/kit/townMission'
+import { MISSION_SPOTS, missionArrival, isNearMissionSpot, findTappedMissionSpot } from '../../../utils/town/proto2_5d/missionSpots'
+import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
+import { PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements, movePlacement, removePlacement } from '../../../utils/town/proto2_5d/placementSlots'
+
+// 2026-09-26(Phase 2, 가게 경험 v1) — 마을 산책 -> 가게 발견 -> 가게 내부
+// -> 마을로 복귀 흐름. shopInteraction.js가 입장 지점/반경/상품 데이터를
+// 소유하고(재구현 없음), 이 파일은 그 위에 "언제 입장 버튼을 보여줄지"와
+// "오버레이 열기/닫기를 브라우저 뒤로가기와 어떻게 맞물릴지"만 오케스트
+// 레이션한다. 새 씬 오브젝트/걷기/충돌 로직 없음 — 기존 데모 건물(가게로
+// 재해석)에 입장 반경만 얹는다.
+
+// 2026-09-26 — "산책 모드" v1(신규, 팀장 지시). 지금까지 바닥(ground)은 항상
+// 뷰포트 전체와 정확히 같은 크기였다(WORLD 종횡비를 그대로 aspectRatio로
+// 강제) — 세계=화면이라 카메라 개념 자체가 없었다. 산책 모드는 세계를
+// 뷰포트보다 크게 그리고(camera.js computeWorldSizePx, WALK_OVERSCAN=1.6)
+// 캐릭터를 부드럽게 뒤따라가는 카메라(camera.js stepCamera)를 도입한다.
+// 걷기/충돌/좌석/깊이/스프라이트 등 기존 로직은 전부 world-% 좌표 기준이라
+// (walkGrid.js/pathfinding.js/benchInteraction.js/depthVisual.js 순수 함수)
+// 이 기능은 그 위에 "바닥을 얼마나 크게 그리고 어디로 이동시킬지"만
+// 얹는다 — 재구현 없음(CLAUDE.md 규칙 3). 기본 ON(camera.js
+// readWalkModePreference 기본값), HUD 토글로 언제든 끌 수 있고(끄면 이전
+// 동작과 완전히 동일 — 아래 walkMode 분기 참고) localStorage에 남는다.
+
+// 모바일 시각 보정(2026-09-23) — 장애물 디버그 플레이스홀더(점선 상자 +
+// "demo-…" 라벨)는 기본적으로 렌더하지 않는다(실기기 프리뷰에서 벤치 실제
+// 아트와 겹쳐 보여 상호작용을 읽기 어렵다는 회귀 보고). URL 쿼리 파라미터
+// (`?proto25dDebug=1`)로만 켠다 — localStorage 대신 쿼리를 택한 이유: 이
+// 화면 자체가 플래그(paulTown2_5d) 하나로 게이팅되는 격리 프로토타입이라,
+// "이 세션에서만 잠깐 켜고 끄기 쉬운" 쿼리 파라미터가 더 어울린다(값이
+// 세션을 넘어 남아 다음 로그인에도 실수로 디버그 오버레이가 계속 보이는
+// 사고를 피함). 장애물 히트박스(walkGrid.js OBSTACLES) 자체는 변경하지
+// 않는다 — 이 스위치는 오직 시각적 표시 여부만 제어한다.
+function readDebugOverlaysEnabled() {
+  if (typeof window === 'undefined') return false
+  try {
+    return new URLSearchParams(window.location.search).get('proto25dDebug') === '1'
+  } catch {
+    return false
+  }
+}
+
+// 탭 vs 스와이프/스크롤 제스처 구분 임계값(px) — TownScene.jsx의
+// DRAG_THRESHOLD_PX(8, 브리프 권장 범위 6~8px 상단값)와 동일 값. Stage 1은
+// 경쟁하는 드래그 제스처가 없어(아이템 드래그 배치 없음) 그 파일의 전체
+// pending/dragging 상태 머신까지는 필요 없다 — down/up 두 지점 거리 비교로
+// 충분하다(팀장 지시 — "단순 click/pointerup 임계값 체크로 충분").
+const DRAG_THRESHOLD_PX = 8
+
+const INITIAL_LEFT_PCT = 50
+const INITIAL_TOP_PCT = 62
+
+// walkGrid.js OBSTACLES(불변 픽스처)에서 벤치 하나만 꺼내 모듈 스코프에
+// 고정한다 — 이 프로토타입엔 상호작용 가능한 오브젝트가 벤치 하나뿐이다.
+const BENCH = OBSTACLES.find((ob) => ob.id === 'demo-bench')
+
+// Phase 6A — 범용 오브젝트 레이어가 그릴 SCENE_FIXTURE 항목(벤치 제외,
+// sceneFixture.js 'demo-bench' 항목 주석 참고 — 벤치는 위 BENCH 전용
+// 블록이 계속 그린다). assetKey가 없는 항목은 없지만(현재 픽스처 전부
+// 실제 아트를 가짐) 방어적으로 필터링한다(등록되지 않은 assetKey는
+// townAsset()이 null을 반환 — 그 경우도 렌더 루프에서 조용히 건너뛴다).
+const RENDER_OBJECTS = SCENE_FIXTURE.filter((obj) => obj.id !== 'demo-bench')
+
+// V2 TownObjectLayer.jsx/TownSceneryLayer.jsx의 그림자 상수를 그대로
+// 복제한다(재도출 없음 — 파일당 소유권 원칙상 이 파일이 독립적으로
+// 갖는다, 그 두 파일도 서로 각자 복제해 갖고 있는 것과 동일 관례).
+const SHADOW_BACKGROUND = 'radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%)'
+
+// 씬 오브젝트 그림자의 세로 비율 — 그림자 높이(widthPx 대비)와 세로 중심
+// 보정(translate의 y%) 양쪽에 같은 0.35를 쓴다(납작한 타원 그림자를 만드는
+// 의도적 비율, ProtoCharacter.jsx의 SHADOW_* 상수와 동일한 관례로 이름을
+// 붙여둔다).
+const SCENE_OBJECT_SHADOW_HEIGHT_RATIO = 0.35
+
+// 초목 흔들림(ambient sway) — 새 keyframe을 만들지 않고 TownSceneryLayer.jsx
+// 가 이미 쓰는 town-sway(tailwind.config.js, rotate ±1.5deg 5s)를 그대로
+// 재사용한다(팀장 지시 — "기존 sway keyframe이 있으면 그걸 쓴다"). 나무/
+// 관목 assetKey에만 적용(건물/벤치는 흔들리지 않음).
+const SWAY_ASSET_KEYS = new Set(['nature/tree', 'nature/flower-garden'])
+const SWAY_CLASS = ' origin-bottom motion-safe:animate-town-sway'
+
+// 탭 리플 — CSS 애니메이션(450ms, tailwind.config.js townProtoRipple)이
+// 끝난 뒤 DOM에서 제거할 때까지의 여유(애니메이션 종료 시점과 JS 타이머
+// 발화 시점의 시계 차를 흡수 — Astra 핸드오프 §0.16 S9/S3 교훈과 동일
+// 이유로, 애니메이션이 실제로 끝나기 전에 지워 깜빡이지 않게 살짝 더 김).
+const TAP_RIPPLE_ANIM_MS = 450
+const TAP_RIPPLE_REMOVE_MS = TAP_RIPPLE_ANIM_MS + 80
+// 2026-09-26(가게 경험 v1, 오버레이 재등장 더블클릭 수정) — 가게가 닫힌
+// 직후 "가게 들어가기" 버튼이 같은 화면 위치(하단-중앙)에 다시 나타나는데,
+// 뒤로가기 버튼과 겹쳐 있어 빠른 더블클릭의 두 번째 클릭이 이 버튼에
+// 떨어져 가게가 곧바로 재오픈되는 문제(verify:e2e S18 항목f)가 있었다.
+// 닫힘 직후 이 시간(ms) 동안은 클릭/탭/키보드 활성화를 전부 무시한다.
+const SHOP_REENTRY_GUARD_MS = 400
+// depthOrder.js LAYER_BASE.objects(6002)~character(6004)의 y-랭킹 최댓값
+// (6904)보다는 크고 paul(8000)보다는 작은 고정값 — 리플은 Y-랭킹 대상이
+// 아니라(바닥 오브젝트/캐릭터와 가리고 가려질 필요가 없는 순간적 UI 장식)
+// depthOrder 시스템에 참여시키지 않고 이 파일 로컬 상수로만 고정한다.
+const TAP_RIPPLE_Z = 7000
+// F2(2026-09-28) — 배치 안내 배너의 빗나간 탭 힌트/배치 성공 토스트 표시 시간(약 2초).
+// ponytail: 문구가 벤치 고정 — 상품이 늘면 이름(조사 포함) 매핑 추가.
+const PLACE_HINT_MS = 2000
+const PLACE_TOAST_MS = 2000
+const PLACE_BANNER_TEXT = '🪑 노란 칸을 눌러 벤치를 놓아요'
+
+// Phase 6C-1(2026-09-25, 경로 종료 지점 facing 깜빡임 수정) — 긴 LEFT 이동
+// 경로(예: (90,20)→(20,20))의 마지막 구간이 pathfinding/walkGrid 스냅으로
+// 아주 작은(때로는 반대 부호) dx를 가질 수 있다. 그 결과 idle 전환 직전
+// ~한 프레임 동안 facing이 반대로 튀었다가 되돌아오는 깜빡임이 E2E로
+// 재현됐다. 수/세로 이동(direction!=='side')이거나 dx가 이 임계값보다
+// 작은 미세 스냅 구간은 facing을 갱신하지 않는다(직전 값 유지).
+const FACING_MIN_DX_PCT = 1.0
+
+// Phase 6B — spriteManifest는 선택적 prop이다.
+// Phase 6C(2026-09-24) — 기본값이 이제 `PAUL_SPRITE_MANIFEST`(승인된 Paul
+// 스프라이트 8장 기반)다. App.jsx는 여전히 어떤 prop도 넘기지 않으므로
+// (현재 유일한 프로덕션 호출부) 이 기본값이 그대로 적용되어
+// `isSpriteV2ManifestActive`가 true가 된다 — 아래 모든 v2 관련 분기가 이제
+// 실제로 실행된다(위 파일 헤더 "Phase 6C" 주석 참고). 호출부가 명시적으로
+// `spriteManifest={undefined}` 등 다른 값을 넘기면 그 값이 우선한다.
+const NO_MISSIONS = []
+export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, wallet = null, onBack = null, missions = NO_MISSIONS, completedMissionIds = NO_MISSIONS, onStartMission = null } = {}) {
+  // 미션 표지판(2026-10-10) — missions가 비었거나 onStartMission이 없으면 아무것도 렌더/판정하지 않는다.
+  const missionSpots = typeof onStartMission === 'function' && Array.isArray(missions)
+    ? MISSION_SPOTS.filter((sp) => missions.some((m) => m && m.id === sp.id))
+    : []
+  const reducedMotion = usePrefersReducedMotion()
+  // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
+  // useState lazy init으로 충분 — 매 렌더 재파싱 불필요).
+  const [debugOverlaysEnabled] = useState(readDebugOverlaysEnabled)
+  // Phase 6B — v2 스프라이트 매니페스트가 실제로 유효한지(spriteManifest가
+  // 있고 validateSpriteManifest(...).ok===true) 한 번만 계산해 아래 facing
+  // 게이팅에 재사용한다(위 파일 헤더 "Phase 6B" 주석 참고).
+  const isSpriteV2ManifestActive = useMemo(
+    () => Boolean(spriteManifest) && validateSpriteManifest(spriteManifest).ok === true,
+    [spriteManifest],
+  )
+  const [character, setCharacter] = useState({
+    phase: 'idle',
+    leftPct: INITIAL_LEFT_PCT,
+    topPct: INITIAL_TOP_PCT,
+    facing: 1, // 1=기본 방향, -1=좌우 미러링(ProtoCharacter.jsx facing prop)
+    direction: 'front', // Phase 6B — 논리 방향('front'|'back'|'side'), v2 스프라이트 전용(위 파일 헤더 참고)
+    pendingSit: false, // 벤치를 향해 걷는 중(walking)인지 — 항목7 반복 탭 무시 판정용
+    sitBenchHeightPx: undefined, // 2026-09-23 좌석 접촉점 sink 보정 — enterSitting에서만 채워짐(아래 참고)
+    // S28(2026-09-30, 배치 의자 착석) — 지금 걸어가는 중(pendingSit)이거나
+    // 앉아있는 좌석이 "무엇"인지. 'bench'(고정 벤치) | `placed:${itemId}`
+    // (배치 의자) | null. sitRect는 그 좌석의 장애물 rect(고정 벤치는 BENCH,
+    // 배치 의자는 placedObstacleRect(slot)) — enterSitting/enterLeaving/
+    // characterDepthY가 BENCH를 하드코딩하는 대신 이 값을 쓴다(재구현 없이
+    // 기존 benchInteraction.js의 rect 매개변수화를 그대로 재사용).
+    sitTargetKey: null,
+    sitRect: null,
+    // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물을 향해 걷는 중인지와
+    // "어느 건물인지"(예: 'shop:demo-building'). pendingSit/sitTargetKey와
+    // 동일한 목적지-의도 패턴(재구현 아님) — 다만 도착 후에는 앉지 않고
+    // (idle 복귀 + 반경 안이면 상점 오픈) 전혀 다른 결과로 이어지므로
+    // 별도 필드 쌍을 둔다(하나의 필드로 sitTargetKey='shop:x'를 섞으면
+    // "이게 좌석인지 건물인지"를 매번 문자열 prefix로 구분해야 해서 오히려
+    // 더 복잡해진다).
+    pendingShop: false,
+    shopTargetKey: null,
+  })
+  const characterRef = useRef(character) // 헤더 주석 "characterRef" 참고 — setTimeout 콜백 전용 최신값 미러
+  const [infoOpen, setInfoOpen] = useState(false)
+
+  // 2026-09-26(Phase 2, 가게 경험 v1) — 가게 오버레이 열림 여부. shopBusyRef
+  // 는 open/close 두 액션 모두가 공유하는 재진입 가드(seqRef와 같은 정신 —
+  // "진행 중인 전이가 있으면 새 명령을 무시"). 열기(handleEnterShop)는
+  // 다음 tick에 곧바로 풀린다(같은 tick 안의 중복 클릭만 막음). 닫기
+  // (requestCloseShop)는 history.back()이 비동기(popstate)로 도착할 때까지
+  // 계속 걸어둔다 — 아래 requestCloseShop/closeShopNow 주석 참고(리뷰 수정
+  // 1차 — 이전엔 여기도 setTimeout(0)로 즉시 풀어 popstate 도착 전 빠른
+  // 재탭/Escape가 history.back()을 한 번 더 호출해 히스토리 엔트리를
+  // 이중으로 소비하는 경쟁이 있었다).
+  const [shopOpen, setShopOpen] = useState(false)
+  const shopBusyRef = useRef(false)
+  // A8(2026-10-01 모바일 감사) — popstate 리스너(마운트 1회)용 최신값 미러(placingRef와 동일 패턴).
+  const shopOpenRef = useRef(false)
+  shopOpenRef.current = shopOpen
+  // 경제 단계 B(2026-09-27) — 화면 상태만 차감(서버/DB 쓰기 없음). wallet의
+  // dollarsAvailable에서 이 세션 동안 산 만큼만 빼서 보여준다(단일 세션
+  // 로컬 잔액 — 새로고침하면 초기화됨, 이번 단계 의도적 범위).
+  const [spent, setSpent] = useState(0)
+  // 2026-09-27 실기기 결함 수정 — purchasedIds가 ProtoShopScreen 내부
+  // state였던 탓에 가게를 닫으면(언마운트) 재입장 시 리셋돼 재구매가
+  // 성공하고 잔액이 계속 깎였다. 부모로 끌어올려 가게를 열고 닫아도
+  // 유지되게 하고, 공용 구매 함수(onPurchase)에서 재구매를 차단한다
+  // (새로고침 시엔 이 컴포넌트 자체가 다시 마운트되므로 정책대로 리셋).
+  const [purchasedIds, setPurchasedIds] = useState(() => new Set())
+  // Phase C(2026-09-28) — 구매한 아이템을 고정 슬롯(placementSlots.js)에
+  // 1회 배치. 로컬 state만(새로고침하면 리셋). placementsRef는 타이머
+  // 콜백(enterLeaving)이 최신 배치물 장애물을 보도록 동기 미러(characterRef와 동일).
+  const [placements, setPlacements] = useState([]) // [{ itemId, slotId }]
+  const placementsRef = useRef(placements)
+  const [placingItemId, setPlacingItemId] = useState(null)
+  // F1(2026-09-28) — 배치 모드도 가게처럼 히스토리 항목(proto25dPlace)을 쌓아
+  // 뒤로가기가 페이지 이탈 대신 배치 취소가 되게 한다. placingRef는 마운트 1회
+  // 등록된 popstate 리스너용 최신값 미러, placeBackPendingRef는 우리가 부른
+  // history.back()의 popstate 도착 전 창(아래 endPlacement 주석).
+  const placingRef = useRef(null)
+  placingRef.current = placingItemId
+  const placeBackPendingRef = useRef(false)
+  const placeBackFallbackTimerRef = useRef(null)
+  // F5(2026-09-29, 옮기기) — 이 배치 세션(enterPlacement 호출부터 다음
+  // enterPlacement까지)에서 이미 슬롯 탭 1건을 처리했는지. handleGroundPointerUp
+  // 안의 "같은 tick 두 번째 탭" 가드를 이전엔 placementsRef 멤버십(그 아이템이
+  // 이미 배치돼 있는지)으로 판정했는데, "옮기기"는 시작부터 그 아이템이 항상
+  // 이미 배치돼 있어(멤버십이 항상 참) 그 가드가 이동 자체를 막아버린다.
+  // enterPlacement가 false로 초기화하고, 유효한 슬롯 탭을 실제로 처리하는
+  // 순간에만 true로 바꾼다 — 새 배치/이동 두 흐름 모두에서 동일하게 동작.
+  const placeActionDoneRef = useRef(false)
+  // F5 — 보유 물건 목록("🎒 내 물건") 패널. 로컬 state만(placements와 동일 정책).
+  // 리뷰 수정(2026-09-29, 항목3) — 가게/배치 모드와 동일하게 히스토리 항목
+  // (proto25dMyItems)을 쌓아 뒤로가기가 페이지 이탈 대신 패널 닫기가 되게
+  // 한다. myItemsOpenRef는 placingRef와 동일한 이유로 필요(마운트 1회
+  // 등록된 popstate 리스너가 최신값을 봐야 함). myItemsBackPendingRef/
+  // myItemsBackFallbackTimerRef는 placeBackPendingRef/placeBackFallbackTimerRef와
+  // 동일한 역할(아래 releaseMyItemsBack/requestCloseMyItems 참고).
+  const [myItemsOpen, setMyItemsOpen] = useState(false)
+  const myItemsOpenRef = useRef(false)
+  myItemsOpenRef.current = myItemsOpen
+  const myItemsBackPendingRef = useRef(false)
+  const myItemsBackFallbackTimerRef = useRef(null)
+  const myItemsOpenBtnRef = useRef(null)
+  const myItemsCloseRef = useRef(null)
+  // F2 — 빗나간 탭 힌트(배너 문구 대체)/배치 성공 토스트, 각자 타이머 1개.
+  const [placeHint, setPlaceHint] = useState(null)
+  const [placeToast, setPlaceToast] = useState(null)
+  const placeHintTimerRef = useRef(null)
+  const placeToastTimerRef = useRef(null)
+  function flash(setter, timerRef, value, ms) {
+    clearTimeout(timerRef.current)
+    setter(value)
+    timerRef.current = setTimeout(() => setter(null), ms)
+  }
+  useEffect(() => () => { clearTimeout(placeHintTimerRef.current); clearTimeout(placeToastTimerRef.current) }, [])
+  // F2 — 포커스 이동 대상(배치 진입 → 취소 버튼, 종료 → 배치하기 버튼 또는 root,
+  // 가게 닫힘 → root → 재입장 가드가 풀리면 가게 들어가기 버튼).
+  const rootRef = useRef(null)
+  const placeOpenRef = useRef(null)
+  const placeCancelRef = useRef(null)
+  const shopEnterRef = useRef(null)
+  const pendingShopFocusRef = useRef(false) // 가게 닫힘 → 재입장 가드 해제 시 가게 버튼 포커스 예약
+  // 리뷰 대응(2026-09-30, 2차, stage 3 요구사항4) — "🎒 내 물건 보기" 클릭
+  // 시 true로 세팅. 가게가 "실제로 닫히는" 전이(아래 prevShopOpenRef
+  // effect, shopOpen true→false)를 감지하는 순간에만 소비해 openMyItems()
+  // 를 부른다 — 닫기 자체는 requestCloseShop()의 기존 경로(history.back()
+  // → popstate → closeShopNow, shopBusyRef 가드 전부 그대로)를 그대로
+  // 거치므로 "닫기 먼저, popstate/폴백까지 기다린 뒤에만 열기"가 저절로
+  // 보장된다(별도 폴링/타이머 불필요 — 기존 shopOpen state 전이 자체가
+  // 신호).
+  const pendingOpenMyItemsAfterCloseRef = useRef(false)
+  const inventory = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id) && !placements.some((pl) => pl.itemId === p.id))
+  // F5 — "🎒 내 물건" 패널 목록(구매한 물건 전부, 배치 여부 무관 — inventory와
+  // 달리 이미 배치된 물건도 보여준다). SHOP_PRODUCTS 순서 그대로(안정적 표시 순서).
+  const ownedItems = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id))
+  const balance = wallet && Number.isFinite(wallet.dollarsAvailable) ? wallet.dollarsAvailable - spent : null
+  // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
+  // 노출해 ProtoShopScreen의 뒤로가기 버튼을 그 사이 disabled+aria-busy로
+  // 보여준다(shopBusyRef는 ref라 렌더에 반영되지 않으므로 별도 state 필요).
+  const [shopClosing, setShopClosing] = useState(false)
+  // requestCloseShop이 history.back()을 호출한 뒤 popstate가 끝내 도착하지
+  // 않는 드문 환경(히스토리 API가 부분적으로만 동작하는 브라우저/기기 등)을
+  // 대비한 세이프티 타이머 — closeShopNow가 이미 닫았으면(popstate가
+  // 정상 도착) 이 타이머는 이 ref를 통해 취소된다.
+  const shopCloseFallbackTimerRef = useRef(null)
+  function clearShopCloseFallbackTimer() {
+    if (shopCloseFallbackTimerRef.current != null) {
+      clearTimeout(shopCloseFallbackTimerRef.current)
+      shopCloseFallbackTimerRef.current = null
+    }
+  }
+  // 2026-09-26(가게 경험 v1, 재진입 가드) — closeShopNow가 실제로 닫히는
+  // 순간에 세팅되는 타임스탬프(performance.now() 기준, SHOP_REENTRY_GUARD_MS
+  // 동안 유효). handleEnterShop이 ref로 즉시 비교해 클릭/키보드 어느 경로로
+  // 오든 막고, shopReentryBlocked(state)는 버튼을 disabled+inert로 보이게
+  // 렌더링하는 용도(ref만으로는 재렌더가 안 돼 시각적으로 눌리는 것처럼
+  // 보일 수 있음 — shopClosing과 같은 이유).
+  const shopReentryBlockedUntilRef = useRef(0)
+  const [shopReentryBlocked, setShopReentryBlocked] = useState(false)
+  const shopReentryTimerRef = useRef(null)
+  function clearShopReentryTimer() {
+    if (shopReentryTimerRef.current != null) {
+      clearTimeout(shopReentryTimerRef.current)
+      shopReentryTimerRef.current = null
+    }
+  }
+  useEffect(() => clearShopReentryTimer, [])
+
+  // 2026-09-26 — 산책 모드 on/off. 마운트 시점 저장된 선호를 1회만 읽는다
+  // (localStorage 부재/예외 환경에서도 camera.js readWalkModePreference가
+  // 항상 안전한 기본값(true)을 반환 — 위 파일 헤더 "산책 모드" 주석 참고).
+  const [walkMode, setWalkMode] = useState(() => (
+    readWalkModePreference(typeof window !== 'undefined' ? window.localStorage : undefined)
+  ))
+  function toggleWalkMode() {
+    setWalkMode((prev) => {
+      const next = !prev
+      writeWalkModePreference(typeof window !== 'undefined' ? window.localStorage : undefined, next)
+      return next
+    })
+  }
+
+  const groundRef = useRef(null)
+  const pointerDownRef = useRef(null) // { pointerId, downX, downY } | null
+  const walkTimerRef = useRef(null) // 걷기 구간(leg) 전이 타이머(Stage 1부터 — 항상 최대 1개)
+  const holdTimerRef = useRef(null) // Stage 4 — 착석 유지(SIT_HOLD_MS) 전용 타이머(walkTimerRef와 별개 ref)
+  const seqRef = useRef(0) // 헤더 주석 "seq 카운터" 참고
+
+  // Phase 6A — 바닥의 실측 렌더 크기(px). objectRenderedWidthPx(sceneFixture.js)
+  // 가 depth-scale까지 반영한 실제 화면 px 폭을 계산하려면 매 렌더 이
+  // 값이 필요하다(고정 world 종횡비를 가정하지 않는다 — benchInteraction.js
+  // 헤더 주석과 동일 이유). TownPlacementOverlay.jsx의 ref+ResizeObserver
+  // 관례를 그대로 재사용(초기 렌더/리사이즈 모두 대응, 측정 실패 시엔
+  // {width:0,height:0} 그대로 둬 objectRenderedWidthPx가 minWidthPx(있으면)
+  // 로 안전 폴백하게 한다 — 크래시 없음).
+  const [groundSize, setGroundSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const el = groundRef.current
+    if (!el) return undefined
+    function measure() {
+      const rect = el.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) setGroundSize({ width: rect.width, height: rect.height })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // 2026-09-26 — 산책 모드 뷰포트 측정. groundSize와 별개 ref/state다(위
+  // groundSize 주석 참고 — groundSize는 "바닥 자신의 렌더 크기"를 재는
+  // 반면, 이 값은 "그 바닥을 담는 창(뷰포트)의 크기"를 잰다 — 산책 모드
+  // ON이면 두 값이 서로 다르다: 바닥은 세계 전체 크기(worldSize)로 커지고
+  // 뷰포트는 여전히 화면 크기다). 동일한 ref+ResizeObserver 관례 재사용
+  // (재구현 없음).
+  const viewportRef = useRef(null)
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return undefined
+    function measure() {
+      const rect = el.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) setViewportSize({ width: rect.width, height: rect.height })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // 세계(바닥) px 크기 — 뷰포트 크기가 바뀔 때만 다시 계산한다(camera.js
+  // computeWorldSizePx, 순수 함수 — 매 렌더 재계산해도 비용이 없지만
+  // useMemo로 참조 안정성까지 얻어 아래 rAF effect의 의존성 배열이 불필요한
+  // 재시작을 하지 않게 한다).
+  const worldSize = useMemo(
+    () => computeWorldSizePx({ viewportW: viewportSize.width, viewportH: viewportSize.height }),
+    [viewportSize.width, viewportSize.height],
+  )
+
+  // 2026-09-26 — 산책 모드 카메라 rAF 루프. React state가 아니라 ref(카메라
+  // 현재 위치)+DOM 직접 쓰기(transform)로 구현한다 — 매 프레임 React
+  // setState/재렌더를 거치면(60fps 기준 프레임당 수백 개 엘리먼트 재조정)
+  // 불필요한 비용이 크다는 점은 이 저장소의 다른 "매 프레임 값" 관례
+  // (ProtoCharacter.jsx bob/숨쉬기 CSS keyframe, 이 파일 자체의 walkLeg
+  // CSS transition)와 동일한 이유 — camera.js가 순수 계산만 맡고 이
+  // effect가 그 결과를 어디에 쓸지(imperative DOM)만 오케스트레이션한다.
+  // 2026-10-01 idle rAF settle-stop — 정착 후 멈춘 루프를 다시 깨우는 진입점.
+  // effect가 설정/정리한다(OFF·미측정이면 null). 아래 재시작 effect/closeShopNow가 호출.
+  const cameraLoopStartRef = useRef(null)
+  const CAMERA_SETTLE_FRAMES = 10
+  const cameraPosRef = useRef(null) // null=아직 초기화 전(다음 프레임에 target으로 즉시 스냅, 부드러운 팬 없이 모드 진입).
+  useEffect(() => {
+    // OFF로 전환(또는 애초에 OFF) — 다음에 다시 켜질 때 항상 새로 스냅하도록
+    // 리셋하고, 바닥의 transform을 명시적으로 되돌려 전환 잔상이 남지 않게
+    // 한다(이 효과가 없으면 ON→OFF 전환 시 마지막 translate3d가 인라인
+    // style에 그대로 남아, OFF 전용 렌더 분기(transform 미지정)와 실제
+    // DOM이 어긋난다).
+    if (!walkMode) {
+      cameraPosRef.current = null
+      if (groundRef.current) {
+        groundRef.current.style.transform = 'none'
+        delete groundRef.current.dataset.cameraLoop
+      }
+      return undefined
+    }
+    // 뷰포트/세계 크기를 아직 측정하지 못했으면(마운트 직후 ResizeObserver
+    // 발화 전) 루프를 시작하지 않는다 — 위 groundSize 패턴과 동일하게
+    // 크기가 갱신되면 이 effect가 재실행(의존성 배열)돼 그때 시작한다.
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) return undefined
+    if (worldSize.worldW <= 0 || worldSize.worldH <= 0) return undefined
+
+    let rafId = null
+    cameraPosRef.current = null // 모드 진입/뷰포트 변경마다 첫 프레임은 항상 즉시 스냅.
+    // 2026-09-26 Phase 3 — 캐릭터 엘리먼트를 이 effect 실행(walkMode ON
+    // 구간) 동안 클로저 변수에 캐시한다. querySelector는 DOM 서브트리를
+    // 매 프레임 순회하므로(60fps) 매번 다시 찾을 이유가 없다 — 캐릭터
+    // 엘리먼트는 바닥(groundEl) 아래에서 리마운트되지 않는 한 동일 노드다.
+    // groundEl.contains 체크로 리마운트(예: 좌석 전환 등으로 노드 교체)
+    // 시에는 다시 조회하도록 방어한다.
+    let charElCache = null
+    // 2026-10-01 idle rAF settle-stop — 이전 프레임 측정값과 연속 정착 프레임 수.
+    let prevSample = null
+    let settledFrames = 0
+
+    function frame() {
+      const groundEl = groundRef.current
+      if (!charElCache || !groundEl || !groundEl.contains(charElCache)) {
+        charElCache = groundEl ? groundEl.querySelector('[data-proto-character]') : null
+      }
+      const charEl = charElCache
+      if (groundEl && charEl) {
+        // charWorldPx — ProtoCharacter.jsx의 앵커 관례(translate(-50%,-100%),
+        // 이 파일 헤더 "characterRef" 주석 근처 참고)상 실제 렌더 박스의
+        // 가로 중심 = world-x 앵커, 세로 하단 = world-y(발) 앵커. 바닥 자신은
+        // transform(translate만, scale 없음)만 받으므로 groundRect도 이미
+        // 카메라가 적용된 화면 좌표다 — 두 rect를 빼면 카메라 오프셋이
+        // 상쇄되어 "카메라와 무관한 세계 고정 px 좌표"가 남는다(설계 그대로).
+        const groundRect = groundEl.getBoundingClientRect()
+        const charRect = charEl.getBoundingClientRect()
+        const charWorldX = charRect.left + charRect.width / 2 - groundRect.left
+        const charWorldY = charRect.bottom - groundRect.top
+        const target = computeCameraTarget({
+          charX: charWorldX,
+          charY: charWorldY,
+          viewportW: viewportSize.width,
+          viewportH: viewportSize.height,
+          worldW: worldSize.worldW,
+          worldH: worldSize.worldH,
+        })
+        const next = cameraPosRef.current == null
+          ? target // 첫 프레임 — 부드러운 팬 없이 즉시 목표 위치로(모드 진입/리사이즈 직후 어색한 장거리 팬 방지).
+          : stepCamera(cameraPosRef.current, target, reducedMotion ? 1 : undefined) // reduced-motion이면 t=1(매 프레임 즉시 스냅).
+        cameraPosRef.current = next
+        groundEl.style.transform = `translate3d(${-next.x}px, ${-next.y}px, 0)`
+        // 테스트 계측용(townProto25d.spec.mjs S17) — 카메라 현재 위치를
+        // DOM 속성으로도 노출한다(반올림 — px 서브픽셀 차이로 단언이
+        // 흔들리지 않게).
+        groundEl.dataset.cameraX = String(Math.round(next.x))
+        groundEl.dataset.cameraY = String(Math.round(next.y))
+        // 2026-10-01 idle rAF settle-stop — 캐릭터 world 위치와 카메라가 모두
+        // 그대로인 프레임이 CAMERA_SETTLE_FRAMES(10 ≈ 160ms) 연속이면 루프를
+        // 멈춘다. 10프레임인 이유: 걷기는 CSS transition(650ms)이라 상태 변경
+        // 직후 첫 프레임에 아직 rect가 안 움직였을 수 있는데, transition이
+        // 시작되면 rect는 매 프레임 움직이므로 160ms 안에 반드시 감지된다.
+        // 걷기 시작 등 상태 변화는 아래 재시작 effect가 start()로 다시 깨운다.
+        const sample = { charX: charWorldX, charY: charWorldY, camX: next.x, camY: next.y }
+        settledFrames = cameraSettled(prevSample, sample) ? settledFrames + 1 : 0
+        prevSample = sample
+        if (settledFrames >= CAMERA_SETTLE_FRAMES) {
+          rafId = null
+          groundEl.dataset.cameraLoop = 'idle'
+          return
+        }
+      }
+      rafId = requestAnimationFrame(frame)
+    }
+    // 멱등 — 이미 프레임이 예약돼 있으면 정착 카운터만 리셋하고, 멈춰 있으면
+    // 카운터를 리셋한 채 루프를 다시 시작한다.
+    function start() {
+      settledFrames = 0
+      if (rafId != null) return
+      prevSample = null
+      if (groundRef.current) groundRef.current.dataset.cameraLoop = 'running'
+      rafId = requestAnimationFrame(frame)
+    }
+    cameraLoopStartRef.current = start
+    start()
+    return () => {
+      cameraLoopStartRef.current = null
+      if (rafId != null) cancelAnimationFrame(rafId)
+      rafId = null
+    }
+  }, [walkMode, viewportSize.width, viewportSize.height, worldSize.worldW, worldSize.worldH, reducedMotion])
+
+  // 2026-10-01 idle rAF settle-stop — 정착으로 멈춘 카메라 루프를 깨우는 재시작
+  // 트리거: 캐릭터를 움직이거나(새 걷기 구간 = leftPct/topPct 변경, phase/좌석
+  // 전환) 크기를 바꾸는(placements) 상태 변화. 루프가 이미 돌고 있으면 no-op.
+  useEffect(() => {
+    cameraLoopStartRef.current?.()
+  }, [character.leftPct, character.topPct, character.phase, character.sitTargetKey, placements])
+
+  // Phase 6A — 탭 리플(순수 장식, 상태 머신 seq/타이머 체계와 완전히
+  // 독립 — 위 헤더 주석 "seq 카운터"의 대상이 아니다, 걷기/착석 로직을
+  // 전혀 건드리지 않는다). 각 리플은 자기 자신의 타이머로 스스로를
+  // 제거한다(여러 개가 겹쳐도 서로 간섭하지 않음 — walkTimerRef처럼
+  // "항상 최대 1개" 제약이 이 장식에는 적용되지 않는다, 의도적으로 다른
+  // 규율). 언마운트 시 전부 정리(rippleTimersRef)만 지켜 setState-after-
+  // unmount를 피한다.
+  const [ripples, setRipples] = useState([])
+  const rippleIdRef = useRef(0)
+  const rippleTimersRef = useRef(new Set())
+  function showTapRipple(point) {
+    if (reducedMotion) return // 항목C1 — reduced-motion에서는 아예 렌더하지 않음(motion-safe: 이중 방어와 별개로 DOM 자체를 안 만듦).
+    const id = ++rippleIdRef.current
+    setRipples((cur) => [...cur, { id, x: point.x, y: point.y }])
+    const timerId = setTimeout(() => {
+      rippleTimersRef.current.delete(timerId)
+      setRipples((cur) => cur.filter((rp) => rp.id !== id))
+    }, TAP_RIPPLE_REMOVE_MS)
+    rippleTimersRef.current.add(timerId)
+  }
+  useEffect(() => () => {
+    for (const t of rippleTimersRef.current) clearTimeout(t)
+    rippleTimersRef.current.clear()
+  }, [])
+
+  function clearWalkTimer() {
+    if (walkTimerRef.current != null) {
+      clearTimeout(walkTimerRef.current)
+      walkTimerRef.current = null
+    }
+  }
+  function clearHoldTimer() {
+    if (holdTimerRef.current != null) {
+      clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+  }
+
+  // character state와 characterRef(타이머 콜백용 최신값 미러)를 항상 함께
+  // 갱신하는 유일한 통로 — 이 함수를 거치지 않고 setCharacter를 직접
+  // 호출하지 않는다(두 값이 갈라지는 사고 방지).
+  function updateCharacter(patch) {
+    setCharacter((cur) => {
+      const next = typeof patch === 'function' ? patch(cur) : { ...cur, ...patch }
+      characterRef.current = next
+      return next
+    })
+  }
+  // seq 가드 — 타이머 콜백 전용(헤더 주석 참고). 예약 시점 이후 새 명령이
+  // 들어와 seqRef가 앞서갔으면 조용히 무시한다.
+  function applyIfActive(seq, patch) {
+    if (seq !== seqRef.current) return
+    updateCharacter(patch)
+  }
+
+  // 단일 구간(leg) 이동 — 목표 좌표로 전이 후 transition 지속시간이 지나면
+  // onArrive(마지막 구간이면) 또는 다음 구간으로 넘어간다(Stage 1의 "예약된
+  // 타이머 1개만 활성" 관례를 그대로 유지 — walkTimerRef는 항상 최대 1개의
+  // 타이머만 가리킨다). onArrive는 "다 걸었을 때 무엇을 할지"를 호출부가
+  // 결정한다(Stage 4부터 idle로 직행하는 경로와 sitting으로 들어가는 경로
+  // 둘 다 이 함수 하나를 공유하기 위한 일반화 — 재구현 아님). phaseLabel —
+  // 이 구간 동안 표시할 phase 문자열('walking' 또는 Stage 4의 'leaving').
+  // 하드코딩하지 않는 이유(실측으로 발견한 버그, 아래 참고): enterLeaving이
+  // 먼저 phase:'leaving'을 세팅한 뒤 같은 동기 호출 스택 안에서 곧바로
+  // walkPath -> walkLeg를 부르면, walkLeg가 하드코딩된 'walking'으로 다시
+  // setState하는 것까지 React가 한 배치로 묶어(자동 배칭) 커밋 — 그 결과
+  // 'leaving'은 화면에 단 한 프레임도 그려지지 못하고 곧장 'walking'으로
+  // 덮인다(townProto25d.spec.mjs S8/S8b가 이 문제를 실측 FAIL로 재현했다 —
+  // 이 세션의 CLAUDE.md 규칙15 "회귀 의심 시 실제 FAIL 확인" 그대로).
+  // walkLeg/walkPath에 phaseLabel을 받아 그대로 쓰게 하면(enterLeaving은
+  // 'leaving'을 넘긴다) 배칭이 일어나도 최종 커밋값 자체가 'leaving'이라
+  // 문제가 없다.
+  function walkLeg(path, index, seq, phaseLabel, onArrive) {
+    const target = path[index]
+    const isLast = index === path.length - 1
+    // Phase 6B — direction은 모든 모드에서 항상 갱신(위 파일 헤더 참고).
+    // facing은 v2 스프라이트 매니페스트가 실제로 유효할 때만 갱신한다(게이트
+    // — emoji 모드의 기존 "일반 걷기는 facing을 바꾸지 않는다" 동작 보존).
+    applyIfActive(seq, (cur) => {
+      const dx = target.x - cur.leftPct
+      const dy = target.y - cur.topPct
+      const direction = directionForMove(dx, dy, cur.direction, WORLD)
+      const next = { ...cur, phase: phaseLabel, leftPct: target.x, topPct: target.y, direction }
+      // Phase 6C-1 — 진짜 좌우 이동 구간에서만 facing 갱신(위 파일 상단
+      // FACING_MIN_DX_PCT 주석 참고). 세로/미세 스냅 구간은 직전 facing 유지.
+      if (isSpriteV2ManifestActive && direction === 'side' && Math.abs(dx) >= FACING_MIN_DX_PCT) {
+        next.facing = facingForMove(dx, cur.facing)
+      }
+      return next
+    })
+    walkTimerRef.current = setTimeout(() => {
+      walkTimerRef.current = null
+      if (seq !== seqRef.current) return // 스테일 타이머 — 그 사이 새 명령이 들어옴(헤더 주석 seq 카운터).
+      if (isLast) onArrive()
+      else walkLeg(path, index + 1, seq, phaseLabel, onArrive)
+    }, WALK_TRANSITION_MS)
+  }
+
+  // 경로(웨이포인트 배열) 하나를 따라 걷는다. reduced-motion이면 각
+  // 웨이포인트를 순서대로 보여주는 대신, 경로가 유효(=pathfinding이 검증한
+  // 걸을 수 있는 목적지)함을 그대로 신뢰해 마지막 웨이포인트로 즉시(짧은
+  // transition 1회) 이동한다 — "경로의 최종 보행 가능 위치로 즉시 이동"
+  // 요구사항(운영자 원문) 그대로. 순간이동(0ms)은 아니다 — Stage 1과 동일한
+  // 이유로 목적지 변화를 지각할 수 있는 최소 지속시간(REDUCED_MOTION_
+  // TRANSITION_MS)을 유지한다. phaseLabel — walkLeg 주석 참고.
+  function walkPath(path, seq, phaseLabel, onArrive) {
+    clearWalkTimer()
+    if (!path || path.length === 0) { onArrive(); return }
+    if (reducedMotion) {
+      const dest = path[path.length - 1]
+      // Phase 6B — walkLeg와 동일한 direction/facing 갱신(위 주석 참고).
+      applyIfActive(seq, (cur) => {
+        const dx = dest.x - cur.leftPct
+        const dy = dest.y - cur.topPct
+        const direction = directionForMove(dx, dy, cur.direction, WORLD)
+        const next = { ...cur, phase: phaseLabel, leftPct: dest.x, topPct: dest.y, direction }
+        // Phase 6C-1 — walkLeg와 동일 가드(위 파일 상단 FACING_MIN_DX_PCT 주석 참고).
+        if (isSpriteV2ManifestActive && direction === 'side' && Math.abs(dx) >= FACING_MIN_DX_PCT) {
+          next.facing = facingForMove(dx, cur.facing)
+        }
+        return next
+      })
+      walkTimerRef.current = setTimeout(() => {
+        walkTimerRef.current = null
+        if (seq !== seqRef.current) return
+        onArrive()
+      }, REDUCED_MOTION_TRANSITION_MS)
+      return
+    }
+    walkLeg(path, 0, seq, phaseLabel, onArrive)
+  }
+
+  // 일반 바닥 탭 — Stage 1~3과 동일한 걷기(벤치 상호작용 아님). 도착하면
+  // idle로 복귀한다.
+  function startPlainWalk(rawPoint) {
+    const cur = characterRef.current
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, rawPoint, obstaclesWithPlacements(placementsRef.current))
+    if (!path || path.length === 0) return // 경로 없음(완전히 도달 불가) — 제자리 유지, 크래시 없음.
+    const seq = ++seqRef.current
+    clearWalkTimer()
+    clearHoldTimer()
+    // S29(2026-09-30, 독립 리뷰 발견) — pendingSit뿐 아니라 sitTargetKey/
+    // sitRect도 함께 지운다. 이 셋은 항상 "지금 걸어가는 중이거나 앉아있는
+    // 좌석이 무엇인지"를 함께 나타내는 한 묶음이다(character 초기 state
+    // 주석 참고) — pendingSit만 지우고 sitTargetKey를 남기면, 좌석으로
+    // 걷던 중 다른 곳을 탭해 재지정됐을 때(이 함수가 바로 그 경로) 이제
+    // 이 걷기는 그 좌석과 전혀 무관한데도 character.sitTargetKey는 옛
+    // 좌석을 계속 가리키는 상태(stale)로 남는다 — 그 뒤 그 좌석 아이템을
+    // 옮기거나(movePlacement) 회수하면(interruptSitIfTargeting) stale key가
+    // 우연히 일치해, 지금 진행 중인 전혀 무관한 걷기를 즉시 중단시켜
+    // 버린다(이 세션이 S29로 직접 재현·확인). 마을 산책형 상점 방문
+    // 1단계(2026-09-30) — 같은 이유로 pendingShop/shopTargetKey도 함께
+    // 지운다(건물로 걷던 중 다른 곳을 탭하면 그 상점 목적지도 취소되어야
+    // 한다 — "새 탭이 항상 우선" 원칙, S29와 동일한 stale-key 위험).
+    updateCharacter({ pendingSit: false, sitTargetKey: null, sitRect: null, pendingShop: false, shopTargetKey: null })
+    walkPath(path, seq, 'walking', () => applyIfActive(seq, (c) => ({ ...c, phase: 'idle' })))
+  }
+
+  // Stage 4 — 벤치(또는 S28부터, 배치 의자) 탭. 좌석 앞 도착 지점까지
+  // 걸어간 뒤 enterSitting으로 넘어간다. 도착 지점이 도달 불가면(병적인
+  // 경우) 아무 것도 하지 않는다(Stage 2와 동일한 "안전한 no-op" 원칙).
+  // rect/sitTargetKey — S28(2026-09-30)에서 고정 벤치 전용이던 이 함수를
+  // 일반화했다(benchInteraction.js 자체는 처음부터 rect 매개변수를 받는
+  // 순수 함수였다, 그 파일 헤더 주석 참고 — 재구현이 아니라 이미 있던
+  // 매개변수화를 실제로 활용). sitTargetKey는 "무엇에 앉으려는지"
+  // (character.sitTargetKey) — 'bench' 또는 `placed:${itemId}`.
+  function startWalkToSeat(rect, sitTargetKey) {
+    const cur = characterRef.current
+    const rawArrival = benchArrivalPoint(rect)
+    const obstacles = obstaclesWithPlacements(placementsRef.current) // Phase C — 배치물도 장애물
+    const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y, obstacles)
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
+    if (!path || path.length === 0) return
+    const seq = ++seqRef.current
+    clearWalkTimer()
+    clearHoldTimer()
+    // facing은 "걷기 시작 시점의 이동 방향"으로 한 번만 정해 sitting까지
+    // 그대로 들고 간다(팀장 문구 "도착 시 facing 설정"과 결과적으로 동일 —
+    // 도착 지점의 x가 시작 x와 같은 방향이므로 어느 시점에 계산해도 부호가
+    // 같다. dx===0이면 facingToward가 0을 반환해 기존 facing을 그대로 둔다
+    // — "벤치가 정확히 위에 있으면 현재 방향 유지" 요구 그대로).
+    const dir = facingToward({ x: cur.leftPct, y: cur.topPct }, arrival)
+    // 마을 산책형 상점 방문 1단계 — 좌석으로 재지정되면 이전 상점 목적지도
+    // 취소한다(위 startPlainWalk 주석과 동일한 stale-key 방지 이유).
+    updateCharacter((c) => ({ ...c, pendingSit: true, sitTargetKey, sitRect: rect, pendingShop: false, shopTargetKey: null, facing: dir !== 0 ? dir : c.facing }))
+    walkPath(path, seq, 'walking', () => enterSitting(seq))
+  }
+  function startWalkToBench() {
+    startWalkToSeat(BENCH, 'bench')
+  }
+  // S28 — 배치 의자 walk-to-sit(요구사항2). pl은 placements 배열의 항목
+  // ({itemId,slotId}), rect는 그 슬롯의 장애물 rect(placedObstacleRect).
+  function startWalkToPlacedSeat(pl, rect) {
+    startWalkToSeat(rect, `placed:${pl.itemId}`)
+  }
+
+  // 마을 산책형 상점 방문 1단계(2026-09-30, 팀장 지시) — 건물 탭 → 입구
+  // 접근 지점까지 걷기. startWalkToSeat과 동일한 패턴(목적지까지 findPath
+  // → pendingX/xTargetKey 세팅 → 도착 시 콜백)이지만 도착 후 결과가
+  // 다르다(앉지 않고, idle 복귀 + 반경 안이면 handleEnterShop()). 도착
+  // 지점은 shop.entrance를 매번 obstaclesWithPlacements로 다시
+  // nearestWalkablePoint 보정한다(정적 SHOP_ENTRANCE가 아니라) — 플레이어가
+  // 배치물(F1 구매 의자 등)을 입구 근처에 놓아 그 정적 지점이 막혔을 수
+  // 있기 때문(startWalkToSeat이 rawArrival을 매번 보정하는 것과 동일 이유).
+  // 경로가 없으면(완전히 도달 불가) 그대로 no-op(Stage 2와 동일 원칙).
+  function startWalkToShop(shop) {
+    const cur = characterRef.current
+    const obstacles = obstaclesWithPlacements(placementsRef.current)
+    const arrival = nearestWalkablePoint(shop.entrance.x, shop.entrance.y, obstacles)
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
+    if (!path || path.length === 0) return
+    const seq = ++seqRef.current
+    clearWalkTimer()
+    clearHoldTimer()
+    updateCharacter({
+      pendingSit: false, sitTargetKey: null, sitRect: null,
+      pendingShop: true, shopTargetKey: `shop:${shop.id}`,
+    })
+    walkPath(path, seq, 'walking', () => {
+      applyIfActive(seq, (c) => ({ ...c, phase: 'idle', pendingShop: false, shopTargetKey: null }))
+      // 요구사항 — 장애물/경계로 입구 반경에 못 들어오면(예: 위 arrival이
+      // 배치물에 막혀 반경 밖으로 보정됨) 열지 않는다. 이동 중 다른 탭으로
+      // 이 걷기 자체가 취소됐으면(seq 불일치) applyIfActive가 이미 아무 것도
+      // 안 했으므로 여기서도 열지 않는다(seqRef 재확인).
+      if (seq === seqRef.current && shopArrivalOk(shop, arrival.x, arrival.y)) handleEnterShop()
+    })
+  }
+
+  // Stage 4 — 착석. 논리 좌표를 좌석 지점(benchSeatPoint)으로 옮기고
+  // SIT_HOLD_MS(또는 reduced-motion이면 REDUCED_MOTION_SIT_HOLD_MS) 뒤
+  // enterLeaving을 예약한다. depthY는 ProtoCharacter.jsx에 별도로 넘긴다
+  // (아래 렌더 부분 참고 — 왜 topPct 그대로 z-index에 쓰면 안 되는지는 그
+  // 파일의 헤더 주석에 정리). 모바일 시각 보정(2026-09-23) —
+  // benchSeatPoint가 이제 바닥 엘리먼트의 실제 렌더 크기(groundWidthPx/
+  // groundHeightPx)를 받아야 한다(benchInteraction.js 헤더 주석 — 고정
+  // world 종횡비를 가정하지 않음). handleGroundPointerUp과 동일하게
+  // groundRef에서 직접 측정한다.
+  //
+  // 2026-09-23(좌석 접촉점 sink 보정, 두 번째 패스) — 같은 groundRect 측정
+  // 김에 benchRenderedSizePx(BENCH, groundRect?.width).heightPx(벤치의 실제
+  // 스크린 px 렌더 높이)도 같이 구해 character state에 실어 보낸다.
+  // ProtoCharacter.jsx가 이 값을 자신의 depth-scale로 나눠 sink 상한(좌석선
+  // ~ 벤치 바닥까지의 여유) 계산에 쓴다(그 파일 헤더 주석 "sitBenchHeightPx"
+  // 항목 참고). 벤치 좌표/기하 자체는 전혀 바꾸지 않는다 — benchSeatPoint가
+  // 이미 계산해 둔 seat.x/seat.y는 그대로.
+  function enterSitting(seq) {
+    if (seq !== seqRef.current) return
+    // S28 — sitRect(walk-to-seat 시작 시 세팅된 목표 좌석 rect, characterRef
+    // 미러) 기준으로 계산한다. BENCH 폴백은 이론상 도달 불가(startWalkToSeat이
+    // 항상 sitRect를 함께 세팅) — 방어적 안전망일 뿐.
+    const rect = characterRef.current.sitRect || BENCH
+    const groundRect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
+    const seat = benchSeatPoint(rect, groundRect?.width, groundRect?.height)
+    const benchHeightPx = benchRenderedSizePx(rect, groundRect?.width).heightPx
+    applyIfActive(seq, (c) => ({
+      ...c,
+      phase: 'sitting',
+      pendingSit: false,
+      leftPct: seat.x,
+      topPct: seat.y,
+      sitBenchHeightPx: benchHeightPx,
+    }))
+    clearHoldTimer()
+    const holdMs = reducedMotion ? REDUCED_MOTION_SIT_HOLD_MS : SIT_HOLD_MS
+    holdTimerRef.current = setTimeout(() => {
+      holdTimerRef.current = null
+      if (seq !== seqRef.current) return
+      enterLeaving(seq)
+    }, holdMs)
+  }
+
+  // Stage 4 — 기립 후 벤치 앞 도착 지점으로 되돌아 걸어 나간 뒤 idle.
+  // characterRef.current(좌석 지점)에서 출발하는 경로를 findPath에 맡긴다
+  // — findPath가 내부적으로 시작점도 nearestWalkablePoint로 보정하므로
+  // (좌석은 벤치 박스 안이라 그 자체로는 걸을 수 없는 칸) 이 함수가 따로
+  // 보정할 필요가 없다. 경로를 못 찾는 병적인 경우에도(사실상 발생하지
+  // 않음 — arrival은 항상 걸을 수 있는 점) 도착 지점으로 좌표만 맞추고
+  // idle로 안전하게 떨어진다(크래시/멈춘 상태 없음).
+  // S28 — onIdle(선택) — idle 도착 직후 실행할 콜백(요구사항4 "다른 곳
+  // 탭" 재지정용: 배치 의자에서 일어난 뒤 그 탭 지점으로 곧장 걷는다).
+  // 기존 호출부(holdTimer 만료)는 onIdle 없이 그대로 호출해 동작 무변경.
+  function enterLeaving(seq, onIdle) {
+    if (seq !== seqRef.current) return
+    const cur = characterRef.current
+    const rect = cur.sitRect || BENCH
+    const rawArrival = benchArrivalPoint(rect)
+    const obstacles = obstaclesWithPlacements(placementsRef.current) // Phase C — 배치물도 장애물
+    const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y, obstacles)
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
+    if (!path || path.length === 0) {
+      // 도달 불가 — Stage 5 감사(2026-09-23)로 확인: benchSeatPoint의 좌석
+      // 좌표는 findPath 내부에서 항상 nearestWalkablePoint로 먼저 보정되고,
+      // arrival도 이미 걸을 수 있는 칸(benchInteraction.js 계약)이라, 현재
+      // OBSTACLES 픽스처(walkGrid.js)로는 이 분기가 실제로 실행되지 않는다
+      // (증명 불가능한 이론상 방어 코드 — walkGrid.js OBSTACLES가 바뀌어
+      // 좌석 주변을 완전히 봉쇄하는 경우에만 도달). 이전 버전은 이 분기에서
+      // phase:'leaving'과 phase:'idle'을 두 번의 별도 setState로 나눠
+      // 호출했는데, 같은 동기 스택 안의 연속 setState는 React 18 자동
+      // 배칭으로 한 커밋에 묶여 'leaving'이 화면에 단 한 프레임도 그려지지
+      // 못하고 idle로 즉시 덮인다(walkLeg 주석의 phaseLabel 버그와 동일
+      // 클래스 — 그 버그는 실측 FAIL로 확인·수정했지만 이 분기는 현재
+      // 도달 불가라 같은 방식으로 재현할 수 없다). 이 분기가 실제로
+      // 실행되더라도 'leaving' 프레임이 안 보이는 것 자체가 사용자에게
+      // 관측 가능한 오류는 아니다(최종 idle 위치는 정확) — 그래도 실행되지
+      // 않는 setState 두 번을 남겨 미래에 혼동을 주지 않도록 단일 호출로
+      // 정리한다(동작 변화 없음, 도달 시나리오가 없어 스스로 검증도 못하는
+      // 코드를 놔두지 않는다).
+      applyIfActive(seq, (c) => ({ ...c, phase: 'idle', leftPct: arrival.x, topPct: arrival.y, sitTargetKey: null, sitRect: null }))
+      if (onIdle) onIdle()
+      return
+    }
+    // phase:'leaving'은 walkPath의 phaseLabel 인자로만 세팅한다(walkLeg 주석
+    // 참고 — 별도로 미리 setState하면 곧바로 뒤따르는 walkPath의 setState와
+    // 같은 배치로 묶여 화면에 한 번도 그려지지 못하고 덮이는 버그가 있었다,
+    // 실측 FAIL로 발견).
+    walkPath(path, seq, 'leaving', () => {
+      applyIfActive(seq, (c) => ({ ...c, phase: 'idle', sitTargetKey: null, sitRect: null }))
+      if (onIdle) onIdle()
+    })
+  }
+
+  // S28(2026-09-30, 요구사항4) — 배치 의자 착석 중 탭. 고정 벤치는 착석
+  // 중 모든 탭을 무시하는 기존 규칙을 그대로 유지한다(요구사항6, 이 함수는
+  // sitTargetKey가 'placed:'로 시작할 때만 호출된다) — 배치 의자만 다른
+  // 규칙: 같은 의자 재탭이면 그냥 일어나고(redirectPoint 없음), 그 외
+  // 탭이면 일어난 뒤 그 지점으로 곧장 걷는다(leaving→idle→walking).
+  // phase가 이미 'leaving'(기립 중)이면 아무 것도 하지 않는다(기립 도중
+  // 재탭에 대한 재지정은 이번 최소 구현 범위 밖 — 기립이 끝나면 idle이라
+  // 그 다음 탭부터는 정상 동작).
+  // 리뷰 대응(2026-10-01, F4) — 인자를 좌표가 아니라 onIdle 콜백으로 바꿨다:
+  // 이전엔 기립 후 무조건 startPlainWalk(탭 지점)이라, 앉은 채 건물/다른
+  // 의자를 탭하면 그 앞까지만 걷고 상점이 안 열리거나 안 앉았다. 호출부가
+  // idle 탭과 같은 4분기 분류(dispatchTap)를 넘긴다.
+  function standUpFromPlacedSeat(onIdle) {
+    if (characterRef.current.phase !== 'sitting') return
+    clearHoldTimer()
+    const seq = seqRef.current
+    enterLeaving(seq, onIdle || undefined)
+  }
+
+  // S28(요구사항5) — 지금 걷고 있거나(pendingSit) 앉아있는 좌석이 바로
+  // itemId(배치 의자)면 즉시 해제하고 idle로 되돌린다. seqRef를 증가시켜
+  // 이미 예약된 walk-to-seat/leaving 타이머를 전부 무효화한다(헤더 주석
+  // "seq 카운터" 참고) — 떠 있는 캐릭터/좀비 타이머가 남지 않는다. 대상이
+  // 아니면 완전히 no-op(고정 벤치는 sitTargetKey가 'bench'라 절대 매치되지
+  // 않음 — 요구사항6 무변경).
+  function interruptSitIfTargeting(itemId) {
+    const cur = characterRef.current
+    if (cur.sitTargetKey !== `placed:${itemId}`) return
+    seqRef.current += 1
+    clearWalkTimer()
+    clearHoldTimer()
+    updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null }))
+  }
+
+  // S28(요구사항2) — 탭 지점이 배치 의자 하나의 rect(+ 44px 하한 패딩) 안인지.
+  // 고정 벤치와 동일한 hit-test(isBenchTap/benchTapPad)를 rect만 바꿔
+  // 재사용한다(새 판정 로직 없음). 슬롯은 겹치지 않으므로(testProto25dPlacedObstacles.mjs
+  // "슬롯끼리 겹치지 않음") 최대 1개만 매치된다.
+  function findTappedPlacedSlot(point, groundPx) {
+    for (const pl of placementsRef.current) {
+      const slot = PLACEMENT_SLOTS.find((sl) => sl.id === pl.slotId)
+      if (!slot) continue
+      const r = placedObstacleRect(slot)
+      if (isBenchTap(point, r, benchTapPad(r, groundPx))) return { pl, rect: r }
+    }
+    return null
+  }
+
+  // 언마운트 시 예약된 타이머 정리(setState-after-unmount 방지, TownScene.jsx
+  // interactionTimerRef cleanup과 동일 관례) — walkTimerRef/holdTimerRef
+  // 둘 다 정리한다(Stage 4 — 착석 유지 타이머가 새로 추가됨). 리뷰 수정
+  // 1차 — shopCloseFallbackTimerRef(가게 닫기 세이프티 타이머)도 함께
+  // 정리한다.
+  // A8(2026-10-01 모바일 감사) — 언마운트 시 우리 마커(가게/배치/내 물건)가 히스토리
+  // 맨 위에 남아 있으면 제자리 교체(replaceState, 이동 없음)로 지운다 — 고아 마커를
+  // 남기면 이후 뒤로가기가 다른 화면의 popstate로 잘못 읽힌다.
+  useEffect(() => () => {
+    clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack(); releaseMyItemsBack()
+    try {
+      const s = window.history.state
+      if (s && (s.proto25dShop || s.proto25dPlace || s.proto25dMyItems)) window.history.replaceState(null, '')
+    } catch { /* 무시 */ }
+  }, [])
+
+  // 탭 지점 분류 — 벤치 > 배치 의자 > 건물 순(예전엔 handleGroundPointerUp
+  // 본문에 인라인). 리뷰 대응(2026-10-01, F4)으로 추출: 앉아 있다 일어난 뒤
+  // 재지정(standUpFromPlacedSeat onIdle)도 idle 탭과 똑같이 분류해야 해서 두
+  // 경로가 이 함수 하나를 공유한다. 배치 모드 여부는 onIdle 클로저가 낡은
+  // 렌더의 placingItemId를 잡지 않도록 placingRef.current로 읽는다.
+  function classifyTap(rawPoint, groundPx) {
+    const tapPad = benchTapPad(BENCH, groundPx)
+    const tappedBench = isBenchTap(rawPoint, BENCH, tapPad)
+    // S28(요구사항2) — 배치 의자 탭(벤치가 아닐 때만 검사 — 슬롯은 벤치와
+    // 겹치지 않지만 우선순위를 명확히 고정).
+    const tappedPlaced = tappedBench ? null : findTappedPlacedSlot(rawPoint, groundPx)
+    // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물 탭(벤치/배치 의자가
+    // 아닐 때만 검사 — 씬 상 겹치지 않지만 우선순위를 명확히 고정, 위
+    // tappedPlaced와 동일한 관례).
+    // 리뷰 대응(2026-10-01, F1) — 배치 모드 중엔 건물 탭을 상점 의도로 치지
+    // 않는다(일반 걷기). 이전엔 입구까지 걸어가 놓고 도착 시 handleEnterShop의
+    // placingRef 가드에 막혀 아무 것도 안 열려, 캐릭터가 문 앞에서 그냥 멈추는
+    // 막다른 길이었다. 가드 자체는 이중 방어선으로 그대로 둔다.
+    const tappedShop = (tappedBench || tappedPlaced || placingRef.current) ? null : findTappedShop(rawPoint, groundPx)
+    // 미션 표지판 — 벤치/배치 의자/건물이 아닐 때만, 배치 모드 중엔 제외(건물과 동일 관례).
+    const tappedMission = (tappedBench || tappedPlaced || tappedShop || placingRef.current || missionSpots.length === 0)
+      ? null : findTappedMissionSpot(rawPoint, groundPx, missionSpots)
+    return { tappedBench, tappedPlaced, tappedShop, tappedMission }
+  }
+
+  // 표지판 탭/키보드 → 표지판 오른쪽 앞 도착 지점까지 일반 걷기(도착해도 자동 시작 없음,
+  // "공원 미션 시작" 버튼만 뜬다). 일반 걷기 재사용이라 새 pending 상태가 없다.
+  function startWalkToMission(spot) {
+    const a = missionArrival(spot)
+    if (!a) return
+    const p = nearestWalkablePoint(a.x, a.y, obstaclesWithPlacements(placementsRef.current))
+    startPlainWalk(p)
+  }
+
+  // 분류된 탭 하나를 실제 걷기로 옮기는 4분기 — idle 탭과 기립 후 재지정 공용.
+  function dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop, tappedMission }) {
+    if (tappedBench) {
+      startWalkToBench()
+    } else if (tappedPlaced) {
+      startWalkToPlacedSeat(tappedPlaced.pl, tappedPlaced.rect)
+    } else if (tappedShop) {
+      startWalkToShop(tappedShop)
+    } else if (tappedMission) {
+      startWalkToMission(tappedMission)
+    } else {
+      startPlainWalk(rawPoint)
+    }
+  }
+
+  function handleGroundPointerDown(e) {
+    pendingShopFocusRef.current = false // F2 — 아이가 이미 바닥을 눌렀으면 가게 버튼으로 포커스를 옮기지 않는다
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    // 2026-10-01 모바일 감사(A1) — 누른 순간의 바닥 rect도 함께 저장한다.
+    // 산책 모드에선 바닥이 카메라 transform을 달고 있어 press 동안에도 계속
+    // 움직이는데(~150–200px/s), pointerup 시점의 rect로 world %를 계산하면
+    // 100–150ms 눌림에 15–30px 오차가 생겨 44px 타겟을 빗나간다(걷는 중
+    // 재지정에서 특히). 아이가 "누른" 위치는 down 좌표+down rect다.
+    const downRect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
+    pointerDownRef.current = { pointerId: e.pointerId, downX: e.clientX, downY: e.clientY, downRect }
+  }
+
+  function handleGroundPointerUp(e) {
+    const start = pointerDownRef.current
+    pointerDownRef.current = null
+    if (!start || start.pointerId !== e.pointerId) return
+    try { e.currentTarget.releasePointerCapture?.(e.pointerId) } catch { /* 이미 해제됨 — 무시 */ }
+    // 2026-09-26(Phase 2, 가게 경험 v1) — 가게가 열려있는 동안은 바닥 탭이
+    // 이동을 전혀 일으키지 않는다(요구사항 — 오버레이가 위에 떠 있어도
+    // 바닥 포인터 핸들러 자체는 여전히 등록돼 있으므로 여기서 명시적으로
+    // 막는다). 캐릭터 위치/방향은 이 return으로 인해 전혀 갱신되지 않아
+    // 그대로 보존된다.
+    // F5 — "내 물건" 패널이 열려있는 동안도 가게와 동일하게 바닥 탭을 무시한다
+    // (패널이 전체 화면 오버레이라 실제로는 겹쳐 닿지 않지만, 명시적으로 막아
+    // 이 화면의 기존 shopOpen 관례와 동일하게 방어한다).
+    if (shopOpen || myItemsOpen) return
+    const dist = Math.hypot(e.clientX - start.downX, e.clientY - start.downY)
+    if (dist >= DRAG_THRESHOLD_PX) return // 스와이프/스크롤 제스처로 판정 — 걷기 시작 안 함.
+    const rect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
+    if (!rect || rect.width <= 0 || rect.height <= 0) return
+    // A1 — 점 좌표는 down 스냅샷(좌표+rect)에서, 크기(groundPx)는 fresh rect에서.
+    const pr = start.downRect && start.downRect.width > 0 && start.downRect.height > 0 ? start.downRect : rect
+    const rawLeftPct = ((start.downX - pr.left) / pr.width) * 100
+    const rawTopPct = ((start.downY - pr.top) / pr.height) * 100
+    const rawPoint = { x: rawLeftPct, y: rawTopPct }
+
+    const cur = characterRef.current
+
+    // Phase C — 배치 모드에서 빈 슬롯 탭(벤치와 같은 world 좌표 hit-test,
+    // 44px 하한 패딩). idle이고 캐릭터가 그 슬롯 rect 밖에 있을 때만 배치하고,
+    // 아니면 일반 걷기로 흘려보낸다(캐릭터가 배치물 안에 갇히지 않게).
+    // F1 — walking 중에도 배치.
+    // F5(2026-09-29, 옮기기) — placingItemId가 가리키는 아이템이 이미
+    // placements에 있으면 "이동"이다(같은 슬롯 탭 판정을 그대로 재사용해
+    // 다른 빈 슬롯으로 옮긴다). 같은 tick 두 번째 탭(빠른 재탭) 방지는
+    // placeActionDoneRef(이 배치 세션에서 이미 슬롯 탭 1건을 처리했는지)로
+    // 판정한다 — 이전의 멤버십 기반 가드는 "이동"에서 시작부터 항상 참이라
+    // 이동 자체를 막아버렸다(위 placeActionDoneRef 선언부 주석 참고).
+    // S28(요구사항5, 순서 변경) — 이 배치 모드 블록을 sitting/leaving 게이트
+    // 보다 앞으로 옮겼다("절차" 참고) — 그렇지 않으면 "앉아 있는 채로 내 물건
+    // 패널에서 옮기기"가 슬롯 탭 자체를 게이트에 가로채여 절대 완료되지
+    // 못한다(이 세션이 repro로 직접 재현). 이 블록이 실제로 슬롯을 찾아
+    // 처리하는 경우에만 return하고, 그 외(배치 모드가 아니거나 슬롯을
+    // 못 찾음)엔 아래로 흘러 sitting/leaving 게이트를 그대로 통과한다 —
+    // placingItemId가 없는 모든 기존 시나리오(S8/S9/S13 등)는 이 블록이
+    // 조건 자체를 타지 않아(`if (placingItemId ...)`가 false) 동작이
+    // 100% 그대로다.
+    if (placingItemId && !placeActionDoneRef.current) {
+      const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
+      const tappedSlots = PLACEMENT_SLOTS.filter((sl) => {
+        if (placementsRef.current.some((pl) => pl.slotId === sl.id)) return false // ref — 같은 tick 연속 탭 이중 배치 방지(이동 중엔 자기 자신의 현재 slot도 제외)
+        const r = placedObstacleRect(sl)
+        return isBenchTap(rawPoint, r, benchTapPad(r, groundPx))
+      })
+      const slot = tappedSlots.find((sl) => classifyPoint(cur.leftPct, cur.topPct, [placedObstacleRect(sl)]) === 'walkable')
+      // F2 — 배치 안 된 탭은 부드러운 힌트만(아래 일반 걷기는 그대로 진행).
+      if (!slot) flash(setPlaceHint, placeHintTimerRef, tappedSlots.length ? '내가 서 있는 칸이에요. 다른 칸을 눌러요' : '노란 칸을 눌러요. 안 보이면 땅을 눌러 걸어가요', PLACE_HINT_MS)
+      if (slot) {
+        placeActionDoneRef.current = true
+        const moving = placementsRef.current.some((pl) => pl.itemId === placingItemId)
+        const next = moving
+          ? movePlacement(placementsRef.current, placingItemId, slot.id)
+          : [...placementsRef.current, { itemId: placingItemId, slotId: slot.id }]
+        placementsRef.current = next
+        setPlacements(next)
+        // S28(요구사항5) — 이동 중인 바로 그 아이템에 지금 앉아있거나(sitting)
+        // 그리로 걸어가는 중(pendingSit)이면 즉시 해제(idle) — 옮긴 뒤에도
+        // 캐릭터가 옛 자리에 떠 있지 않게 한다. moving이 아니면(새 배치) 그
+        // itemId는 아직 어디에도 앉을 수 없었으므로 항상 no-op.
+        if (moving) interruptSitIfTargeting(placingItemId)
+        endPlacement()
+        showTapRipple(slot.anchor) // F2 — 배치 지점 리플(reduced-motion이면 showTapRipple이 건너뜀)
+        flash(setPlaceToast, placeToastTimerRef, moving ? '벤치를 옮겼어요!' : '벤치를 놓았어요! 🎉', PLACE_TOAST_MS)
+        if (characterRef.current.phase === 'walking') {
+          // F1 — 걷는 중 배치: 진행 중 경로는 새 장애물을 모르므로 걷기를 끊고
+          // 현재 논리 위치(구간 목표점 — 위에서 슬롯 rect 밖임을 확인)에서 idle.
+          // ponytail: 이미 시작된 CSS 구간 전이는 끝까지 그려져 그 구간이 슬롯을
+          // 스치면 시각적으로 잠깐 겹칠 수 있음 — 필요 시 구간/rect 교차 검사 추가.
+          // characterRef.current로 다시 읽는다(리뷰 수정 — 이전 주석은 "바로 위
+          // interruptSitIfTargeting의 setState가 이 시점에 이미 반영돼 있다"고
+          // 단정했는데 부정확했다: React의 배치 처리 타이밍상 그 setState의
+          // updater가 이 동기 코드 안에서 이미 실행됐다는 보장은 없다 — 즉 이
+          // 시점의 characterRef.current.phase가 interruptSitIfTargeting 이전
+          // 값(stale)일 수도, 이후 값(idle)일 수도 있다. 어느 쪽이든 안전하다:
+          // interruptSitIfTargeting이 실제로 발동했다면 목표 phase는 이미
+          // 'idle'이라 아래 블록이 도는지 여부와 무관하게 최종 phase는 'idle'로
+          // 수렴하고, 발동하지 않았다면(sitTargetKey 불일치) 이 read는 cur(핸들러
+          // 시작 시점 스냅샷)와 사실상 같은 값이다 — 최악의 경우도 idle을 한 번
+          // 더(무해하게) 세팅하는 정도라, cur 대신 이 ref를 쓰는 것 자체가
+          // "정확한 동기 반영"을 전제하지 않고도 더 안전한 선택이다.
+          // 리뷰 대응(2026-09-30, 2차) — 걷는 중이 좌석 목적지(pendingSit)만이
+          // 아니라 상점 목적지(pendingShop)일 수도 있다(건물로 걷는 중에도
+          // 배치가 가능 — 위 handleGroundPointerUp 배치 블록은 phase를
+          // 검사하지 않는다). pendingSit/sitTargetKey/sitRect만 지우고
+          // pendingShop/shopTargetKey를 안 지우면, data-walk-target이
+          // "shop:demo-building"로 고장난 채 남는다 — 이 캐릭터는 이제
+          // idle이고 상점과 전혀 무관한데도 DOM은 여전히 "건물로 걷는
+          // 중"이라고 거짓 신호를 낸다(startPlainWalk/startWalkToSeat이
+          // 새 탭마다 이 두 필드를 함께 지우는 것과 동일한 이유 — S29
+          // stale-key 패턴과 동형). 실측 재현 — S30y-B.
+          seqRef.current += 1
+          clearWalkTimer()
+          updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null, pendingShop: false, shopTargetKey: null }))
+        }
+        return
+      }
+    }
+
+    // Stage 4 정책(헤더 주석 참고, 항목7/8) — sitting/leaving 동안은 모든
+    // 탭을 무시한다(idle로 돌아올 때까지 입력 잠금). S28(요구사항4) — 배치
+    // 의자(sitTargetKey가 'placed:'로 시작)에 앉아 있을 때만 예외: 어떤
+    // 탭이든 일어나게 한다(같은 의자 재탭은 제자리에서만, 다른 곳 탭은
+    // 일어난 뒤 그 지점으로 재지정). 고정 벤치(sitTargetKey==='bench')는
+    // 이 분기를 타지 않아 기존 규칙 그대로(요구사항6). 이 게이트를 위 배치
+    // 모드 블록보다 뒤로 옮긴 이유는 그 블록의 새 주석(S28, 요구사항5)
+    // 참고.
+    if (cur.phase === 'sitting' || cur.phase === 'leaving') {
+      if (cur.phase === 'sitting' && cur.sitTargetKey && cur.sitTargetKey.startsWith('placed:')) {
+        const groundPxSit = { groundWidthPx: rect.width, groundHeightPx: rect.height }
+        const tappedSameChair = findTappedPlacedSlot(rawPoint, groundPxSit)
+        const sameChair = !!tappedSameChair && `placed:${tappedSameChair.pl.itemId}` === cur.sitTargetKey
+        standUpFromPlacedSeat(sameChair ? null : () => dispatchTap(rawPoint, classifyTap(rawPoint, groundPxSit)))
+      } else if (cur.sitTargetKey === 'bench') {
+        // 2026-10-01 모바일 감사(A4) — 규칙(탭 무시)은 그대로, 피드백만 추가.
+        flash(setPlaceHint, placeHintTimerRef, '앉아 있어요. 잠깐만요', PLACE_HINT_MS)
+      }
+      return
+    }
+
+    // 벤치 hit-test는 항상 world 좌표로만 한다(벤치 이미지 자체는
+    // pointer-events:none — 별도 onClick 경로를 만들지 않는다는 요구사항,
+    // 아래 렌더 부분 참고). 패딩은 고정값이 아니라 이 탭에서 이미 구한
+    // 바닥 레이어의 실제 렌더 픽셀 크기(rect)로 매번 다시 계산한다(모바일
+    // 시각 보정 — 벤치 렌더 크기가 44px 미만인 좁은 뷰포트에서도 유효 탭
+    // 타겟이 44x44px 이상이 되도록, 새 이벤트 경로 없이 이 hit-test 단계의
+    // 패딩 크기만 조정한다).
+    const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
+    const { tappedBench, tappedPlaced, tappedShop, tappedMission } = classifyTap(rawPoint, groundPx)
+    const tappedSeatKey = tappedBench ? 'bench' : (tappedPlaced ? `placed:${tappedPlaced.pl.itemId}` : null)
+
+    // 항목7 — 이미 좌석(벤치든 배치 의자든)을 향해 걷는 중(pendingSit)에
+    // 같은 좌석을 다시 탭하면 중복 시퀀스를 만들지 않고 무시한다.
+    if (cur.phase === 'walking' && cur.pendingSit && tappedSeatKey && tappedSeatKey === cur.sitTargetKey) return
+    // 마을 산책형 상점 방문 2단계(요구사항4) — 같은 건물로 걷는 중에 그
+    // 건물을 다시 탭하면(더블탭) 위와 동일하게 중복 시퀀스를 만들지 않고
+    // 무시한다(목록 기반이라 건물이 늘어도 그대로 동작).
+    if (cur.phase === 'walking' && cur.pendingShop && tappedShop && `shop:${tappedShop.id}` === cur.shopTargetKey) return
+
+    // 그 외의 모든 경우(idle에서의 첫 탭이든, walking 중 재지정이든) — 새
+    // 탭이 항상 우선한다: clamp(월드 경계) + 장애물 보정 + 경로탐색은
+    // findPath(일반 바닥)/nearestWalkablePoint(벤치)에 위임한다(이 컴포넌트는
+    // 좌표만 계산해 넘긴다 — 소유권 분리, walkGrid.js/pathfinding.js/
+    // benchInteraction.js가 유일한 진실 원천).
+    //
+    // Phase 6A — 이 지점까지 도달한 탭은(sitting/leaving 잠금·pendingSit
+    // 중복 무시를 이미 통과) "걷기를 실제로 시작시키는 유효한 탭"이므로
+    // 여기서 탭 리플을 띄운다(항목C2 — startPlainWalk/startWalkToBench와
+    // 같은 지점, 마우스/터치 공용 — 이 핸들러가 두 입력 모두를 받는다).
+    showTapRipple({ x: rawLeftPct, y: rawTopPct })
+    dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop, tappedMission })
+  }
+
+  function handleGroundPointerCancel(e) {
+    if (pointerDownRef.current && pointerDownRef.current.pointerId === e.pointerId) pointerDownRef.current = null
+  }
+
+  // Stage 5 감사(2026-09-23) 추가 — pointercancel과 동일한 정리를
+  // lostpointercapture에도 건다. 브라우저가 setPointerCapture(위
+  // handleGroundPointerDown)로 얻은 캡처를 pointerup/pointercancel 없이
+  // 스스로 회수하는 경로(예: 동시 터치 중 다른 엘리먼트가 캡처를 가로채는
+  // 드문 케이스)가 있으면, pointerDownRef가 그 down 시점 좌표를 계속 들고
+  // 있다가 나중에 무관한 pointerup과 잘못 짝지어질 수 있다 — 이 핸들러가
+  // 없어도 다음 pointerdown이 항상 pointerDownRef를 덮어써 자가 치유되긴
+  // 하지만(요구사항13 무변경, 새 이동 경로 아님), 캡처 상실 시점에 즉시
+  // 정리해 그 좁은 창을 없앤다.
+  function handleGroundLostPointerCapture(e) {
+    if (pointerDownRef.current && pointerDownRef.current.pointerId === e.pointerId) pointerDownRef.current = null
+  }
+
+  // 2026-09-26(Phase 2, 가게 경험 v1) — 가게 열기. shopBusyRef로 같은 tick
+  // 안의 중복 호출(빠른 더블클릭)만 막는다 — 정상적인 "닫았다가 다시
+  // 열기"는 막지 않는다(다음 tick에 자동 해제). history.pushState로 "가게
+  // 화면"이라는 새 히스토리 항목을 만들어, 브라우저/기기의 뒤로가기로도
+  // 가게가 닫히게 한다(모바일 하드웨어 백 버튼 등). pushState 자체가
+  // 실패해도(사설/구식 환경) 오버레이는 그대로 연다 — history 연동은
+  // "있으면 더 좋은" 부가 기능이지 열기 자체의 전제조건이 아니다.
+  function handleEnterShop() {
+    // 리뷰 대응(2026-09-30, 2차) — 도착 콜백(startWalkToShop)이 이 함수를
+    // 직접 호출해 "가게 들어가기" 버튼의 JSX 렌더 게이트(!placingItemId &&
+    // !myItemsOpen)를 우회한다. 배치 모드/"내 물건" 패널이 이미 자기
+    // 히스토리 항목(proto25dPlace/proto25dMyItems)을 쌓아 둔 상태에서 그
+    // 위에 가게가 또 pushState하면, 배치 취소(뒤로가기 1회)가 배치만
+    // 지우고 가게는 그대로 남아 다음에 가게를 닫을 때 자기 마커를 못 찾는
+    // 고아 히스토리 항목이 생긴다(실측 재현 — S30y-A1/A2). placingRef/
+    // myItemsOpenRef(둘 다 popstate 리스너용으로 이미 최신값을 미러링 중)
+    // 를 그대로 재사용해 이 가드에도 추가한다 — 배치/패널이 열려 있으면
+    // 도착해도 열지 않는다. 걷기 의도(pendingShop/shopTargetKey)는
+    // startWalkToShop의 도착 콜백이 이 함수 호출 여부와 무관하게 항상
+    // 먼저 지우므로(이 함수 위 호출부 참고), 이 가드에 걸려 열리지
+    // 않아도 캐릭터는 정상적으로 idle로 남고 다음 탭으로 자유롭게
+    // 재지정된다 — "그 자리에서 멈추고 조용히 실패"가 아니라 "의도만
+    // 취소되고 나머지는 평소와 동일".
+    if (shopBusyRef.current || shopOpen || placingRef.current || myItemsOpenRef.current || performance.now() < shopReentryBlockedUntilRef.current) return
+    shopBusyRef.current = true
+    pendingOpenMyItemsAfterCloseRef.current = false // F2 — 새 가게 세션은 이전 "내 물건 보기" 예약을 물려받지 않는다.
+    // 마을 산책형 상점 방문 2단계(요구사항1) — 걷는 중(walking)에 열리면
+    // (도착 콜백 경로는 이미 idle이라 여기선 무해한 재확인, 버튼을 직접
+    // 눌렀는데 마침 이동 경로가 입구 반경을 스쳐 지나가는 드문 경우가
+    // 실제 대상) 그 즉시 지금 leg 목표 지점에서 멈춰 idle로 고정한다 —
+    // 열려있는 동안 캐릭터가 계속 걷는 것처럼 보이지 않게 한다. seqRef를
+    // 올려 이미 예약된 걷기 타이머를 전부 무효화한다(헤더 주석 "seq
+    // 카운터"와 동일 원칙). ponytail: sitting/leaving 중엔 "가게 들어가기"
+    // 버튼 자체가 안 보여 이 경로에 들어오지 않음 — 필요해지면 동일하게 확장.
+    if (characterRef.current.phase === 'walking') {
+      seqRef.current += 1
+      clearWalkTimer()
+      clearHoldTimer()
+      updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null, pendingShop: false, shopTargetKey: null }))
+    }
+    setShopOpen(true)
+    try { window.history.pushState({ proto25dShop: true }, '') } catch { /* 무시 — 오버레이 자체는 그대로 열린다 */ }
+    setTimeout(() => { shopBusyRef.current = false }, 0)
+  }
+
+  // 실제로 오버레이를 닫는 지점 — popstate 경로와 직접 호출 경로(+ 세이프티
+  // 타이머 경로, 리뷰 수정 1차)가 모두 이 함수 하나로 수렴한다(여러 갈래가
+  // 각자 setShopOpen을 부르면 상태가 갈라질 위험이 있어 단일 통로로 합침).
+  // cameraPosRef를 null로 리셋해 "산책 모드" rAF 루프가 다음 프레임에 즉시
+  // 재스냅하게 한다(walkMode OFF 전환 effect와 동일한 이유 — 인라인
+  // transform 잔상 방지, 위 walkMode effect 주석 참고). 함수형 업데이터로
+  // 이미 닫혀있으면 아무 것도 하지 않는다(멱등 — popstate가 중복 발화해도
+  // 안전). 리뷰 수정 1차 — 재진입 가드(shopBusyRef)는 이제 "실제로 닫히는
+  // 시점"(이 함수가 cur:true -> false로 전이시킬 때)에만 풀린다 — 열기
+  // (handleEnterShop)는 그대로 다음 tick에 풀리므로 무관.
+  function closeShopNow() {
+    clearShopCloseFallbackTimer()
+    setShopOpen((cur) => {
+      if (!cur) return cur
+      cameraPosRef.current = null
+      shopBusyRef.current = false
+      return false
+    })
+    // 2026-10-01 idle rAF settle-stop — 멈춘 루프를 깨워 재스냅(업데이터 밖: 렌더 중/이중 호출 안전, start()는 멱등).
+    cameraLoopStartRef.current?.()
+    setShopClosing(false)
+    // 2026-09-26 수정 3차 — 위 setShopOpen 함수형 업데이터 내부에서 세팅한
+    // 지역 변수(예: didClose)는 React 18 배칭 하에서 업데이터가 나중에(이
+    // 호출이 끝난 뒤) 실행되므로, 그 결과를 이 자리에서 동기적으로 읽을 수
+    // 없다 — 그렇게 짜여 있던 이전 버전은 재진입 가드가 죽은 코드였다(항상
+    // false로 보여 아래 블록이 실행되지 않음, verify:e2e S18 항목f 회귀).
+    // 그래서 이 블록을 조건 없이 매번 실행한다. closeShopNow가 이미 닫힌
+    // 상태에서 중복 호출돼도(popstate 중복 발화 등) 400ms 입장 차단을 한 번
+    // 더 거는 것은 무해하다(가게가 이미 닫혀 있으니 재진입을 막는 것 자체가
+    // 목적에 부합, 창만 살짝 늘어날 뿐).
+    shopReentryBlockedUntilRef.current = performance.now() + SHOP_REENTRY_GUARD_MS
+    setShopReentryBlocked(true)
+    clearShopReentryTimer()
+    shopReentryTimerRef.current = setTimeout(() => {
+      shopReentryTimerRef.current = null
+      setShopReentryBlocked(false)
+    }, SHOP_REENTRY_GUARD_MS)
+  }
+
+  // 뒤로가기 버튼(ProtoShopScreen)/Escape 키가 공유하는 닫기 요청 — 우리가
+  // pushState로 쌓아둔 히스토리 항목이 여전히 맨 위(history.state에 우리
+  // 마커가 있음)면 history.back()으로 "진짜 뒤로가기"를 흉내내(popstate가
+  // 발화해 closeShopNow를 부른다) 다음에 사용자가 또 뒤로가도 엉뚱한
+  // 화면으로 튀지 않게 한다. 마커가 없으면(예: pushState가 애초에 실패한
+  // 환경) history.back() 없이 바로 닫는다(직접 닫기).
+  //
+  // 리뷰 수정 1차(코드 리뷰 지적 — history.back()이 비동기 popstate로
+  // 도착하는데 이전엔 shopBusyRef를 setTimeout(0)로 즉시 풀어버려, popstate
+  // 도착 전에 빠른 재탭/Escape가 history.back()을 한 번 더 호출해 히스토리
+  // 엔트리를 이중으로 소비하는 경쟁이 있었다) — history.back() 분기에서는
+  // shopBusyRef를 여기서 풀지 않는다. 대신 popstate가 실제로 도착해
+  // closeShopNow가 닫힐 때(위 함수)에만 풀린다. popstate가 끝내 오지 않는
+  // 드문 환경을 대비해 ~600ms 세이프티 타이머로 강제로 직접 닫는다(그
+  // 시점에도 closeShopNow를 거치므로 busy 해제는 여전히 그 함수 하나가
+  // 담당 — 두 갈래가 각자 풀지 않음). 동기적으로 끝나는 나머지 두 경로
+  // (마커 없음/history.back() 자체가 throw)는 closeShopNow를 이 자리에서
+  // 바로 호출하므로 busy도 그 즉시 풀린다(비동기 창이 없어 추가 처리 불필요).
+  function requestCloseShop() {
+    if (shopBusyRef.current || !shopOpen) return
+    shopBusyRef.current = true
+    let ourStateOnTop = false
+    try { ourStateOnTop = !!(window.history.state && window.history.state.proto25dShop) } catch { ourStateOnTop = false }
+    if (ourStateOnTop) {
+      try {
+        window.history.back()
+        setShopClosing(true)
+        clearShopCloseFallbackTimer()
+        shopCloseFallbackTimerRef.current = setTimeout(() => {
+          shopCloseFallbackTimerRef.current = null
+          closeShopNow() // popstate가 안 왔다 — 세이프티 폴백(위 주석 참고). busy/closing 해제는 closeShopNow가 담당.
+        }, 600)
+      } catch {
+        closeShopNow() // history.back() 자체가 던짐 — 동기 폴백, busy는 closeShopNow가 즉시 해제.
+      }
+    } else {
+      closeShopNow() // 히스토리 마커 없음 — 동기 직접 닫기, busy는 closeShopNow가 즉시 해제.
+    }
+  }
+
+  // popstate(브라우저/기기 뒤로가기, 또는 위 requestCloseShop의
+  // history.back() 호출) — 항상 "닫기"만 한다(새 pushState 없음, 요구사항
+  // 그대로). 의존성 배열 없이 마운트 시 1회만 등록 — closeShopNow가 함수형
+  // setShopOpen 업데이터를 쓰므로 클로저가 최신 shopOpen을 몰라도 안전하다
+  // (updateCharacter/applyIfActive와 동일한 "최신값은 업데이터 인자로"
+  // 원칙).
+  // F1 — 배치 모드 히스토리 항목. 열기/닫기 모두 shopBusyRef를 함께 본다
+  // (가게 닫기 back()이나 배치 back()이 도착하기 전 새 pushState가 끼어들어
+  // 엔트리를 엇갈리게 소비하는 것 방지 — 두 모드는 화면상 동시에 열리지 않는다).
+  // 리뷰 수정(2026-09-29, 항목4) — shopBusyRef가 아직 걸려있으면(직전
+  // 배치/가게/패널 닫기의 history.back()이 popstate로 도착하기 전, ≤600ms
+  // 창) 이 호출은 조용히 no-op였다. 호출부(특히 패널의 "놓기"/"옮기기")가
+  // 성공 여부를 몰라 무조건 패널을 닫아버리면, 탭은 아무 효과가 없는데
+  // 패널만 사라지는 유령 상태가 된다. boolean을 반환해 호출부가 실제
+  // 성공했을 때만 패널을 닫도록 한다(아래 JSX 참고).
+  function enterPlacement(itemId) {
+    if (shopBusyRef.current || shopOpen) return false
+    if (placingRef.current) return false // A9 — Enter 길게 누름 auto-repeat이 마커를 또 쌓지 않게
+    // A9 — 2초 미만 토스트가 배치 취소 뒤 다시 뜨지 않게
+    clearTimeout(placeToastTimerRef.current)
+    setPlaceToast(null)
+    setPlaceHint(null)
+    pendingShopFocusRef.current = false
+    placeActionDoneRef.current = false // F5 — 이 배치 세션은 아직 슬롯 탭을 처리하지 않았다(새 배치/이동 공통).
+    setPlacingItemId(itemId)
+    try {
+      // 리뷰 수정(항목3) — "내 물건" 패널에서 곧바로 배치 모드로 들어가는
+      // 경우, 패널이 이미 자신의 히스토리 항목(proto25dMyItems)을 쌓아 둔
+      // 상태다. 여기서 또 pushState하면 스택이 2단으로 깊어져 뒤로가기 한
+      // 번으로 배치 모드만 취소되고 패널이 떠 있던 것처럼 남는 엇갈림이
+      // 생긴다 — 대신 같은 항목의 표식만 배치 모드로 바꿔치기한다
+      // (replaceState). 표준 "🪑 배치하기" 버튼(패널 밖)에서 호출될 때는
+      // myItemsOpen이 이미 false이므로 기존과 동일하게 새 항목을 쌓는다.
+      // 리뷰 수정(2026-09-29, 항목2 — 2차 리뷰) — myItemsOpen(React state)만
+      // 보고 판단하면, 그 state와 실제 브라우저 히스토리 최상단이 어긋난
+      // 드문 경우(예: 다른 코드 경로가 먼저 그 항목을 소비했는데 아직
+      // setMyItemsOpen(false) 렌더가 반영되지 않은 순간)에도 무조건
+      // replaceState를 시도해 남의 히스토리 항목을 배치 모드로 바꿔치기하는
+      // 사고가 날 수 있다. 실제로 지금 최상단 항목이 proto25dMyItems인지
+      // 히스토리 자체에서 다시 확인한다.
+      let topIsMyItems = false
+      try { topIsMyItems = !!(window.history.state && window.history.state.proto25dMyItems) } catch { topIsMyItems = false }
+      if (topIsMyItems) window.history.replaceState({ proto25dPlace: true }, '')
+      else window.history.pushState({ proto25dPlace: true }, '')
+    } catch { /* 무시 — 배치 모드 자체는 그대로 */ }
+    return true
+  }
+  // F5(2026-09-29, 넣기) — 배치된 아이템을 가방으로 회수(placements에서
+  // 제거). 배치 모드로 들어가지 않는다(되돌릴 수 있는 즉시 동작이라 확인창
+  // 없음, 요구사항 그대로) — endPlacement/enterPlacement와 무관한 별도 통로.
+  // 패널도 함께 닫는다(요구사항3 — "🪑 배치하기가 다시 보임"이 넣기의 직접
+  // 결과여야 한다. 패널을 열어 두면 그 버튼이 myItemsOpen 게이트에 가려
+  // 보이지 않는다 — 재배치는 그 표준 배치하기 흐름을 다시 쓰면 된다).
+  // requestCloseMyItems를 써서(원시 setMyItemsOpen(false) 아님) 패널의
+  // 히스토리 항목도 함께 정리한다(리뷰 수정 항목3).
+  function handleRetrieve(itemId) {
+    const next = removePlacement(placementsRef.current, itemId)
+    if (next === placementsRef.current) return // 알 수 없는 itemId — no-op
+    placementsRef.current = next
+    setPlacements(next)
+    // S28(요구사항5) — 회수하는 바로 그 아이템에 지금 앉아있거나 그리로
+    // 걸어가는 중이면 즉시 해제(idle) — 치워진 의자 위에 캐릭터가 떠 있지
+    // 않게 한다(interruptSitIfTargeting 헤더 주석 참고).
+    interruptSitIfTargeting(itemId)
+    requestCloseMyItems()
+    flash(setPlaceToast, placeToastTimerRef, '벤치를 가방에 넣었어요', PLACE_TOAST_MS)
+  }
+  // 리뷰 수정(2026-09-29, 항목3) — "내 물건" 패널도 가게/배치 모드와 동일한
+  // 히스토리 소비 패턴(endPlacement/releasePlaceBack과 동형)을 쓴다.
+  function releaseMyItemsBack() {
+    if (myItemsBackFallbackTimerRef.current != null) {
+      clearTimeout(myItemsBackFallbackTimerRef.current)
+      myItemsBackFallbackTimerRef.current = null
+    }
+    if (!myItemsBackPendingRef.current) return
+    myItemsBackPendingRef.current = false
+    shopBusyRef.current = false
+  }
+  function openMyItems() {
+    if (shopBusyRef.current || shopOpen || placingItemId || myItemsOpenRef.current) return // A9 — 중복 pushState 방지
+    setMyItemsOpen(true)
+    try { window.history.pushState({ proto25dMyItems: true }, '') } catch { /* 무시 — 패널 자체는 그대로 */ }
+  }
+  // 닫기 버튼/Escape/넣기(회수) 공용 종료 — endPlacement와 동일한 모양
+  // (우리 마커가 맨 위면 history.back()으로 소비, popstate/600ms 세이프티
+  // 타이머까지 shopBusyRef를 걸어둔다). 패널이 배치 모드로 전환되는 경우
+  // (놓기/옮기기)는 이 함수를 거치지 않는다 — enterPlacement가 같은 항목을
+  // replaceState로 바꿔치기하므로 여기서 또 back()을 부르면 안 된다.
+  function requestCloseMyItems() {
+    setMyItemsOpen(false)
+    if (myItemsBackPendingRef.current) return
+    let ourStateOnTop = false
+    try { ourStateOnTop = !!(window.history.state && window.history.state.proto25dMyItems) } catch { ourStateOnTop = false }
+    if (!ourStateOnTop) return
+    try {
+      window.history.back()
+      myItemsBackPendingRef.current = true
+      shopBusyRef.current = true
+      myItemsBackFallbackTimerRef.current = setTimeout(releaseMyItemsBack, 600)
+    } catch { /* 무시 — 패널은 이미 닫힘 */ }
+  }
+  function releasePlaceBack() {
+    if (placeBackFallbackTimerRef.current != null) {
+      clearTimeout(placeBackFallbackTimerRef.current)
+      placeBackFallbackTimerRef.current = null
+    }
+    if (!placeBackPendingRef.current) return
+    placeBackPendingRef.current = false
+    shopBusyRef.current = false
+  }
+  // 취소 버튼/Escape/배치 성공 공용 종료 — requestCloseShop과 같은 방식으로
+  // 우리 마커가 맨 위면 history.back()으로 소비하고, popstate(또는 600ms
+  // 세이프티 타이머)가 올 때까지 shopBusyRef를 걸어둔다. 화면 상태는 즉시 종료.
+  function endPlacement() {
+    setPlacingItemId(null)
+    if (placeBackPendingRef.current) return
+    let ourStateOnTop = false
+    try { ourStateOnTop = !!(window.history.state && window.history.state.proto25dPlace) } catch { ourStateOnTop = false }
+    if (!ourStateOnTop) return
+    try {
+      window.history.back()
+      placeBackPendingRef.current = true
+      shopBusyRef.current = true
+      placeBackFallbackTimerRef.current = setTimeout(releasePlaceBack, 600)
+    } catch { /* 무시 — 배치 모드는 이미 종료됨 */ }
+  }
+
+  useEffect(() => {
+    function onPopState() {
+      if (placeBackPendingRef.current) { releasePlaceBack(); return } // 우리가 부른 back() — 배치 항목 소비 완료
+      if (myItemsBackPendingRef.current) { releaseMyItemsBack(); return } // 우리가 부른 back() — 패널 항목 소비 완료
+      if (placingRef.current) { setPlacingItemId(null); return } // 기기/브라우저 뒤로가기 — 배치만 취소
+      if (myItemsOpenRef.current) { setMyItemsOpen(false); return } // 기기/브라우저 뒤로가기 — 패널만 취소(리뷰 수정 항목3)
+      if (!shopOpenRef.current) return // A8 — 열린 게 없으면 무관한 popstate: closeShopNow의 400ms 재진입 차단을 걸지 않는다
+      closeShopNow()
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // Escape 키 — 가게가 열려있을 때만 닫기를 요청한다(요구사항). shopOpen에
+  // 의존해 매번 최신 requestCloseShop 클로저로 다시 배선한다(리스너 자체는
+  // 가벼워 재등록 비용이 무시할 만함, 이 파일의 다른 effect들과 동일 관례
+  // 수준).
+  // F1 — 배치 모드에서도 Escape = 배치 취소(뒤로가기와 같은 종료 경로).
+  // F5 — "내 물건" 패널이 열려있을 때도 Escape로 닫는다(요구사항6).
+  useEffect(() => {
+    if (!shopOpen && !placingItemId && !myItemsOpen) return undefined
+    function onKeyDown(e) {
+      if (e.key !== 'Escape') return
+      if (shopOpen) requestCloseShop()
+      else if (placingItemId) endPlacement()
+      else requestCloseMyItems() // 리뷰 수정 항목3 — 패널 히스토리 항목도 함께 정리
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [shopOpen, placingItemId, myItemsOpen])
+
+  // F5 — "내 물건" 패널 포커스 이동(요구사항6, F2와 동일한 prev-ref 관례).
+  // 이 effect를 아래 prevPlacingRef effect보다 먼저 선언해 둔다 — 패널의
+  // "놓기"/"옮기기" 버튼이 myItemsOpen=false와 placingItemId=itemId를 같은
+  // 클릭 핸들러 안에서 동시에 세팅할 때, React가 effect를 선언 순서대로
+  // 실행하므로 이 effect(먼저 실행, root/myItemsOpenBtnRef로 보내려 함)를
+  // 아래 배치 effect(나중에 실행, placeCancelRef로 보냄)가 항상 덮어써
+  // 최종적으로 취소 버튼에 포커스가 남는다(의도한 순서 — 패널을 거쳐 배치
+  // 모드로 들어간 경우 배치 모드의 포커스 규칙이 우선해야 한다).
+  const prevMyItemsOpenRef = useRef(false)
+  useEffect(() => {
+    const was = prevMyItemsOpenRef.current
+    prevMyItemsOpenRef.current = myItemsOpen
+    if (myItemsOpen && !was) (myItemsCloseRef.current || rootRef.current)?.focus()
+    else if (!myItemsOpen && was) myItemsOpenBtnRef.current?.focus()
+  }, [myItemsOpen])
+
+  // F2 — 포커스 이동. prev ref로 "상태가 실제로 바뀐 때"만 움직여 마운트 시엔 가져가지 않는다.
+  const prevPlacingRef = useRef(null)
+  useEffect(() => {
+    const was = prevPlacingRef.current
+    prevPlacingRef.current = placingItemId
+    if (placingItemId) placeCancelRef.current?.focus()
+    else if (was) (placeOpenRef.current || rootRef.current)?.focus()
+  }, [placingItemId])
+  const prevShopOpenRef = useRef(false)
+  useEffect(() => {
+    const was = prevShopOpenRef.current
+    prevShopOpenRef.current = shopOpen
+    if (was && !shopOpen) {
+      // 리뷰 대응(stage 3, 요구사항4) — "내 물건 보기" 예약이 있으면 가게
+      // 버튼 포커스 대신 그쪽을 우선한다(같은 "닫힘 완료" 신호를 서로 다른
+      // 두 다음 동작이 다투지 않게 배타적으로 분기).
+      if (pendingOpenMyItemsAfterCloseRef.current) {
+        pendingOpenMyItemsAfterCloseRef.current = false
+        openMyItems()
+      } else {
+        rootRef.current?.focus() // 가게 들어가기 버튼은 400ms 비활성 — 우선 root
+        pendingShopFocusRef.current = true
+      }
+    }
+  }, [shopOpen])
+  // 리뷰 대응(stage 3, 요구사항4) — ProtoShopScreen의 "🎒 내 물건 보기".
+  // requestCloseShop()과 완전히 동일한 닫기 경로를 그대로 태운다(뒤로가기
+  // 버튼과 다른 동작을 만들지 않는다) — 다음 열기는 위 effect가 닫힘
+  // 완료를 감지한 뒤에만 한다.
+  // 리뷰 대응(2026-10-01, F2) — requestCloseShop이 조용히 no-op인 조건(닫기
+  // 진행 중/이미 닫힘)에선 예약 플래그도 세팅하지 않는다. 이전엔 플래그만
+  // 남아 있다가 나중의 평범한 닫기(뒤로가기 등)가 내 물건 패널을 뜬금없이
+  // 열었다. handleEnterShop도 새 가게 세션 시작 시 플래그를 비운다.
+  function handleViewMyItemsFromShop() {
+    if (shopBusyRef.current || !shopOpen) return
+    pendingOpenMyItemsAfterCloseRef.current = true
+    requestCloseShop()
+  }
+  useEffect(() => {
+    // 재입장 가드 해제 시 예약이 남아 있으면(그 사이 바닥 탭/배치 진입 없음) 가게 버튼으로.
+    // (activeElement 비교는 못 쓴다 — 바닥 mousedown도 tabIndex=-1 root에 포커스를 준다.)
+    if (shopReentryBlocked || shopOpen || !pendingShopFocusRef.current) return
+    pendingShopFocusRef.current = false
+    shopEnterRef.current?.focus()
+  }, [shopReentryBlocked])
+
+  // Stage 4 — 'sitting' 단계에서만 z-index 계산에 topPct 대신 좌석 rect의
+  // y1을 넘긴다(ProtoCharacter.jsx 헤더 주석 "depthY" 항목에 이유 정리 —
+  // 좌석 y가 rect.y1보다 작아 topPct 그대로 쓰면 캐릭터가 그 좌석보다
+  // 뒤로 밀려나 보인다). walking/leaving/idle에서는 undefined(=topPct
+  // 그대로, 기존 Stage 3 동작 무변경). S28 — character.sitRect(고정
+  // 벤치든 배치 의자든 startWalkToSeat이 세팅)를 쓴다 — BENCH 폴백은
+  // 이론상 도달 불가(enterSitting과 동일한 방어적 안전망).
+  const characterDepthY = character.phase === 'sitting' ? (character.sitRect || BENCH).y1 : undefined
+
+  // 2026-09-26(Phase 2, 가게 경험 v1) — 입장 버튼 표시 여부(shopInteraction.js
+  // isNearShopEntrance가 유일한 판정 로직, 재구현 없음). sitting 중엔 굳이
+  // 보여줄 필요가 없다(요구사항 — 벤치와 가게 입장 반경이 겹칠 이론상
+  // 경우까지 방어).
+  const nearShop = isNearShopEntrance(character.leftPct, character.topPct)
+  const missionUiOpen = !shopOpen && !placingItemId && !myItemsOpen
+  const nearMission = missionUiOpen && character.phase !== 'sitting'
+    ? missionSpots.find((sp) => isNearMissionSpot(sp, character.leftPct, character.topPct)) || null
+    : null
+
+  return (
+    <div
+      data-testid="proto25d-root"
+      // a11y 속성은 data-* 앞에 둔다 — testProto25dSpriteAdapter가 root 뒤 900자 창에서 role/aria-label을 찾는다(data-* 추가로 밀려나지 않게).
+      // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
+      role="region"
+      aria-label="폴 마을" // 2026-10-01 모바일 감사(A10) — 아이가 듣는 이름(내부 용어 제거)
+      // Phase 6A — 장애물 개수를 하드코딩된 리터럴 없이 DOM에서 직접
+      // 읽을 수 있게 노출한다(E2E가 "OBSTACLES_REF 3개" 같은 고정 상수
+      // 대신 이 속성으로 실제 개수를 재확인 — walkGrid.js 헤더 주석의
+      // "단일 진실 원천" 원칙과 동일 정신, 값 복제가 아니라 실제 소스를
+      // 그대로 반영).
+      data-proto25d-obstacle-count={OBSTACLES.length}
+      // 2026-09-26(Phase 2, 가게 경험 v1) — 가게 오버레이가 열려있는지
+      // 테스트가 DOM에서 직접 읽을 수 있게 노출(state 재질의 대신 단일
+      // 진실 원천, 위 data-proto25d-obstacle-count와 동일 정신). 닫혀
+      // 있을 때는 속성 자체를 안 붙인다(값이 "false"인 채로 남는 것보다
+      // "속성 부재"가 더 명확한 계약).
+      {...(shopOpen ? { 'data-shop-open': 'true' } : {})}
+      // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물로 걷는 중일 때만
+      // 목적지 의도를 노출(예: "shop:demo-building"). 위 data-shop-open과
+      // 동일 관례("속성 부재"가 곧 "해당 없음") — 걷는 중이 아니면 속성
+      // 자체를 안 붙인다.
+      {...(character.pendingShop && character.shopTargetKey ? { 'data-walk-target': character.shopTargetKey } : {})}
+      // Phase C — 배치 개수/배치 모드 여부(테스트 계측용).
+      data-proto25d-placed-count={placements.length}
+      data-placing={placingItemId ? 'true' : 'false'}
+      ref={rootRef}
+      tabIndex={-1} // F2 — 포커스 복귀 대상(배치하기/가게 버튼이 없을 때)
+      // 2026-10-01 모바일 감사(A2) — touch-manipulation: iOS Safari 더블탭 확대 방지(바닥/뷰포트만 touch-none이라 가게/다이얼로그/HUD 버튼은 무방비였다).
+      className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col outline-none touch-manipulation"
+    >
+      {/* UI 배지(항목8/12 테스트용 UI 엘리먼트) — 바닥 레이어의 형제
+          엘리먼트로, 그 하위에 중첩하지 않는다. 포인터 이벤트는 바닥
+          레이어 엘리먼트에만 직접 걸려 있으므로(버블링 경로가 아니라 그
+          엘리먼트 자신이 타깃일 때만 발화), 이 배지를 눌러도 구조적으로
+          바닥의 onPointerDown/onPointerUp에는 절대 닿지 않는다. */}
+      <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-1">
+        <button
+          type="button"
+          data-testid="proto25d-info-toggle"
+          onClick={() => setInfoOpen((v) => !v)}
+          // Stage 5 감사(2026-09-23) — min-h-[44px] 추가(WCAG 2.5.5/iOS HIG
+          // 탭 타겟 하한, 이 저장소 기존 관례 — testTownV2Static.mjs가 이미
+          // V2 컴포넌트 전체 버튼에 강제하는 것과 동일 기준). 이전 px-3 py-1
+          // + text-xs만으로는 실측 높이가 ~24px로 하한 미달이었다(로직/좌표
+          // 무변경, 시각적 패딩만 조정).
+          className="min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-purple-500 shadow"
+        >
+          ⓘ 도움말
+        </button>
+        {/* 2026-09-26 — 산책 모드 HUD 토글. 기존 정보 배지와 같은 컬럼(항상
+            좌상단, 바닥 중앙을 가리지 않음)에 둔다 — 이 배지 컬럼 자체가
+            바닥 pointer 핸들러의 형제 엘리먼트라(위 "UI 배지" 주석 참고)
+            이 버튼을 눌러도 구조적으로 바닥의 이동 핸들러에는 닿지 않는다.
+            min-h-[44px] — 위 정보 배지와 동일한 탭 타겟 하한 관례. */}
+        <button
+          type="button"
+          data-testid="proto25d-walkmode-toggle"
+          onClick={toggleWalkMode}
+          className="min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-600 shadow"
+        >
+          산책 모드 {walkMode ? 'ON' : 'OFF'}
+        </button>
+        {infoOpen && !placingItemId && !placeToast && ( // F2 — 배치 중엔 접어 안내 배너와 겹치지 않게 / A6(2026-10-01 모바일 감사) — 토스트와도 겹치지 않게(360px)
+          <p className="rounded-xl bg-white/90 px-3 py-2 text-xs text-gray-500 shadow max-w-[220px]">
+            {/* F4(2026-09-28) — 아이 대상 문구: 현재 흐름만 짧게(내부 용어 없음). A5(2026-10-01) — 더 짧게/아이 말투. */}
+            땅을 누르면 걸어가요. 가게 앞에서 🏪를 눌러 물건을 사요. 🪑로 마을에 놓아요. 새로고침하면 처음부터예요.
+          </p>
+        )}
+        {/* 2026-10-04(205차) — 홈 복귀 버튼(운영자 지시: 기존 내비게이션에 통합, 새 메뉴 없음).
+            배치 변천: 상단 중앙은 360/1280에서 데모 건물 탭 지점과 겹쳐 폐기(S30/S32),
+            컬럼 안 행 래퍼는 컬럼 부모/높이가 바뀌어 폐기(S20/S26/G1), 좌하단은 S37
+            modal-churn이 4/4 실패(숨기면 48/48 통과)해 폐기. 채택: 컬럼의 absolute 자식,
+            ⓘ 오른쪽 — flex 흐름 밖이라 컬럼 박스(높이=info+walk+4px)에 영향이 없다.
+            가게/내 물건/배치 중엔 다른 트리거와 같은 관례로 숨긴다. */}
+        {typeof onBack === 'function' && !shopOpen && !myItemsOpen && !placingItemId && (
+          <button type="button" data-testid="proto25d-home" aria-label="홈으로 돌아가기" onClick={onBack}
+            className="absolute left-full top-0 ml-1 min-h-[44px] whitespace-nowrap flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-purple-700 shadow">
+            🏠 홈
+          </button>
+        )}
+      </div>
+
+      {/* 경제 단계 A(2026-09-26)/A2(2026-09-27)/A3(2026-09-27, 배지 위치
+          수정) — 읽기 전용 Paul Dollar 잔액 배지. 이전에는 좌상단 HUD
+          컬럼(정보/산책모드 토글이 있는 그 flex-col)의 세 번째 자식으로
+          두었는데, 그 컬럼 div 자체가 pointer-events-none이 아니라서
+          배지가 늘려놓은 세로 공간만큼 그 div의 절대 배치 박스가 커졌고,
+          그 박스가 바닥(ground) 위에 겹쳐 앉으면서 안쪽 빈 공간을 탭해도
+          바닥의 onPointerDown/onPointerUp까지 이벤트가 도달하지 못했다
+          (S12 LEFT-walk 프레임/미러 회귀 + S18/S19 가게 입장 지점 탭 실패
+          — orchestrator가 이전 HEAD 639/639 로그와 비교해 이번에 추가된
+          배지가 원인임을 확인). 그래서 이 배지를 그 컬럼 밖으로 완전히
+          꺼내 독립된 형제 엘리먼트로 만들고(컬럼 자신의 박스 크기는
+          이제 배지와 무관하게 이전과 동일), 반대편(top-3 right-3)에 둔다
+          — 정보/산책모드 버튼과 같은 줄에 나란히 놓여 서로의 탭 영역을
+          넓히는 일도 없다. pointer-events-none은 그대로 유지(비인터랙티브
+          — 밑에 뭔가 있어도 항상 통과시킨다). wallet이 null이거나
+          coinDisplay.js가 표시 불가로 판단하면(coinBadgeText null) 아무
+          것도 렌더하지 않는다. */}
+      {/* 경제 단계 B(2026-09-27) — balance!==null이면 지금까지 산 만큼 뺀
+          값을 배지에도 반영한다(가게 화면과 같은 숫자, 단일 표시 소스). */}
+      {coinBadgeText(balance !== null ? { dollarsAvailable: balance } : wallet) !== null && (
+        <div
+          data-testid="proto25d-coin-badge"
+          role="status"
+          aria-label={coinBadgeAriaLabel(balance !== null ? { dollarsAvailable: balance } : wallet)}
+          className="absolute top-3 right-3 z-10 pointer-events-none min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-amber-600 shadow"
+        >
+          💵 {coinBadgeText(balance !== null ? { dollarsAvailable: balance } : wallet)}
+        </div>
+      )}
+
+      {/* Phase C — "배치하기" 버튼. 좌상단 HUD 컬럼에 넣지 않는다(위 코인
+          배지 주석 — 컬럼 박스가 커지면 바닥 탭을 가린다). 독립 형제로 코인
+          배지 아래에 둔다. F5 — myItemsOpen 중엔 숨긴다(패널이 전체 화면을
+          덮으므로 그 아래 트리거 버튼이 탭 가능한 상태로 남지 않게 — 가게/배치
+          모드에도 이미 적용된 동일 관례). */}
+      {inventory.length > 0 && !placingItemId && !shopOpen && !myItemsOpen && (
+        <button
+          type="button"
+          data-testid="proto25d-place-open"
+          ref={placeOpenRef}
+          onClick={() => enterPlacement(inventory[0].id)}
+          className="absolute top-[4.25rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white shadow"
+        >
+          🪑 배치하기
+        </button>
+      )}
+
+      {/* F5(2026-09-29) — "🎒 내 물건" 버튼. 구매한 물건이 1개 이상이면 등장,
+          배치 모드/가게/자기 자신의 패널이 열려있는 동안엔 숨긴다(요구사항1).
+          리뷰 수정(항목2, 1차) — 원래 좌하단(left-3 bottom-6)에 뒀는데 360px
+          폭에서 "🏪 가게 들어가기"(하단-중앙, -translate-x-1/2로 폭의 절반
+          가까이 차지)와 실측 겹침이 있었다(S27 항목b 바운딩박스 확인).
+          리뷰 수정(항목1, 2차) — top-[9rem](144px)으로 옮긴 자리가 이번엔
+          배치/이동/회수 성공 토스트(proto25d-place-live, top-32=128px,
+          2초간 표시)와 실측 겹쳤다. 토스트 표시 구간(top-32 + 실측 최대
+          높이)보다 확실히 아래인 top-[12.5rem](200px)로 한 번 더 내린다 —
+          우상단 열(코인 배지 → 배치하기 버튼 → 이 버튼)의 연장, 하단-중앙
+          가게 버튼과는 아예 다른 사분면. 슬롯 A/B/C는 이 버튼이 보이는
+          동안 렌더되지 않으므로(placingItemId가 false일 때만 이 버튼이
+          보이고, 슬롯은 true일 때만 보임) 구조적으로 겹치지 않는다.
+          openMyItems — 자체 히스토리 항목(proto25dMyItems)을 쌓는다(항목3). */}
+      {purchasedIds.size > 0 && !placingItemId && !shopOpen && !myItemsOpen && (
+        <button
+          type="button"
+          data-testid="proto25d-myitems-open"
+          ref={myItemsOpenBtnRef}
+          onClick={openMyItems}
+          className="absolute top-[12.5rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-700 shadow"
+        >
+          🎒 내 물건
+        </button>
+      )}
+
+      {/* F5 — "내 물건" 패널. ProtoShopScreen과 같은 전체 화면 오버레이 +
+          가운데 카드 관례(구매 확인 다이얼로그, 위 참고). 물건마다 이름
+          (item.nameEn — 가게 카드와 동일한 표시 소스, 새 한국어 이름 필드
+          발명 없음) + 상태 + 상태별 버튼(가방: 놓기 / 마을: 옮기기·넣기).
+          ponytail: 상품이 1종(벤치)뿐이라 리스트가 항상 한 줄 — 여러 종으로
+          늘면 스크롤 영역(overflow-y-auto)이 필요할 수 있음. */}
+      {myItemsOpen && (
+        <div
+          data-testid="proto25d-myitems-panel"
+          role="dialog"
+          aria-label="내 물건"
+          className="absolute inset-0 z-[8900] bg-black/30 flex items-center justify-center px-6"
+        >
+          <div className="w-full max-w-xs rounded-2xl bg-white shadow-lg p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-black text-gray-800">🎒 내 물건</h2>
+              <button
+                type="button"
+                data-testid="proto25d-myitems-close"
+                ref={myItemsCloseRef}
+                onClick={requestCloseMyItems}
+                className="min-h-[44px] px-3 rounded-xl bg-gray-200 text-gray-700 text-xs font-black"
+              >
+                닫기
+              </button>
+            </div>
+            {ownedItems.map((item) => {
+              const placedEntry = placements.find((pl) => pl.itemId === item.id)
+              return (
+                <div
+                  key={item.id}
+                  data-testid="proto25d-myitems-item"
+                  data-item-id={item.id}
+                  className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-gray-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.nameKo || item.nameEn}</p>
+                    <p data-testid="proto25d-myitems-status" className="text-[11px] text-gray-500">
+                      {placedEntry ? '마을에 있어요' : '가방에 있어요'}
+                    </p>
+                  </div>
+                  {/* A7(2026-10-01 모바일 감사) — 버튼 min-w 44 / text-xs / gap-2 (탭 타겟·가독성) */}
+                  <div className="flex gap-2 flex-shrink-0">
+                    {placedEntry ? (
+                      <>
+                        <button
+                          type="button"
+                          data-testid="proto25d-myitems-move"
+                          onClick={() => { if (enterPlacement(item.id)) setMyItemsOpen(false) }}
+                          className="min-h-[44px] min-w-[44px] px-2 rounded-lg bg-amber-600 text-white text-xs font-black"
+                        >
+                          옮기기
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="proto25d-myitems-retrieve"
+                          onClick={() => handleRetrieve(item.id)}
+                          className="min-h-[44px] min-w-[44px] px-2 rounded-lg bg-gray-300 text-gray-700 text-xs font-black"
+                        >
+                          넣기
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        data-testid="proto25d-myitems-place"
+                        onClick={() => { if (enterPlacement(item.id)) setMyItemsOpen(false) }}
+                        className="min-h-[44px] min-w-[44px] px-2 rounded-lg bg-emerald-600 text-white text-xs font-black"
+                      >
+                        놓기
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2026-09-26 — 뷰포트 래퍼(신규, 산책 모드 전용 새 엘리먼트). 항상
+          렌더된다(walkMode와 무관 — 뷰포트 크기를 모드 전환 전에도 미리
+          알고 있어야 토글 즉시 카메라가 정확한 값으로 시작할 수 있다).
+          바닥이 예전처럼 이 컬럼의 flex-1 아이템 역할을 그대로 하도록
+          "flex flex-col"도 추가한다(OFF 모드에서 바닥 자신의 flex-1
+          유틸리티가 여전히 효과를 내려면 부모가 flex 컨테이너여야 한다 —
+          안 그러면 flex-1은 아무 것도 하지 않는 클래스가 된다) — 이
+          래퍼가 root의 flex-col 안에서 flex-1로 남은 세로 공간 전체를
+          차지하고(이전에 바닥이 하던 역할 그대로), 그 안에서 다시
+          flex-col을 열어 바닥 하나를 자식으로 꽉 채운다 — 순수하게
+          레이아웃을 보존하기 위한 중간 계층일 뿐 시각적으로 아무 것도
+          그리지 않는다(배경/테두리 없음). overflow-hidden — 산책 모드에서
+          세계가 이 창보다 커도 창 밖은 잘려서 보이지 않는다(요구사항 —
+          "world larger than viewport"). */}
+      <div ref={viewportRef} data-testid="proto25d-viewport" className="relative flex-1 overflow-hidden touch-none flex flex-col">
+        {/* 바닥/씬 레이어 — 이동 핸들러가 붙는 유일한 엘리먼트(요구사항13).
+            world % 좌표계는 worldContract.js WORLD(100 x 190)를 그대로
+            가져다 쓴다(새 좌표계 재정의 금지).
+            2026-09-26 — walkMode OFF는 예전과 완전히 동일한 className/
+            style(같은 문자열, transform 없음) — S1~S16이 이 렌더 분기에서
+            byte-equivalent임을 보장한다. walkMode ON은 흐름에서 빠져
+            (absolute) 세계 전체 크기(worldSize, computeWorldSizePx)로
+            그려지고, 매 프레임 transform만 위 rAF effect가 imperative하게
+            쓴다(React style에는 transform을 아예 넣지 않는다 — effect가
+            유일한 소유자). */}
+      <div
+        ref={groundRef}
+        data-testid="proto25d-ground"
+        role="group"
+        aria-label="마을 바닥" // 2026-10-01 모바일 감사(A10)
+        className={walkMode ? 'absolute top-0 left-0 touch-none' : 'relative flex-1 overflow-hidden touch-none'}
+        style={walkMode
+          ? { width: `${worldSize.worldW}px`, height: `${worldSize.worldH}px`, willChange: 'transform', background: 'linear-gradient(180deg, #eaf7f0 0%, #cdebd8 100%)' }
+          : { aspectRatio: `${WORLD.w} / ${WORLD.h}`, background: 'linear-gradient(180deg, #eaf7f0 0%, #cdebd8 100%)' }}
+        onPointerDown={handleGroundPointerDown}
+        onPointerUp={handleGroundPointerUp}
+        onPointerCancel={handleGroundPointerCancel}
+        onLostPointerCapture={handleGroundLostPointerCapture}
+      >
+        {/* Phase 6A — 정적 길/광장(path/plaza) 표시. 이미지 파일 없이 CSS
+            radial-gradient 2장만으로 스폰(50,62)에서 벤치 쪽(23.5,63)으로,
+            그리고 광장 아래(50,88 부근)로 "닳은 길" 느낌을 준다
+            (p6a_B_composition.md §2 "Path/plaza treatment" 그대로). 장애물이
+            아니다 — walkGrid.js OBSTACLES에 전혀 관여하지 않고, z-index를
+            주지 않아(auto) 아래의 모든 명시적 z-index 엘리먼트(오브젝트/
+            캐릭터/디버그 박스)보다 항상 뒤에 그려진다(DOM 순서상으로도 가장
+            먼저 — 두 조건이 함께 이를 보장). pointer-events-none — 탭
+            판정에 전혀 관여하지 않는다(요구사항13 무변경). */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: [
+              'radial-gradient(ellipse 40% 10% at 23.5% 63%, rgba(214,196,150,0.35) 0%, rgba(214,196,150,0) 70%)',
+              'radial-gradient(ellipse 30% 45% at 50% 88%, rgba(214,196,150,0.30) 0%, rgba(214,196,150,0) 70%)',
+              'linear-gradient(180deg, rgba(214,196,150,0) 0%, rgba(214,196,150,0.22) 55%, rgba(214,196,150,0) 100%)',
+            ].join(', '),
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+
+        {/* 2026-10-04 마을 시각 보정(제한 범위) — 정적 장식 그룹(잔디 질감/
+            자갈길/화단/건물 접지 패치). 전부 pointer-events-none/aria-hidden,
+            애니메이션 없음. z-index 5000 = depthOrder.js의 path 베이스
+            (오브젝트 6002+ 보다 항상 아래, 슬롯 마커 7000 보다 아래).
+            충돌/앵커/슬롯 데이터는 건드리지 않는다. */}
+        {(() => {
+          const gw = groundSize.width || 412
+          const gh = groundSize.height || 560
+          const stone = Math.max(10, gw * 0.04)
+          const cobble = {
+            backgroundImage: `url(${cobblestoneTile})`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: `${stone}px ${stone * (2 / 3)}px`,
+            opacity: 0.72,
+            borderRadius: '9999px',
+            filter: 'blur(0.3px)',
+          }
+          const mk = (g) => ({ WebkitMaskImage: g, maskImage: g })
+          const maskX = mk('linear-gradient(to right, transparent, black 18%, black 82%, transparent)')
+          const maskY = mk('linear-gradient(to bottom, transparent, black 18%, black 82%, transparent)')
+          const maskR = mk('radial-gradient(ellipse at center, black 55%, transparent 100%)')
+          const house = SCENE_FIXTURE.find((o) => o.id === 'demo-building')
+          const houseW = house ? objectRenderedWidthPx(house, groundSize) : 0
+          const flower = townAsset('nature/flower-garden')
+          const bed = (x, y, key) => (flower && (
+            <img key={key} src={flower} alt="" loading="lazy" decoding="async" draggable={false}
+              className="absolute pointer-events-none"
+              style={{ left: `${x}%`, top: `${y}%`, width: 'max(5%, 28px)', transform: 'translate(-50%, -100%)' }} />
+          ))
+          const accent = (src, x, y) => (
+            <img key={src} src={src} alt="" loading="lazy" decoding="async" draggable={false}
+              className="absolute pointer-events-none"
+              style={{ left: `${x}%`, top: `${y}%`, width: 'max(2.5%, 14px)', transform: 'translate(-50%, -100%)' }} />
+          )
+          return (
+            <div data-testid="proto25d-decor" aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ zIndex: 5000 }}>
+              <div className="absolute inset-0" style={{
+                backgroundImage: [
+                  'radial-gradient(ellipse 22% 9% at 15% 80%, rgba(60,125,85,0.07), transparent 100%)',
+                  'radial-gradient(ellipse 22% 9% at 82% 30%, rgba(60,125,85,0.07), transparent 100%)',
+                  'radial-gradient(ellipse 22% 9% at 30% 22%, rgba(150,210,160,0.07), transparent 100%)',
+                  'radial-gradient(ellipse 22% 9% at 80% 88%, rgba(150,210,160,0.07), transparent 100%)',
+                  'radial-gradient(circle at 3px 4px, rgba(86,150,110,0.05) 1px, transparent 1.6px)',
+                  'radial-gradient(circle at 8px 5px, rgba(70,130,95,0.045) 1px, transparent 1.6px)',
+                  'linear-gradient(180deg, rgba(40,90,60,0) 70%, rgba(40,90,60,0.07) 100%)',
+                ].join(', '),
+                backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 11px 11px, 17px 17px, 100% 100%',
+                backgroundRepeat: 'no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat',
+              }} />
+              {/* 2026-10-04 시각 보정 2차 — 길 가장자리 feather(mask), 입구 착지 패드, 벤치 끝 패드 */}
+              <div className="absolute" style={{ ...cobble, ...maskX, left: '47.5%', top: '42%', width: '5%', height: '50%' }} />
+              <div className="absolute" style={{ ...cobble, ...maskY, left: '23.5%', top: '64.5%', width: '26.5%', height: '3.5%' }} />
+              <div className="absolute" style={{ ...cobble, ...maskR, left: '44%', top: '41.5%', width: '12%', height: '4%' }} />
+              <div className="absolute" style={{ ...cobble, ...maskR, left: '21%', top: '64.2%', width: '5%', height: '3.6%' }} />
+              {houseW > 0 && (
+                <div className="absolute" style={{
+                  left: '50%', top: '40.6%', width: `${houseW * 0.9}px`, height: `${gh * 0.022}px`,
+                  transform: 'translate(-50%, -50%)',
+                  background: 'radial-gradient(ellipse at center, rgba(30,25,15,0.28) 0%, rgba(30,25,15,0) 70%)',
+                }} />
+              )}
+              {bed(39.5, 39.5, 'bed-l')}
+              {bed(60.5, 39.5, 'bed-r')}
+              {accent(gardenAccent1, 37.5, 41)}
+              {accent(gardenAccent2, 62.5, 41)}
+            </div>
+          )
+        })()}
+
+        {/* Phase 6A — 범용 오브젝트 레이어(sceneFixture.js SCENE_FIXTURE,
+            벤치 제외 — 아래 기존 벤치 전용 블록이 계속 그린다). 각 항목을
+            bottom-center 앵커(translate(-50%,-100%))로 배치하고, shadow:true
+            면 같은 zIndex의 그림자를 본체보다 먼저(DOM 순서) 그려 항상 그
+            아래 깔리게 한다(V2 TownObjectLayer.jsx LotShadow와 동일 패턴).
+            폭은 objectRenderedWidthPx(sceneFixture.js — depth-scale +
+            minWidthPx 하한 반영, groundSize 실측), 높이는 naturalAspect로
+            역산(벤치의 기존 "width만 %, height는 이미지 종횡비" 관례와
+            동일 정신). townAsset(assetKey)가 null이면(등록 안 된 키) 조용히
+            건너뛴다(townAsset() 기존 계약 — 이미지 부재로 기능이 깨지지
+            않음). pointer-events-none — 탭 판정은 여전히 bench와 마찬가지로
+            새 이벤트 경로를 만들지 않는다. 앵커 배치(left/top/transform)는
+            래퍼 div가 전담하고 img는 안에서 100%/100%로만 채운다 — sway
+            애니메이션(motion-safe:animate-town-sway)이 자신이 걸린
+            엘리먼트의 인라인 transform을 매 프레임 통째로 덮어써서,
+            img 자신에 배치용 translate(-50%,-100%)를 같이 걸면 애니메이션이
+            그 배치를 지우고 top-left 앵커처럼 밀려 보이는 버그가 있었다
+            (나무/관목 5개, 그림자·hitbox와 어긋남) — 배치는 래퍼가,
+            흔들림 회전은 img가 따로 맡아 서로 덮어쓰지 않게 분리했다. */}
+        {RENDER_OBJECTS.map((obj) => {
+          const url = townAsset(obj.assetKey)
+          if (!url) return null
+          const collision = OBSTACLES.find((ob) => ob.id === obj.id)
+          const depthY = collision ? collision.y1 : obj.anchor.y
+          const z = obstacleZIndex(obj.id, depthY)
+          const widthPx = objectRenderedWidthPx(obj, groundSize)
+          const heightPx = widthPx * obj.naturalAspect
+          const swayClass = SWAY_ASSET_KEYS.has(obj.assetKey) ? SWAY_CLASS : ''
+          return (
+            <Fragment key={obj.id}>
+              {obj.shadow && (
+                <div
+                  aria-hidden="true"
+                  data-testid="proto25d-object-shadow"
+                  data-object-id={obj.id}
+                  className="absolute rounded-full pointer-events-none"
+                  style={{
+                    left: `${obj.anchor.x}%`,
+                    top: `${obj.anchor.y}%`,
+                    width: `${widthPx}px`,
+                    height: `${widthPx * SCENE_OBJECT_SHADOW_HEIGHT_RATIO}px`,
+                    transform: `translate(-50%, -${SCENE_OBJECT_SHADOW_HEIGHT_RATIO * 100}%)`,
+                    background: SHADOW_BACKGROUND,
+                    zIndex: z,
+                  }}
+                />
+              )}
+              <div
+                aria-hidden="true"
+                data-testid="proto25d-object"
+                data-object-id={obj.id}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${obj.anchor.x}%`,
+                  top: `${obj.anchor.y}%`,
+                  width: `${widthPx}px`,
+                  height: `${heightPx}px`,
+                  transform: 'translate(-50%, -100%)',
+                  transformOrigin: '50% 100%',
+                  zIndex: z,
+                }}
+              >
+                <img
+                  src={url}
+                  alt=""
+                  draggable={false}
+                  data-proto25d-object-img=""
+                  className={`block w-full h-full${swayClass}`}
+                  // 2026-10-04 마을 시각 보정(제한 범위) — my-house.png 하단 투명
+                  // 여백(5%) 때문에 떠 보이는 문제: 내부 img만 내려 접지(래퍼 불변).
+                  style={obj.id === 'demo-building' ? { transform: 'translateY(5%)' } : undefined}
+                />
+              </div>
+            </Fragment>
+          )
+        })}
+
+        {/* Stage 4 — 실제 벤치 아트(src/assets/town/decorations/bench.webp,
+            townAsset('decorations/bench')). 하단-중앙을 장애물 박스의
+            하단-중앙((x0+x1)/2, y1)에 맞춘다(요구사항1 그대로 — width는
+            장애물 폭, height는 이미지 자체 비율에 맡긴다/aspect-ratio 강제
+            없음). pointer-events-none + alt="" + aria-hidden — 탭 판정은
+            여전히 바닥 레이어의 hit-test(isBenchTap, world 좌표)만 쓰고 이
+            엘리먼트 자체에는 어떤 이벤트 핸들러도 걸지 않는다(요구사항2 —
+            새 이벤트 경로를 만들지 않는다). 모바일 시각 보정(2026-09-23) —
+            width에 px 하한(44px, ProtoCharacter.jsx CHARACTER_MIN_WIDTH_PX와
+            같은 취지)을 CSS max()로 둔다 — walkGrid.js OBSTACLES 좌표(x0/x1)
+            자체는 무변경, 시각 렌더 크기만 좁은 뷰포트에서 더 이상 줄어들지
+            않게 한다. */}
+        {BENCH && townAsset('decorations/bench') && (
+          <img
+            src={townAsset('decorations/bench')}
+            alt=""
+            aria-hidden="true"
+            data-testid="proto25d-bench-art"
+            className="absolute pointer-events-none"
+            style={{
+              left: `${(BENCH.x0 + BENCH.x1) / 2}%`,
+              top: `${BENCH.y1}%`,
+              width: `max(${BENCH.x1 - BENCH.x0}%, ${BENCH_ASSET_MIN_WIDTH_PX}px)`,
+              transform: 'translate(-50%, -100%)',
+              zIndex: obstacleZIndex(BENCH.id, BENCH.y1),
+            }}
+          />
+        )}
+
+        {/* Phase C — 배치된 아이템(벤치 아트와 같은 앵커/폭 규칙, 그림자 없음). */}
+        {placements.map((pl) => {
+          const slot = PLACEMENT_SLOTS.find((sl) => sl.id === pl.slotId)
+          const item = SHOP_PRODUCTS.find((p) => p.id === pl.itemId)
+          const url = item ? townAsset(item.assetKey) : null
+          if (!slot || !url) return null
+          const r = placedObstacleRect(slot)
+          return (
+            <img
+              key={pl.slotId}
+              src={url}
+              alt=""
+              aria-hidden="true"
+              data-testid="proto25d-placed-item"
+              data-item-id={pl.itemId}
+              data-slot-id={pl.slotId}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${(r.x0 + r.x1) / 2}%`,
+                top: `${r.y1}%`,
+                width: `max(${r.x1 - r.x0}%, ${BENCH_ASSET_MIN_WIDTH_PX}px)`,
+                transform: 'translate(-50%, -100%)',
+                zIndex: obstacleZIndex(r.id, r.y1),
+              }}
+            />
+          )
+        })}
+
+        {/* Phase C — 배치 모드 슬롯 표시(시각 전용 — 바닥이 포인터 캡처를
+            하므로 탭 판정은 handleGroundPointerUp의 world 좌표 hit-test). */}
+        {placingItemId && PLACEMENT_SLOTS.filter((sl) => !placements.some((pl) => pl.slotId === sl.id)).map((sl) => {
+          const r = placedObstacleRect(sl)
+          return (
+            <div
+              key={sl.id}
+              aria-hidden="true"
+              data-testid="proto25d-place-slot"
+              data-slot-id={sl.id}
+              className="absolute pointer-events-none rounded-lg border-2 border-dashed border-amber-500 bg-amber-300/30 motion-safe:animate-pulse"
+              style={{
+                left: `${r.x0}%`,
+                top: `${r.y0}%`,
+                width: `${r.x1 - r.x0}%`,
+                height: `${r.y1 - r.y0}%`,
+                minWidth: '44px',
+                minHeight: '44px',
+                zIndex: TAP_RIPPLE_Z,
+              }}
+            />
+          )
+        })}
+
+        {/* 장애물 디버그 플레이스홀더(Stage 2) — 실제 아트 아님, Phase E
+            육안 검증(탭이 상자 안으로 들어가지 않는지/뒤로 돌아가는지)을
+            가능하게 하기 위한 단순 색상 사각형 + 라벨. pointer-events-none
+            — 탭 핸들러는 여전히 바닥(groundRef) 엘리먼트에만 걸려 있고
+            이 오버레이는 그 판정에 관여하지 않는다(요구사항13 무변경).
+            zIndex(Stage 3) — 고정값이 아니라 obstacleZIndex(id, y1)로 매
+            렌더 계산한다(depthOrder.js 'objects' 레이어, y1=바운딩 박스
+            하단/지면 접점) — 캐릭터('character' 레이어, 위 Proto25DScreen
+            헤더 주석 참고)와 Y 기준으로 서로 가리고 가려지게 하기 위함.
+            모바일 시각 보정(2026-09-23) — 기본적으로 렌더하지 않는다
+            (debugOverlaysEnabled, 위 readDebugOverlaysEnabled 주석 참고).
+            실기기 프리뷰에서 이 점선 상자+라벨이 벤치 실제 아트와 겹쳐
+            상호작용을 읽기 어렵다는 회귀가 보고됐다 — walkGrid.js
+            OBSTACLES(히트박스 자체)는 그대로 두고 시각 표시만 끈다.
+            townProto25d.spec.mjs S6은 `?proto25dDebug=1` 쿼리로 이 스위치를
+            켠 뒤 기존 "장애물 디버그 엘리먼트가 OBSTACLES_REF와 좌표
+            일치" 회귀를 그대로 재확인한다(약화 없음, 조건부 실행으로만
+            전환).
+            Phase 6A(DOM 순서 변경) — 이 map을 범용 오브젝트 레이어/벤치
+            아트보다 "뒤"(이 위치)로 옮겼다(이전엔 오브젝트/벤치보다 앞에
+            있었다). 같은 id는 아트와 디버그 박스가 정확히 같은
+            obstacleZIndex(id,y1)를 쓰므로(zIndex 동률), DOM에서 더 뒤에
+            있는 엘리먼트가 항상 위에 그려진다 — 디버그 모드에서는 "장애물
+            히트박스가 실제 아트 위에 겹쳐 보여야 육안 검증이 쉽다"는
+            요구(팀장 지시)에 맞춰 디버그 박스가 항상 아트 위에 오도록
+            바꿨다(일반 모드는 이 블록 자체가 렌더되지 않아 영향 없음). */}
+        {debugOverlaysEnabled && OBSTACLES.map((ob) => (
+          <div
+            key={ob.id}
+            aria-hidden="true"
+            data-testid="proto25d-obstacle"
+            data-obstacle-id={ob.id}
+            className="absolute pointer-events-none border-2 border-dashed border-slate-500/70 bg-slate-500/25 flex items-center justify-center overflow-hidden"
+            style={{
+              left: `${ob.x0}%`,
+              top: `${ob.y0}%`,
+              width: `${ob.x1 - ob.x0}%`,
+              height: `${ob.y1 - ob.y0}%`,
+              zIndex: obstacleZIndex(ob.id, ob.y1),
+            }}
+          >
+            <span className="text-[9px] text-slate-700/80 font-bold px-0.5 text-center leading-tight">
+              {ob.id}
+            </span>
+          </div>
+        ))}
+
+        {/* Phase 6A — 탭 리플(항목C2). pointer-events-none, aria-hidden.
+            reduced-motion이면 showTapRipple 자체가 state를 채우지 않아
+            (컴포넌트 헤더의 ripple state 선언부 주석 참고) ripples는 항상
+            빈 배열이라 이 map은 아무것도 렌더하지 않는다(이중 방어 —
+            motion-safe: 클래스도 함께 건다). */}
+        {ripples.map((rp) => (
+          <div
+            key={rp.id}
+            aria-hidden="true"
+            data-testid="proto25d-tap-ripple"
+            className="absolute rounded-full border-2 border-purple-400/70 motion-safe:animate-town-proto-ripple pointer-events-none"
+            style={{
+              left: `${rp.x}%`,
+              top: `${rp.y}%`,
+              width: '36px',
+              height: '36px',
+              zIndex: TAP_RIPPLE_Z,
+            }}
+          />
+        ))}
+
+        {/* 미션 표지판 — 시각 + 접근성 요소. 마우스/터치 탭은 바닥의 world 좌표
+            hit-test(classifyTap)가 처리하므로 pointer-events-none(벤치와 동일 관례),
+            키보드는 Enter/Space. 오버레이(가게/내 물건/배치)가 열리면 숨긴다. */}
+        {missionUiOpen && missionSpots.map((sp) => {
+          const url = missionArtUrl(MISSION_ART[sp.assetKey])
+          if (!url) return null
+          const widthPx = objectRenderedWidthPx(sp, groundSize)
+          const done = Array.isArray(completedMissionIds) && completedMissionIds.includes(sp.id)
+          const z = obstacleZIndex(`mission-${sp.id}`, sp.anchor.y)
+          const cp = sp.companion
+          const cookieUrl = cp ? missionArtUrl(MISSION_ART[cp.assetKey]) : null
+          const cookieW = cp ? objectRenderedWidthPx(cp, groundSize) : 0
+          const cookieZ = cp ? obstacleZIndex(`mission-${sp.id}-companion`, cp.anchor.y) : 0
+          const shadowStyle = (a, w, zi) => ({
+            left: `${a.x}%`,
+            top: `${a.y}%`,
+            width: `${w}px`,
+            height: `${w * SCENE_OBJECT_SHADOW_HEIGHT_RATIO}px`,
+            transform: `translate(-50%, -${SCENE_OBJECT_SHADOW_HEIGHT_RATIO * 100}%)`,
+            background: SHADOW_BACKGROUND,
+            zIndex: zi,
+          })
+          return (
+            <Fragment key={sp.id}>
+              <div aria-hidden="true" className="absolute rounded-full pointer-events-none" style={shadowStyle(sp.anchor, widthPx, z)} />
+              {cookieUrl && (
+                <>
+                  <div aria-hidden="true" className="absolute rounded-full pointer-events-none" style={shadowStyle(cp.anchor, cookieW, cookieZ)} />
+                  <div
+                    aria-hidden="true"
+                    data-testid={`proto25d-mission-companion-${sp.id}`}
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: `${cp.anchor.x}%`,
+                      top: `${cp.anchor.y}%`,
+                      width: `${cookieW}px`,
+                      height: `${cookieW * cp.naturalAspect}px`,
+                      transform: 'translate(-50%, -100%)',
+                      zIndex: cookieZ,
+                    }}
+                  >
+                    <img src={cookieUrl} alt="" draggable={false} className="block w-full h-full" />
+                  </div>
+                </>
+              )}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={sp.labelKo}
+                data-testid={`proto25d-mission-spot-${sp.id}`}
+                data-done={done ? 'true' : undefined}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return
+                  e.preventDefault()
+                  if (character.phase === 'sitting' || character.phase === 'leaving') return
+                  startWalkToMission(sp)
+                }}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${sp.anchor.x}%`,
+                  top: `${sp.anchor.y}%`,
+                  width: `${widthPx}px`,
+                  height: `${widthPx * sp.naturalAspect}px`,
+                  minHeight: '44px',
+                  transform: 'translate(-50%, -100%)',
+                  zIndex: z,
+                }}
+              >
+                <img src={url} alt="" draggable={false} className="block w-full h-full" />
+                {done && (
+                  <span
+                    data-testid={`proto25d-mission-done-${sp.id}`}
+                    className="absolute left-1/2 -top-1 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-emerald-600 text-white text-xs font-black px-2 py-0.5 shadow"
+                  >
+                    완료
+                  </span>
+                )}
+              </div>
+            </Fragment>
+          )
+        })}
+
+        <ProtoCharacter
+          phase={character.phase}
+          leftPct={character.leftPct}
+          topPct={character.topPct}
+          reducedMotion={reducedMotion}
+          facing={character.facing}
+          depthY={characterDepthY}
+          sitBenchHeightPx={character.phase === 'sitting' ? character.sitBenchHeightPx : undefined}
+          spriteManifest={spriteManifest}
+          direction={character.direction}
+        />
+      </div>
+
+      {/* 2026-09-26(Phase 2, 가게 경험 v1) — "가게 들어가기" 버튼. 뷰포트
+          래퍼의 형제(바닥의 형제, 바닥 안이 아님)라 산책 모드의 카메라
+          transform(바닥에만 걸림)에 영향받지 않고 항상 화면(뷰포트) 기준
+          하단-중앙에 고정된다. pointer-events-auto — 부모 뷰포트 래퍼가
+          touch-none이라도 이 버튼 자체는 눌려야 한다. z는 바닥 내부
+          최댓값(TAP_RIPPLE_Z=7000)보다 낮아도 무방 — DOM상 바닥의 형제로
+          이후에 그려지므로 항상 그 위에 쌓인다(stacking context가 같은
+          가장 가까운 z:auto가 아닌 조상 기준이라 안전, 이 파일의 UI 배지
+          컬럼과 동일 원리). */}
+      {!shopOpen && !placingItemId && !myItemsOpen && nearShop && character.phase !== 'sitting' && (
+        <button
+          type="button"
+          data-testid="proto25d-shop-enter"
+          ref={shopEnterRef}
+          onClick={handleEnterShop}
+          disabled={shopReentryBlocked}
+          aria-disabled={shopReentryBlocked ? 'true' : undefined}
+          className={
+            'absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-emerald-600 text-white text-sm font-black shadow-lg pointer-events-auto'
+            + (shopReentryBlocked ? ' pointer-events-none' : '')
+          }
+        >
+          🏪 가게 들어가기
+        </button>
+      )}
+      {nearMission && (
+        <button
+          type="button"
+          data-testid="proto25d-mission-enter"
+          onClick={() => onStartMission(nearMission.id)}
+          className="absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-emerald-600 text-white text-sm font-black shadow-lg pointer-events-auto"
+        >
+          {nearMission.labelKo} 시작
+        </button>
+      )}
+      {/* Phase C — 배치 취소(배치 모드 동안만). F2 — 하단 가운데(가게 버튼 자리)는 짧은 화면에서
+          슬롯 C를 가려 "배치하기" 버튼 자리(우상단, 코인 배지 아래)로 옮겼다 — 같은 자리에서 켜고 끈다. */}
+      {placingItemId && (
+        <button
+          type="button"
+          data-testid="proto25d-place-cancel"
+          ref={placeCancelRef}
+          onClick={endPlacement}
+          className="absolute top-[4.25rem] right-3 z-20 min-h-[52px] px-4 rounded-full bg-white text-gray-700 text-sm font-black shadow-lg pointer-events-auto"
+        >
+          ✕ 배치 취소
+        </button>
+      )}
+      {/* F2 — 배치 안내 배너(빗나간 탭이면 ~2초 힌트로 대체)와 배치 성공 토스트. 같은 자리:
+          HUD 컬럼(top-3, 44+4+44px)과 우상단 취소 버튼(4.25rem+52px) 아래 가운데.
+          pointer-events-none이라 아래 슬롯/바닥 탭을 막지 않는다. 라이브 영역(role=status)은
+          항상 마운트해 두고 안의 내용만 바꾼다 — 이미 채워진 채로 새로 마운트된 영역은
+          스크린리더가 읽지 않을 수 있다. 보여줄 게 없으면 빈 채로 둔다. */}
+      <div data-testid="proto25d-place-live" role="status" className="absolute top-32 inset-x-3 z-20 flex justify-center pointer-events-none">
+          {placingItemId ? (
+            <p
+              data-testid="proto25d-place-banner"
+              className="rounded-2xl bg-white/95 border-2 border-amber-400 text-amber-700 text-sm font-black px-4 py-2 shadow text-center"
+            >
+              {placeHint || PLACE_BANNER_TEXT}
+            </p>
+          ) : placeToast ? (
+            <p
+              data-testid="proto25d-place-toast"
+              className="rounded-2xl bg-orange-50 border-2 border-orange-300 text-orange-600 text-base font-black px-5 py-3 shadow-lg text-center"
+            >
+              {placeToast}
+            </p>
+          ) : placeHint ? (
+            // A4 — 배치 모드 밖에서도 힌트가 보여야 한다(고정 벤치에 앉아 있는 동안 탭 피드백).
+            <p
+              data-testid="proto25d-place-hint"
+              className="rounded-2xl bg-white/95 border-2 border-amber-400 text-amber-700 text-sm font-black px-4 py-2 shadow text-center"
+            >
+              {placeHint}
+            </p>
+          ) : character.pendingShop && character.shopTargetKey ? (
+            // 2026-10-01 모바일 감사(A3) — 가게로 걷는 중 상태 문구(토스트/힌트가 있으면 그쪽이 우선).
+            <p
+              data-testid="proto25d-shop-walking"
+              className="rounded-2xl bg-white/95 border-2 border-emerald-400 text-emerald-700 text-sm font-black px-4 py-2 shadow text-center"
+            >
+              🏪 가게로 가고 있어요…
+            </p>
+          ) : null}
+      </div>
+      </div>
+
+      {/* 2026-09-26(Phase 2, 가게 경험 v1) — 가게 내부 오버레이. root(이
+          fixed inset-0 z-[9999] 전체 화면)의 형제 레벨 마지막 자식으로 둬
+          DOM 순서만으로 항상 최상단에 그려지고(뷰포트/바닥/HUD 배지 전부
+          이 오버레이보다 먼저 등장), ProtoShopScreen 자신도 absolute
+          inset-0 + 명시적 z-index로 이중 방어한다. */}
+      {shopOpen && (
+        <ProtoShopScreen
+          products={SHOP_PRODUCTS}
+          onBack={requestCloseShop}
+          onViewMyItems={handleViewMyItemsFromShop}
+          closing={shopClosing}
+          balance={balance}
+          purchasedIds={purchasedIds}
+          onPurchase={(item) => {
+            if (purchasedIds.has(item.id)) return { ok: false, reason: 'purchased', balance }
+            const r = tryPurchase(balance, item.price)
+            if (r.ok) {
+              setSpent((s) => s + item.price)
+              setPurchasedIds((prev) => new Set(prev).add(item.id))
+            }
+            return r
+          }}
+        />
+      )}
+    </div>
+  )
+}

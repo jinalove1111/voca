@@ -1,0 +1,35 @@
+{
+  "agent_name": "orchestrator",
+  "role": "207차 리드(Claude) — 한글 상황 기반 Speaking 통합",
+  "task_id": "speaking-korean-situation-2026-10-04",
+  "task": "회화 연습에 한글 상황 카드, 그림 보고 말하기 시험을 한글 보고 말하기로 전환, 임시 그림 숨김",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-04T19:45:00+09:00",
+  "updated_at": "2026-10-04T20:30:00+09:00",
+  "worktree": "C:/voca-wt/paul-town-v2-night-audit",
+  "files_owned": [
+    "src/utils/situation/situationContent.js",
+    "src/components/SceneCard.jsx",
+    "src/components/SpeakingPracticeItem.jsx",
+    "src/components/SpeakingExam.jsx",
+    "src/components/SpeakingPractice.jsx",
+    "src/components/SpeakingPracticeMode.jsx",
+    "src/components/StudentHome.jsx",
+    "scripts/testSituationRecall.mjs",
+    "tests/e2e/speaking.spec.mjs",
+    "tests/e2e/speakingExam.spec.mjs",
+    "docs/design/SPEAKING_UX_V2_2026-10-04.md",
+    "handoff.md"
+  ],
+  "test_and_verify_results": {
+    "static": "testSituationRecall ALL PASS, testSpeakingSession, StudentPathContracts, SpeakingPathNoPermanentDisable, LazyChunkGuards 83/83, BundleBudget 32/32, RegistryCoverage PASS, build 0 warnings",
+    "e2e": "speaking 203/203, speaking-exam 154/154, student-home 226+1 SKIP, student 34/34, mobile 178/178 (360/390/412/1280, mock, unmocked 0)"
+  },
+  "db_sql_production_changes": 0,
+  "pr": "#62 Draft",
+  "remaining": [
+    "실기기 마이크·듣기 확인",
+    "그림 제작 보류(§9 명세 유지)"
+  ]
+}

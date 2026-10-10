@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "구현·검증·문서·push",
+  "task_id": "speaking-partner-role-2026-10-06",
+  "task": "2화 상대(미아) 역할 녹음·내 목소리 다시 듣기, 기존 녹음 재사용",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-06T03:00:00+09:00",
+  "updated_at": "2026-10-06T04:10:00+09:00",
+  "files_owned": ["src/hooks/useLocalRecorder.js", "src/components/SpeakingPracticeItem.jsx", "src/components/SpeakingPracticeMode.jsx", "src/components/SpeakingExam.jsx", "src/utils/situation/speakingSets.js", "src/utils/situation/storyEpisodes.js", "scripts/testKeySentenceFlow.mjs", "scripts/testSpeakingSets.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "TESTING.md", "handoff.md"],
+  "summary": "[mock 기반] 상대 역할 녹음(스트림 공유·정리·시험 예시 숨김). e2e speaking 497/0, speaking-exam 216/0, 정적 9종 PASS. 실제 마이크 미검증.",
+  "blocker": null,
+  "next_action": "운영자: 실기기(Preview, QA 계정)에서 2화 연습 s02-03 내 대답 녹음·내 목소리 듣기·예시 대답 듣기, 시험 답 확인 후 예시 대답 확인"
+}

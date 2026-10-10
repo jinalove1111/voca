@@ -1,5 +1,289 @@
 # Paul Easy Voca — 로드맵
 
+_(2026-09-18 170차 추가) Paul Town V2 렌더러 통합 — 브랜치
+`feat/paul-town-v2-world-contract-2026-09-17`, 로컬 커밋만·미push,
+`paulTownV2` OFF, Production WRITE 0. 상세는 `handoff.md`
+2026-09-18(170차) 섹션._
+
+## 2026-10-08 (223~226차) — 통합 과정(자체 커리큘럼) 시범: 공통 구조 + 회화 C1 Unit 2개 — 상태: 코드 완료 ✅(PR #62 브랜치, Draft, **QA 전용**), 교사 콘텐츠 검수 **미완**, 실수업 적용 0
+
+_기준: 운영자 설계안 `Paul_English_Integrated_Curriculum_v1.md`(운영 가안). 상세는 `docs/design/INTEGRATED_CURRICULUM_IMPL_2026-10-08.md`, `CURRICULUM_INDEPENDENCE_2026-10-08.md`, `TEACHER_GUIDE_PILOT_UNITS_2026-10-08.md`, `PHONICS_PILOT_SPEC_2026-10-08.md`, handoff 223~226차._
+
+**완료(mock e2e·정적 검증 기준, 실사용·학습 효과 미검증)**
+- 공통 데이터 구조: 과정 5·회화 블록 6·지원 단계 4(수준과 분리)·기록 플래그 5(앱은 completed/selfChecked만)·Unit 계약 `validateUnit`·기기 임시 기록(UUID 키). 의사소통 목표 13×레벨 3, 교재 의존 0(223차 감사).
+- Unit 1 "교실에서 필요한 물건 빌리기"(requesting, 기존 2화 재사용) — 224차 구현, 225차 독립 검수 결함 6·콘텐츠 4 수정.
+- Unit 2 "잃어버린 물건 위치 묻기"(asking-info, 자체 신작) — Unit 안 말하기 3단계(따라 하기→물건 바꾸기→모범 없이)·inline 쓰기. 템플릿 재사용 확인(화면 무수정). Unit 선택 목록, Unit 간·계정 간 격리(격리 결함 1건 발견·수정).
+- 문서: 참고문헌 7건 확인표(§9), 교사 수업 가이드 2종(검수 전), 파닉스 시범 스펙(콘텐츠 0), 교사 콘텐츠 검수표(226차).
+- 226차: 쓰기 Unit 복귀 버튼, Unit 청크 로드 실패 안내·홈 복귀.
+- 227차: 전 과정 단계표·수행 수준 사다리·매핑(`CURRICULUM_STAGES_2026-10-08.md`), 과정 → 단계 → Unit 선택(저장 없음), Unit `performance`/`profile` 계약, 인접 단계 실증 Unit 3 = C2 발전 "거기 아니야, 저기는?"(교사 검수 대기). 레벨 영구 저장·자동 배정·자동 승급은 의도적으로 없음.
+
+**다음**
+- 교사 콘텐츠 검수(검수표 기반; Unit 3 검수표 추가 작성) → 문구 반영. 실기기 확인(TTS 차례 재생·칩 터치·녹음 안내).
+- 회화 15 Unit(회차만 있음 16 중) 순차 제작 — 다음은 C2 월4 "방과 후에 뭐 하는 걸 좋아해?"(후보 B, 되묻기 What about you?). 기존 문장 복사·개명 금지.
+- `commGoals.js` s03-08(roles) 목표 재배정 여부(C2 월5용) — 운영자 결정.
+
+**보류(결정·입력 대기)**
+- 파닉스: 학원 기존 프로그램의 음소·철자 순서 확인 전 제작 금지.
+- Bell EAL Framework: 이용 조건 확인 전 서술자 미사용(인용·링크만).
+- 교사 화면·배정·제출(설계안 §12): DB 없이 불가 → 설계만.
+- 비QA 학생 노출: 금지 유지(PR #62 Draft).
+
+### 2026-10-09 (229차) — 홈 Speaking·Writing·오늘의 학습 통합 진입: 6 과정 → 레벨(제안) → 단원/이야기 → 활동
+
+_QA 전용·mock e2e 기준. Preview 실화면·학습 효과 미검증. 상세는 handoff 229차, 설계 `CURRICULUM_STAGES_2026-10-08.md` §10._
+
+**완료**
+- 6 과정 구분(Phonics·Conversation·Presentation·Reading·Middle School·News Class 병행) 데이터·화면. 학원 반 이름과 대조, 레벨 라벨은 전부 '(제안)'.
+- 홈 말하기·쓰기·오늘의 학습이 같은 선택 화면으로 진입, 선택 유지/초기화, 말하기↔쓰기 링크, 빈 레벨 '콘텐츠 준비 중'.
+- 기존 이야기 10회차를 Conversation 레벨 하나씩에 배치(제안), 기초/발전 차이는 `[unit]` mock으로 화면 확인.
+- 운영자 통합 설계안 원문이 저장소에 없음을 확인(인용만 존재).
+
+**다음**
+- push → Vercel Preview 확인 → 운영자 SSO 실화면 확인.
+- 학원 레벨명 확정 후 '(제안)' 제거. Unit 3 교사 검수표. 후보 B(C2 4개월차).
+
+**보류**
+- Phonics·Presentation·Reading·Middle School·News Class 콘텐츠 전부 미제작(결정·교사 입력 대기), Conversation 15 Unit.
+- 레벨 영구 저장·자동 배정·자동 승급·자동 채점·새 DB: 의도적 제외 유지.
+
+### 2026-10-09 (231차) — Grammar 최소 통합: 홈 📘 → 공용 선택기 → Unit 문형 활동
+
+_QA 전용·mock e2e 기준. Grammar 요구사항 원문 미수신 상태에서 가정 명시(`CURRICULUM_STAGES_2026-10-08.md` §12)로 진행. 상세는 handoff 231차._
+
+**완료**
+- 기존 Unit 문형 활동(관찰 2 + 문항 3)을 홈 [📘 단원의 문법 살펴보기]에서 과정 → 단계 → Unit 선택기(intent 'grammar')로 바로 연결. 이야기 회차·문법 없는 과정/레벨은 '콘텐츠 준비 중'. 새 문법 콘텐츠·저장·채점·DB 0.
+
+**다음**
+- Grammar 요구사항 원문 수신 → §12 가정 확정/수정. §11.9 답변 → 레벨 라벨 확정('(제안)' 제거).
+- Preview 실화면 운영자 확인.
+
+**보류**
+- 이야기 회차 문법 항목, 다른 5개 과정 문법 콘텐츠(운영자 결정 대기). Unit 1·2·3 교사 검수 미실시.
+
+### 2026-10-09 (232차) — 문법 초·중급 분리 + 레벨별 문제 모아 풀기
+
+_QA 전용·mock e2e 기준. 운영자 요구: "쓰기 말하기 처럼 문법도 초중급 나눠서 문제 풀 수 있게 만들어줘". 상세는 handoff 232차, 설계는 `CURRICULUM_STAGES_2026-10-08.md` §12.5._
+
+**완료**
+- 문법 수준(`PERFORMANCE_LEVELS.grammarKo`, Unit `performance.grammar`: Unit 1·2 기초 / Unit 3 발전), 레벨별 문제 세트(선택기 '이 단계 문법 문제 모아 풀기' → 점수·기록 없는 세트 화면), Unit당 추가 문항 3개(총 9). 기초 12문항·발전 6문항. 새 DB·저장·자동 채점 0.
+
+**다음**
+- 교사 검수(추가 문항 9개 포함). `CURRICULUM_STAGES` §12.4 질문 5개·§11.9 레벨 이름 운영자 답변. 입문·확장 문법 문항은 해당 레벨 Unit 제작 시. Preview 실화면 운영자 확인.
+
+**보류**
+- 입문·확장·발표 문법 문항 미제작. Conversation 3~6단계와 다른 5개 과정의 문법 전부 준비 중. '(제안)' 라벨 유지.
+
+### 2026-10-10 (243차) — 문법 마을 지도 + 첫 브라우저 실측
+
+_QA 전용. 상세는 handoff 243차, 설계는 `docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md` §14~§17. 브라우저는 스펙 하나씩 실제로 실행했으나 Speaking·Writing·Unit·Voca·시험·모자·2.5D 7종은 최종 빌드에서 메모리 부족으로 재실행하지 못했다(1차 빌드 통과, S37 미확인)._
+
+**완료**
+- 7개 구역 문법 마을 지도: 시작 가능 장소 14곳(26단원), '준비 중' 15곳, 문법 노트 8단원. 키트 그림 95장이 지도에서 한 번씩 설명됨(91장 배치, 4장 보류).
+- 흐름: 홈 Grammar 카드 → 마을 → 장소 카드 → 미션 → 기존 덱 → 마을로 복귀(세션 한정 완료 칩). 기존 과정 목록과 2.5D 표지판 흐름 유지.
+- 첫 실제 브라우저 실행에서 제품 결함 3건(속도 위젯 겹침, 선택지 줄 뷰포트 이탈, 미니 공원 그림 과소)과 스펙 오류 3건을 찾아 수정. 최종 빌드 문법·마을·장면·학생 홈 스펙 통과.
+- 정정: 분석 이벤트 중복 제거는 페이지 로드당(하루 1회 아님).
+- 새 보상·XP·DB·저장·SQL 없음.
+
+**다음**
+- 운영자 결정(설계 문서 §17): 완료 저장, 마을 기본 입구, 장소↔단원 표 확정, `paul-portrait`, 보상 그림, 구역 배경, 남은 수업용 그림, 교사 검수. 메모리 여유 시 회귀 7종과 S37을 하나씩 재실행(승인 필요).
+
+**보류**
+- '준비 중' 장소 15곳의 새 미션, 25개 연결 단원 덱의 키트 그림 적용, 지연 로딩 확인, 마을 완료 영구 저장.
+
+### 2026-10-10 (242차) — 폴타운 아트 키트 반입 + 공원 미션 실제 이미지
+
+_QA 전용. 상세는 handoff 242차, 설계는 `docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md` §9~§13. 브라우저 검증 미실행(RAM 2.62 GB <3 GB), 실화면 확인된 것 없음._
+
+**완료**
+- 운영자 PNG 원본 95장을 최적화 사본으로 반입(94개 → WebP 188개 + manifest, 약 7.3 MB, 재실행 가능한 파이프라인, 검사 1417개). 원본은 저장소에 없음.
+- 공원 미션이 실제 그림(배경·Cookie 2포즈·나무·벤치·꽃)을 사용, 마을 표지판+Cookie 교체. 공 그림이 없어 단원의 `ball`을 `flower`로 교체(덱 15장·id 불변).
+- 새 보상·XP·DB·저장 없음.
+
+**다음**
+- RAM ≥3GB에서 브라우저 스펙 5종 실행. 운영자: `paul-portrait` 사용 여부, 부족 이미지(공·인물·음식 소품·기차역·게시판·배경 6종 등, 설계 문서 §12) 제공. 다음 미션 후보(새 그림 불필요): 카페, 책방, 공원 놀이.
+
+### 2026-10-10 (241차) — 폴타운 장소 미션: 공원 미션 마을 진입~복귀
+
+_QA 전용. 상세는 handoff 241차, 설계는 `docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md`. 연결된 장소 1/26, 브라우저 검증 미실행(RAM <3GB), 장소 연결표는 설계 제안(교사·운영자 확정 전)._
+
+**완료**
+- 공원 미션(`g-easy-05`): 마을 표지판 또는 문법 홈 카드에서 들어가 상황 소개 → 기존 15장 덱 → '마을로 돌아가기'. 커밋 3개. 새 보상·XP·DB·저장 없음, 마무리 이벤트 중복 제거 그대로.
+- 공원 배경을 기존 프로젝트 이미지로 구성, 장면 카드의 장식 이모지 제거.
+- 34단원 장소 연결표(연결 26 / 안 함 8), 필요 파일 14개와 폴더 목록, 그림 톤 규칙 문서화.
+
+**다음**
+- RAM ≥3GB에서 `[town-mission]` 등 브라우저 검증과 스크린샷 확인. 운영자: 에셋 제공, 연결표 확정. 이후 카페 → 책방 → 공원 놀이 → 과일 가게 → 빵집 순으로 한 장소씩 연결 제안.
+
+**보류**
+- 완료 표시는 세션 한정(영구 진도는 저장 결정 필요). 복귀 시 Paul 위치 초기화. 잔디·길·공·Cookie 임시 그림, 동작 배지 이모지.
+
+### 2026-10-10 (240차) — 그림 미션 34단원 확장(Scene v2)
+
+_QA 전용. 상세는 handoff 240차, 설계는 `docs/design/GRAMMAR_SCENE_MISSION_2026-10-10.md` §11~§14. 임시 이미지 34/34 단원, 실제(최종) 에셋 0/34, 브라우저 검증 0/34, 교사 검수 0/34. 브라우저는 이번 라운드에 전혀 실행하지 않았다._
+
+**완료**
+- 기존 34단원 전부에 그림 설명 카드(발견·비교)와 그림 활동 카드(선택·배치·읽기·듣기) 추가(새 단원 없음). 기존 카드·id·정답·피드백·진행 불변, 시범 g-easy-05는 15장 그대로.
+- 공통 부품: `sceneProps.js` 레지스트리, `sceneMission.js` v2 검증·기하, `Stage.jsx` 범용 무대, `SceneCards.jsx` view(장면·타임라인·대화)·위치 만들기, 과정별 데이터 `scenes/{easy,int,adv,mid,high}.js`. 커밋 `3b3c409e`·`6a8a5bb8`·`2b7643d6`.
+- 독립 검수 3건이 찾은 결함(답 새어 나감·다의 정답·거짓 규칙 진술·범위 밖 내용) 수정. 정적 PASS, 더미 빌드 경고 0, 총 코드 예산 2.0 MB.
+
+**다음**
+- RAM ≥3GB에서 브라우저 검증(`[grammar-scenes]`·`[grammar-scene]`·`[grammar]`·회귀) 후 스크린샷으로 그림 명확성 확인. 34단원 교사 검수. 운영자 에셋(설계 문서 §13).
+
+**보류**
+- 알려진 한계: adv-04 when/if 그림 구분 불가, adv-05 should/have to는 한국어 '꼭' 의존, 일부 mid·high 틀은 명사로도 풀림, 날씨·상태 소품 없음, Cookie 대역.
+
+### 2026-10-10 (239차) — 그림 상황 미션 시범 단원(There is/are 공원) + 공통 장면 컴포넌트
+
+_QA 전용. 상세는 handoff 239차, 설계는 `docs/design/GRAMMAR_SCENE_MISSION_2026-10-10.md`. 콘텐츠 구현 34/34(시범 1단원은 그림 미션 구조), 교사 검수 0. 시범 단원 브라우저 검증은 미실행이다._
+
+**완료**
+- 공통 장면 컴포넌트(`ParkScene`·`SceneCards`)와 단원 데이터 `scene`, 순수 규칙 모듈 `sceneMission.js`. Easy `g-easy-05`만 9단계 그림 미션(덱 15장), 나머지 33단원은 기존 덱 그대로.
+- 폴타운 스프라이트 + 기존 Paul 이미지 사용, 새 보상·XP·모자 단계·DB·저장 없음(마무리 분석 이벤트 하나만).
+- 설계 문서(근거 검증 포함)와 e2e 스펙 `grammarScene.spec.mjs` a~l 작성. 정적 PASS, 더미 빌드 경고 0.
+
+**다음**
+- RAM ≥3GB에서 브라우저 검증: `[grammar-scene]` a~l, `[grammar]` g 360×640(`c47b1e10` 포함), 회귀 5종. 운영자 에셋(공원 배경·Cookie 2포즈·공·꽃) 수령 후 매핑 교체. 다른 단원에 `scene` 데이터만 추가해 확장.
+
+**보류**
+- 교사 검수, 학원 반 대응(미확인), Middle/High 장면, Preview 실화면(SSO) 확인.
+
+### 2026-10-10 (238차) — 문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드
+
+_QA 전용·mock e2e 기준. 상세는 handoff 238차, 설계는 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md` §12. 콘텐츠 구현 34/34는 불변이고 교사 검수는 0이다. 화면만 덱 구조로 바뀌었다._
+
+**완료(화면)**
+- 단원 상세를 카드 한 장씩(22~26장)으로 전환: 목표 → 예문 → 설명 → 구조 → 비교 → 오류 → 연습(문제마다) → 직접 사용 → 마무리. 큰 이전/다음, 단계·진행 표시, 문제는 답 확인 후 학생이 다음을 눌러야 이동, 틀리면 다시 풀기, 뒤로 가도 답 유지, 기초 설명 왕복 복원, 마무리 요약 + 틀린 문제 다시 풀기.
+- 홈 메인 메뉴를 5카드 그리드로: 문법을 Voca·Speaking·Writing과 같은 크기 카드로 승격하고 작은 바로가기는 제거.
+- 검증: 정적 PASS, `[student-home]` 241/0/1 SKIP, 문법 덱 e2e `[grammar]` 708/0/1 SKIP(덱 첫 빌드 `34712051` 기준, 커밋 `c769ab8a`). 이후 360x640 레이아웃 보정 `ff82e531`·`c47b1e10` 적용, **`c47b1e10`은 브라우저 재실행 미실행(메모리 부족, RAM >=3GB에서 `[grammar]` 재실행 필요)**.
+
+**보류**: 교사 검수 34단원, Preview 실화면 확인(SSO), 실기기 작은 화면 확인, 과정별 청크 분리. 학생 대상 신규 기능·게임화 없음, DB·저장 없음.
+
+### 2026-10-10 (236~237차, 야간) — 문법 전 과정 34단원 콘텐츠 구현(검수 전) + 모자 헤더 1.25em + 8단계 승급 설계
+
+_QA 전용·mock e2e 기준. 상세는 handoff 236~237차, 설계는 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md` §11. 운영자 취침 중 자율 세션. 콘텐츠 구현과 교사 검수는 별개이며, 검수 전이라 커리큘럼 완료는 선언하지 않는다._
+
+**완료**
+- 문법 신규 25단원: Intermediate 02~08, Advanced 01~06, Middle School 01~06, High School 01~06. 이제 34/34 단원이 ready(Easy 8·Intermediate 8·Advanced 6·Middle 6·High 6), 교사 검수 완료 0, 미제작 0. 모든 단원이 어휘 규칙을 통과하고 `reviewStatus: 'unreviewed'`. Middle·High는 '학년·교육과정 대응 미확인' 유지.
+- `[grammar]` e2e 일반화(과정별 진입·연습, 기초 링크 이동, 로드 실패, 준비 중 안전 화면). `testBundleBudget` raw 한도 1.7 → 1.8 MB(grammar lazy 청크 최종 120.2 KB raw / 33.5 KB gzip, main gzip 불변). `[grammar]` 659/0/1 SKIP. 커밋: 학교 단원 `119e3b89`, 번들 예산 `d5c2f1bd`.
+- 홈 헤더 모자 1.25em + `GAME_REWARD_SYSTEM` 236차 해금 조건표(코드 기준). 8단계 모자 승급 설계 문서(`HAT_PROGRESSION_8_STAGES_2026-10-10.md`, 구현 없음, 플래그 OFF 전제).
+
+**다음**
+- 교사 검수 34단원(검수표 237차 블록 + 모듈 헤더 확인 항목). 학원 레벨명·교재 순서 대조(`CURRICULUM_STAGES` §11.9). Vercel Preview 실화면 운영자 확인(SSO). 과정별 청크 분리(번들 한도 대응). 8단계 승급 설계의 운영자 질문 6개 답변.
+
+**보류**
+- 학교 과정의 학년·교육과정 대응(미확인). 8단계 승급 구현(운영자 결정 전). 반-파밍 빈틈(단어별 중복 제거 없는 카운터, `fetchXpTotal` 0 폴백)과 `hat_wizard` 'mastered' 도달 가능성은 승급 구현 전에 확인할 항목. 입문·확장·발표 수준 문법 문항 미제작.
+
+### 2026-10-10 (235차) — Paul 로고 모자 PNG 8장 적용(수집 모자 8종 색 대응)
+
+_QA 전용·mock e2e 기준. 상세는 handoff 235차. 앱에는 "8단계 모자"가 없고 XP 랭크 5·크기 5단계·수집 모자 8종이 따로 있어, 이미지 8장을 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 일치로 대응했다. 운영자 순서(분홍 → 빨강 → 주황 → 초록 → 파랑 → 남색 → 보라 → 금색)의 승급 체인은 적용하지 않았다._
+
+**완료**
+- `src/assets/hats/paul-hat-<color>.png` 8장(256×256 투명 PNG, 균일 여백, 각 약 30 KB) + 빌드 스크립트 + manifest. 홈 헤더·대시보드·모자 컬렉션·모자 연출·마을 모자 걸이에서 현재 모자 이미지를 표시, 장착 변경과 승급 시 바뀜(이미지 없으면 기존 이모지 폴백). 점수·해금 기준·승급 규칙·XP·DB 무변경.
+- HatCollection 장착 버튼 44px 수정, 모자 이름 2건 정정(검은색 → 남색, 하얀색 → 주황색).
+
+**다음**
+- 운영자: 남색 → hat_starter, 주황 → hat_scientist 대응과 "승급 체인이 아닌 수집 모자" 판단 확인. Vercel Preview 실화면(SSO) 확인. 필요하면 홈 헤더 모자 크기 상향(1em → 1.25em) 결정.
+
+**보류**
+- XP 랭크 5·크기 5단계에 모자 그림을 입히는 일(별도 결정 필요). 실기기 확인. Paul 얼굴 작업은 지시에 따라 하지 않음.
+
+### 2026-10-10 (234차) — Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리
+
+_QA 전용·mock e2e 기준. 상세는 handoff 234차, 설계는 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md` §10. 5개 과정 틀과 3개 단원은 커리큘럼 완료가 아니라는 운영자 지시에 따라 Easy의 준비 중 6단원을 실제 학습 내용으로 채웠다._
+
+**완료**
+- Easy 03 am·is·are / 04 can / 05 There is·are / 06 I like / 07 Do you …? / 08 This·That: 단원마다 예문, 쉬운 설명, 구조, 비교, 오류, 연습 4유형(선택 3·빈칸 2·순서 2·만들기 2), 직접 사용. 콘텐츠 구현 완료 = Easy 8/8 + Intermediate 1.
+- 교사 검수 상태 분리(`reviewStatus`, '검수 전' 배지, 과정 버튼 'ready n/total · 검수 r'). 교사 검수 완료 0. 단원 어휘 규칙(배우지 않은 단어 금지) 검증기 추가. 새 DB·저장·자동 채점 0, 보호 범위 무변경.
+
+**다음**
+- 교사 검수(Easy 8단원) → Intermediate 02~08 콘텐츠 → Advanced → Middle School → High School. Preview 실화면 운영자 확인(SSO).
+
+**보류**
+- 미제작 25단원(Intermediate 7, Advanced 6, Middle 6, High 6). **커리큘럼 전체 완료 아님.** 로드 실패 경로·기초 링크 이동 e2e 미작성. 학교 과정의 학년·교육과정 대응 미확인. '(제안)' 라벨 유지.
+
+### 2026-10-10 (233차) — Grammar 커리큘럼 재구성: 5 과정 + 9단계 ESL 단원
+
+_QA 전용·mock e2e 기준. 232차의 선택기 문법 intent·모아 풀기 화면을 새 문법 과정 화면으로 대체. 상세는 handoff 233차, 설계는 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md`._
+
+**완료**
+- 문법 최상위 5 과정(Easy·Intermediate·Advanced 숙련도 / Middle·High School 학교 문법 '(제안)'·학년 대응 미확인) → 단원 목록·학습 목표 → 9단계 단원 → 연습 4유형·오답 피드백·다시 풀기. 기초 이동 링크, 준비 중 안전 화면.
+- 콘텐츠 준비 완료 3단원(Easy 2, Intermediate 1): 시범 Unit의 문법 문항 재사용 + 새 초안, 전부 교사 검수 대기. 기존 문항 배정 근거 기록(변경 0), 동료심사 근거 10행(Shintani 2014는 미확인으로 인용 금지).
+- 새 DB·저장·자동 채점 0, 보호 범위 무변경.
+
+**다음**
+- 교사 검수(문법 단원 3) → `CURRICULUM_STAGES` §11.9 레벨 이름·학년 대응 답변 → Advanced / Middle / High 콘텐츠 제작. Preview 실화면 운영자 확인(SSO).
+
+**보류**
+- 준비 중 31단원 전부(Easy 6, Intermediate 7, Advanced 6, Middle 6, High 6) 미제작. 중·고 과정은 ready 0. 로드 실패 경로·기초 링크 이동 e2e 미작성. 입문·확장·발표 수준 문항 미제작. '(제안)' 라벨 유지.
+
+## 2026-10-04 (202차) — Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리 — 상태: 코드 완료 ✅(PR #62 브랜치, Draft), 전용 일러스트 10장은 명세만(최종본 0)
+
+- Speaking 진입 메뉴 2개(회화 연습 / 그림 보고 말하기 시험) + 홈 시험 직진입. 연습: 그림+문장+뜻+en-GB 듣기 동시, 선택 녹음. 시험: 그림+진행만 → 답 확인 → 문장·음성·다시 연습·다음 문제. 정답·합격·숙달·점수 생성 0, 자동 채점 없음(교사 확인표가 평가). 201차 SituationRecall(힌트 회상)·열린 질문 3개는 통합·제거.
+- e2e speakingExam 148/148, speaking 200/200(재작성), studentHome 212/1 SKIP. 플래그 기본값 불변.
+- 남음: 일러스트 제작(설계 §6 명세, 운영자/일러스트레이터), 제작 후 webp 투입만으로 교체. 상세: `handoff.md` 202차, `docs/design/SPEAKING_UX_V2_2026-10-04.md`.
+
+## 2026-10-04 (201차) — 상황 그림으로 이해·회상 연습(회화 표현 5개) — 상태: 코드 완료 ✅(PR #62 브랜치, Draft), 최종 그림 10장은 임시 합성(제작 목록 대기), 학습 효과는 교사 확인표로만 판단
+
+- Speaking 화면 → 🖼️ 상황 보고 말하기. 보기(그림+음성+EN/KO) → 회상(그림만, 힌트 1/2/3 요청식) → 다른 상황 → 요약; 다음 진입 시 도래 표현은 복습(회상부터). 플래그 `situationRecallV1`(기본 true, 기기 로컬 kill switch). 기록은 localStorage(UUID 키), 완료/숙달/보상 없음. 단위 48/48·e2e 94/94, speaking 93/93 회귀 유지.
+- 그림 10장은 기존 마을/Paul 에셋 합성 + "🖼️ 임시 그림" 배지. `src/assets/situations/<scene-id>.webp`를 넣으면 자동 교체(코드 변경 불필요). 유료 생성 0.
+- 남음: 최종 그림 제작(운영자/수작업), 복습 간격 1일/3일 파일럿 후 조정, 서버 동기화(교사 열람)는 별도 DDL 결정. 상세: `handoff.md` 201차, `docs/design/SITUATION_RECALL_DESIGN_2026-10-04.md`, `docs/teacher/SITUATION_RECALL_CHECKLIST_2026-10-04.md`.
+
+## 2026-10-04 (200차) — Speaking 첫 체험(녹음·재생만) + 2.5D 마을 시각 보정(제한 범위) — 상태: 코드 완료 ✅(PR #62 브랜치, Draft), 실기기 마이크 확인은 운영자 대기
+
+- Speaking 첫 체험 완료 — 홈 🎤 카드 → 질문 3개 듣기/녹음/들어보기/다시 녹음. 플래그 `speakingPracticeV1`(기본 true, 기기 로컬 kill switch). 브라우저 메모리 전용(업로드·STT·점수·보상 0), 커밋 `11e1e89e`/`4aef6b7b`, 단위 32/32·e2e 93/93. 실제 마이크·iOS 공유 스트림 영향은 미검증.
+- 2.5D 마을 시각 보정 완료 — 장식 레이어(잔디/자갈길/화단/건물 접지), 구매·배치·이동 로직 무변경, 커밋 895ec4cd.
+- 남음: Speaking ②~④(평가·발음)는 운영자 결정 후, 마을 나머지 객체 접지 점검. DB·SQL·Production 변경 없음. 상세: `handoff.md` 200차.
+
+## 2026-10-02 (198차) — 학생 홈 4메뉴 + 로그인 중복 fetch 제거 + Writing/Speaking 설계 문서 — 상태: 학생 홈·fetch 코드 완료 ✅(PR #62 브랜치, Draft), 설계 문서 완료·구현 미착수
+
+- 학생 홈 4메뉴(Voca/나의 성장/문장 쓰기/말하기 + 내 마을) 완료 — 플래그 `studentHomeMenu`(기기 로컬 kill switch), 커밋 `02d546cb`/`7220740f`, e2e `[student-home]` 191 PASS/0 FAIL/1 SKIP.
+- 로그인 중복 fetch 제거 완료(커밋 `3238df49`): 로그인→홈 요청 14~19건 → 6건, 중복 0. 수용 한계: 60초 창 내 관리자 변경은 다음 재검증까지 미반영.
+- Writing 파일럿/Speaking 설계 문서 완료(`docs/design/WRITING_PILOT_DESIGN_2026-10-02.md`, `docs/design/SPEAKING_DESIGN_2026-10-02.md`) — **구현 미착수**, 운영자 결정(모델·동의·호스팅·반 선정·보관 정책) 대기. DB·SQL·Production 변경 없음. 상세: `handoff.md` 198차.
+
+## 2026-09-18 (170차) — Paul Town V2 렌더러 통합: 승인 월드·아트 35종을 실제 V2 렌더러에 연결 — 상태: 렌더러 코드 완료 ✅(플래그 OFF, push/PR/merge/배포 미실행)
+
+169차(Paul Town Batch 1 아트 통합 A/B/C, 하네스 34/34 실물·staged 35/38)
+직후 같은 날, 승인된 월드 지오메트리·동결 장식 데이터·아트 35종을 실제
+V2 렌더러 컴포넌트에 배선했다. 새 화폐·가격·레벨 규칙 0(기존 `townScene.js`/
+`townLayout.js`/`townCatalog.js`/`townLevel.js`/`useStudent.js` 전부
+무변경) — 이번 작업은 **렌더링 계층만** 새로 추가했다: 세계 좌표 어댑터
+(`worldRender.js`), 동결 지오메트리(`worldContract.js`)와 배치 계약
+(`placementContract.js`)·깊이 모델(`depthOrder.js`)에 이미 확정돼 있던
+값을 그대로 참조해 좌표·앵커·z-index로 변환할 뿐 새 규칙을 만들지
+않는다(CLAUDE.md 규칙 3), 동결 장식 데이터(`worldScenery.js`, 승인
+디자인 하네스 `paul-town-recompose.html`과 `node:vm`으로 직접 대조),
+env 아트 35종 전용 자산 레지스트리(`src/assets/town/env/`, 기존
+`TOWN_ASSETS`와 완전 분리), 씬 컴포넌트 8개(`TownScene`/
+`TownGroundLayer`/`TownWaterLayer`/`TownPathLayer`/`TownSceneryLayer`/
+`TownObjectLayer`/`TownFogLayer`/`TownPlacementOverlay`).
+
+**"완료"의 의미** — 렌더러 코드는 `paulTownV2:true`로 켰을 때 학생이
+실제로 보게 될 화면을 이미 그린다(로컬 스크린샷 18장으로 확인). 다만
+플래그는 세션 내내 `false`였고 push/PR/merge/배포가 전혀 없었으므로,
+아직 "배포됐다"/"공개됐다"는 의미가 아니다 — 코드가 준비됐고 검증까지
+끝났다는 뜻이다.
+
+**검증** — `npm run build` PASS(경고 0). 신규 순수 단위 테스트 9종
+(`testTownWorldContract`/`testTownPlacementContract`/
+`testTownHarnessGeometrySync`/`testTownDepthOrder`/`testEnvArtManifest`/
+`validateEnvArtManifest`/`testTownEnvAssets`/`testTownWorldRender`/
+`testTownWorldScenery`)이 이번 세션에 `tests/harness/registry.mjs`에
+`extra:false`로 처음 등록됐다(작성 당시 미등록이라 `verify:all`에서
+한 번도 실행되지 않고 있었다). 브라우저 E2E 전체 스펙 974 PASS/0 FAIL/
+0 SKIP(exit 0). 플래그 OFF 상태에서 V1/메인 번들이 env 자산을 전혀
+요청하지 않는다는 정적 증거까지 확인. 상세 수치는 `handoff.md`
+2026-09-18(170차) 3절.
+
+**남은 것** — ① 플래그 `paulTownV2` ON 전환 시점은 이번 세션 범위 밖의
+별도 운영자 결정. ② 다듬기 항목(오너 확인 필요): 4방향 팻말
+("Learn/Grow/Be Kind/Go Further") 문구 렌더 여부(현재 미렌더), 정원
+화단 위치가 동결값이 아님, 구매 가능 카탈로그 아이템(벤치/우체통/화단/
+가로등)이 하네스처럼 고정 배경 소품으로 그려져 소유 여부와 혼동 가능,
+잠금 실루엣 UX 최종 확인. ③ Batch E 아트(fence-post/fence-gate-closed/
+hedge-corner)는 여전히 spec-only 제작 여부 미결(제작해도 화면 변화
+없음). ④ `56.png`(shrub-wide 대체 후보)는 여전히 미승격 보류. 상세는
+`handoff.md` 2026-09-18(170차) 4·5절.
+
 _(2026-09-11 125차 추가) Paul Town V1 구현 — 마을 상점 확장(신규 아이템
 16종·레벨 잠금·8×6 배치·신규 학생 웰컴 크레딧), 브랜치
 `feat/paul-town-v1`, 플래그 `paulTownV1` OFF, `supabase_v3_50_town_v1.sql`
