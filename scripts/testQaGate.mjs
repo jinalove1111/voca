@@ -32,11 +32,11 @@ check('이름 "cookie" false(이름 매칭 없음)', mod.isQaTestStudent('cookie
 
 const app = read('src/App.jsx')
 const lineOf = (re) => app.split('\n').find((l) => re.test(l)) || ''
-check('App.jsx가 isQaTestStudent import', /import \{ isQaTestStudent \} from '\.\/config\/qaTestAccounts'/.test(app))
+check('App.jsx가 isQaTestStudent import', /import \{ isQaTestStudent, isTownWorldTester \} from '\.\/config\/qaTestAccounts'/.test(app))
 check('studentHomeEnabled가 qaTestStudent와 AND', /const studentHomeEnabled =.*&& qaTestStudent/.test(lineOf(/const studentHomeEnabled =/)))
 check('초기 screen useState가 isQaTestStudent(studentId) 사용', /const \[screen, setScreen\].*isQaTestStudent\(studentId\)/.test(lineOf(/const \[screen, setScreen\]/)))
 check('paulTown2_5dEnabled가 qaTestStudent와 AND', /&& qaTestStudent/.test(lineOf(/const paulTown2_5dEnabled =/)))
-check('QA_ONLY_SCREENS 8개(244차 townWorld 추가; 224차 unit, 2026-10-10 grammarCourses·grammarVillage 추가)', /const QA_ONLY_SCREENS = \['home', 'speaking', 'growth', 'proto25d', 'townWorld', 'unit', 'grammarCourses', 'grammarVillage'\]/.test(app))
+check('QA_ONLY_SCREENS 7개(245차 townWorld는 별도 가드로 분리; 224차 unit, 2026-10-10 grammarCourses·grammarVillage 추가)', /const QA_ONLY_SCREENS = \['home', 'speaking', 'growth', 'proto25d', 'unit', 'grammarCourses', 'grammarVillage'\]/.test(app))
 check('직접 진입 차단 effect', /useEffect\(\(\) => \{ if \(!qaTestStudent && QA_ONLY_SCREENS\.includes\(screen\)\) setScreen\('dashboard'\) \}, \[qaTestStudent, screen\]\)/.test(app))
 for (const k of ['home', 'speaking', 'growth']) {
   check(`screen === '${k}' 렌더가 qaTestStudent로 게이팅`, new RegExp(`qaTestStudent && screen === '${k}' &&`).test(app))

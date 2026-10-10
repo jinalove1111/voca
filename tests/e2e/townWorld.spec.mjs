@@ -1,5 +1,6 @@
 // tests/e2e/townWorld.spec.mjs — 하이브리드 2.5D 월드(townWorld) 브라우저 시나리오. 네트워크 전체 mock, 저장 0.
 // 가정(배선 에이전트): 플래그 paulTownWorld + QA 계정이면 홈 마을 버튼(student-home-town)이 town-world를 연다.
+// (g) 마을 전용 테스터(id …a002, 기본 플래그) 대시보드 진입 (h) 일반 학생 진입 없음(245차). 로그인 학생 id 덮어쓰기: installMocks(page, { studentId }) — verify-student-pin mock이 그 id를 내려준다.
 // (a) 데스크톱 이동/충돌/공원 걷기 (b) 지도 빠른 이동 (c) 미션 왕복(문법·쓰기·발표) (d) 모바일 조이스틱/HUD/문 (e) 준비 중 구역 (f) 쓰기 0/저장소 불변/콘솔 오류 0.
 import { mkdirSync } from 'node:fs'
 import { installMocks } from './lib/mockRoutes.mjs'
@@ -88,6 +89,16 @@ async function loginOnly(page) {
   await page.getByRole('button', { name: '시작하기!' }).click()
   await home.waitFor({ state: 'visible', timeout: 20000 })
 }
+// 기본 플래그(localStorage 시딩 없음)로 로그인하고 대시보드가 뜰 때까지 기다린다 — 학생 홈 메뉴 없이 일반 대시보드로 착지.
+async function loginToDashboard(page) {
+  const input = page.getByPlaceholder('이름 입력...')
+  await input.waitFor({ state: 'visible', timeout: 90000 })
+  await input.fill(QA_STUDENT_NAME)
+  await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
+  await page.getByRole('button', { name: '시작하기!' }).click()
+  await input.waitFor({ state: 'hidden', timeout: 20000 })
+  await sleep(1500)
+}
 async function enterWorld(page) {
   await T(page, 'student-home-town').waitFor({ state: 'visible', timeout: 15000 })
   await T(page, 'student-home-town').click()
@@ -157,23 +168,27 @@ export async function run(browser, baseURL) {
   const mockErrors = []
   try { mkdirSync(SHOTS_DIR, { recursive: true }) } catch { /* 스크린샷만 건너뜀 */ }
 
-  async function scenario(label, vp, body, { hasTouch = false } = {}) {
+  async function scenario(label, vp, body, { hasTouch = false, studentId = null, defaultFlags = false } = {}) {
     const context = await browser.newContext({ viewport: vp, hasTouch })
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`) })
     page.on('dialog', (d) => d.accept().catch(() => {}))
-    await page.addInitScript(() => {
-      try { localStorage.setItem('paulEasyVoca_features', JSON.stringify({ studentHomeMenu: true, paulTown2_5d: true, paulTownWorld: true })) } catch { /* 무시 */ }
-    })
-    const { unmockedRequests: u, apiCallLog } = await installMocks(page)
+    const reqUrls = []
+    page.on('request', (q) => reqUrls.push(q.url()))
+    if (!defaultFlags) {
+      await page.addInitScript(() => {
+        try { localStorage.setItem('paulEasyVoca_features', JSON.stringify({ studentHomeMenu: true, paulTown2_5d: true, paulTownWorld: true })) } catch { /* 무시 */ }
+      })
+    }
+    const { unmockedRequests: u, apiCallLog } = await installMocks(page, studentId ? { studentId } : {})
     const name = `${label} [${vp.width}x${vp.height}]`
     try {
       await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
-      await loginOnly(page)
+      await (defaultFlags ? loginToDashboard(page) : loginOnly(page))
       const base = await storageSnap(page)
-      await body({ page, context, name, apiCallLog })
+      await body({ page, context, name, apiCallLog, reqUrls })
       r.check(`${name} 콘솔/페이지 오류 0건`, errors.length === 0, errors.slice(0, 3).join(' | '))
       const bad = badWrites(apiCallLog)
       r.check(`${name} 로그인/분석 외 REST 쓰기 0건`, bad.length === 0, bad.slice(0, 3).join(' | '))
@@ -400,6 +415,73 @@ export async function run(browser, baseURL) {
     await holdSampling(page, 'ArrowLeft', 2500, s2); await holdSampling(page, 'ArrowDown', 2500, s2)
     r.check(`${name} (e) 걸어서 어떤 준비 중 구역 사각형 안에도 들어가지 못함(${s2.length}샘플)`, s2.every((q) => !inSoon(q) && !hitsAnySolid(q)), JSON.stringify(s2.find(inSoon)))
   }, { hasTouch: true })
+
+  // ---- (g) 마을 전용 테스터(…a002): 기본 플래그, 대시보드 버튼으로 새 마을 진입 ----
+  const PARK = ZONES.find((z) => z.id === 'park')
+  const inRect = (p, z) => p.x > z.rect.x && p.x < z.rect.x + z.rect.w && p.y > z.rect.y && p.y < z.rect.y + z.rect.h
+  const inVp = (b, vp) => !!b && b.width > 0 && b.height > 0 && b.x >= 0 && b.y >= 0 && b.x + b.width <= vp.width && b.y + b.height <= vp.height
+  await scenario('(g) 마을 전용 테스터', { width: 1280, height: 800 }, async ({ page, name }) => {
+    const vp = { width: 1280, height: 800 }
+    await T(page, 'dash-town-world').waitFor({ state: 'visible', timeout: 15000 })
+    const bb = await T(page, 'dash-town-world').boundingBox()
+    r.check(`${name} 대시보드에 새 마을 버튼 보임(높이 44px 이상, 홈 메뉴 없이)`, bb && bb.height >= 43.9 && (await T(page, 'student-home').count()) === 0, JSON.stringify(bb))
+    await T(page, 'dash-town-world').click()
+    await T(page, 'town-world').waitFor({ state: 'visible', timeout: 20000 })
+    const pb = await T(page, 'tw-paul').boundingBox()
+    r.check(`${name} 캐릭터(tw-paul)가 화면 안에 0 아닌 크기로 보임`, inVp(pb, vp), JSON.stringify(pb))
+    const p0 = await pos(page)
+    await page.keyboard.down('ArrowRight'); await sleep(450); await page.keyboard.up('ArrowRight')
+    const p1 = await pos(page)
+    await page.keyboard.down('ArrowDown'); await sleep(450); await page.keyboard.up('ArrowDown')
+    const p2 = await pos(page)
+    r.check(`${name} 화살표 오른쪽/아래로 data-x/data-y 변함`, p1.x > p0.x + 2 && p2.y > p1.y + 2, JSON.stringify({ p0, p1, p2 }))
+    await page.keyboard.down('a'); await sleep(450); await page.keyboard.up('a')
+    const p3 = await pos(page)
+    await page.keyboard.down('w'); await sleep(450); await page.keyboard.up('w')
+    const p4 = await pos(page)
+    r.check(`${name} WASD(a/w)로 data-x/data-y 변함`, p3.x < p2.x - 2 && p4.y < p3.y - 2, JSON.stringify({ p2, p3, p4 }))
+    const pb2 = await T(page, 'tw-paul').boundingBox()
+    r.check(`${name} 걸은 뒤에도 캐릭터가 화면 안(카메라 추적)`, inVp(pb2, vp), JSON.stringify(pb2))
+    // 건물(충돌 박스)로 걸어 들어가도 통과하지 못함
+    const sm = []
+    await holdSampling(page, 'ArrowUp', 3000, sm); await holdSampling(page, 'ArrowLeft', 3000, sm); await holdSampling(page, 'ArrowDown', 3000, sm)
+    r.check(`${name} 건물/충돌 박스를 침범하지 않음(${sm.length}샘플)`, sm.every((q) => !hitsAnySolid(q)), JSON.stringify(sm.find(hitsAnySolid)))
+    // 지도로 공원 이동
+    const chip0 = ((await T(page, 'tw-zone-chip').textContent()) || '').trim()
+    await T(page, 'tw-map-open').click(); await T(page, 'tw-map-place-park-green').click()
+    await T(page, 'tw-mission-enter').waitFor({ state: 'visible', timeout: 5000 })
+    const pp = await pos(page), chip1 = ((await T(page, 'tw-zone-chip').textContent()) || '').trim()
+    r.check(`${name} 지도로 공원 이동: 위치가 공원 구역 안 + 구역 칩 변경`, inRect(pp, PARK) && chip1 !== chip0, JSON.stringify({ pp, chip0, chip1 }))
+    // 장소 시트: 미션 비활성 + 안내 문구
+    await T(page, 'tw-mission-enter').click()
+    await T(page, 'tw-place-sheet').waitFor({ state: 'visible', timeout: 5000 })
+    const btns = page.locator('button[data-testid^="tw-mission-"][data-kind]')
+    const nBtn = await btns.count(); let allDisabled = nBtn > 0
+    for (let i = 0; i < nBtn; i++) if (!(await btns.nth(i).isDisabled())) allDisabled = false
+    r.check(`${name} 장소 시트: 안내 문구(tw-missions-closed) 보임 + 미션 버튼 ${nBtn}개 모두 disabled`, (await T(page, 'tw-missions-closed').isVisible()) && ((await T(page, 'tw-missions-closed').textContent()) || '').includes('이 계정은 마을 걷기와 지도 이동만 테스트해요.') && allDisabled, String(nBtn))
+    await T(page, 'tw-sheet-close').click()
+    // 홈 버튼 -> 대시보드(홈 메뉴 아님)
+    await T(page, 'tw-home').click()
+    await T(page, 'dash-town-world').waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} ← 홈은 대시보드로 복귀(홈 메뉴 아님)`, (await T(page, 'town-world').count()) === 0 && (await T(page, 'student-home').count()) === 0)
+    // 허브(paulTown)에서도 진입 카드 — 홈 밴드의 "구경가기"가 있을 때만(밴드는 별도 플래그라 기본 상태에서는 없을 수 있음)
+    const hub = page.getByRole('button', { name: '구경가기' })
+    if ((await hub.count()) > 0) {
+      await hub.first().click()
+      await T(page, 'paul-town-world-entry').waitFor({ state: 'visible', timeout: 10000 })
+      r.check(`${name} 허브(paulTown)에 새 마을 걷기 카드 보임`, true)
+    } else console.log(`${name} (참고) 홈 밴드가 없어 허브 진입 카드 확인 생략`)
+  }, { studentId: 'e2e00000-0000-4000-8000-00000000a002', defaultFlags: true })
+
+  // ---- (h) 일반 학생(두 목록 모두에 없는 id): 진입점 없음, 청크 요청 없음 ----
+  await scenario('(h) 일반 학생', { width: 1280, height: 800 }, async ({ page, name, reqUrls }) => {
+    await sleep(1000)
+    r.check(`${name} 대시보드에 새 마을 버튼 없음`, (await T(page, 'dash-town-world').count()) === 0)
+    r.check(`${name} 허브 진입 카드 없음`, (await T(page, 'paul-town-world-entry').count()) === 0)
+    r.check(`${name} town-world가 마운트되지 않음`, (await T(page, 'town-world').count()) === 0)
+    const chunk = reqUrls.filter((u) => /TownWorld/i.test(u))
+    r.check(`${name} TownWorld 청크 요청 0건`, chunk.length === 0, chunk.slice(0, 2).join(','))
+  }, { studentId: 'e2e00000-0000-4000-8000-00000000b001', defaultFlags: true })
 
   return { results: r.results, unmockedRequests, mockErrors }
 }
