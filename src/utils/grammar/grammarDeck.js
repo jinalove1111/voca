@@ -9,7 +9,8 @@ export function buildDeck(unit, pilotUnits) {
   const d = []
   const add = (kind, stepKo, title, payload = {}, key = '') => d.push({ id: `${kind}${key === '' ? '' : '-' + key}`, kind, stepKo, title, ...payload })
   add('goal', '목표', '학습 목표', { titleKo: unit.titleKo, goalKo: unit.goalKo, situationKo: ex[0]?.ko, basicsUnitId: unit.basicsUnitId })
-  if (unit.scene) { // 그림 미션 단원: 장면 카드가 예문~활용을 대신한다(goal 다음 → 장면 카드 → summary)
+  const addScene = unit.scene?.mode === 'add' ? sceneCards(unit) : [] // add 모드: 설명 카드는 구조 뒤, 활동 카드는 오류 뒤(선택 앞)
+  if (unit.scene && unit.scene.mode !== 'add') { // 그림 미션 단원: 장면 카드가 예문~활용을 대신한다(goal 다음 → 장면 카드 → summary)
     d.push(...sceneCards(unit))
     add('summary', '마무리', '학습 요약')
     return d
@@ -17,8 +18,10 @@ export function buildDeck(unit, pilotUnits) {
   add('examples', '예문', '상황·예문', { examples: ex })
   ;(unit.explainKo || []).forEach((line, i) => add('explain', '설명', '쉬운 설명', { line, example: ex[i] || ex[0] }, i))
   add('structure', '구조', '문장 구조', { structure: unit.structure || [] })
+  d.push(...addScene.filter((c) => c.slot === 'explain'))
   if (unit.compare) add('compare', '비교', '긍정·부정·의문 비교', { compare: unit.compare })
   ;(unit.errors || []).forEach((e, i) => add('error', '오류', '흔한 오류', { wrong: e.wrong, right: e.right, whyKo: e.whyKo }, i))
+  d.push(...addScene.filter((c) => c.slot === 'practice'))
   resolveChoice(unit, pilotUnits).forEach((q, i) => add('choice', '연습 · 선택', '선택 연습', { q }, i))
   ;(p.blank || []).forEach((q, i) => add('blank', '연습 · 빈칸', '빈칸 연습', { q }, i))
   ;(p.order || []).forEach((q, i) => add('order', '연습 · 순서', '순서 연습', { q }, i))

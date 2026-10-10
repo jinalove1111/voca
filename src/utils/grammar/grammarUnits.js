@@ -20,6 +20,11 @@
 // - Easy-01 구조의 "I can borrow"는 어순 비교용이며, 능력의 can은 Easy-04.
 // - be동사 단원이 Easy-03이라 Where's(= Where is)가 먼저 나옴 — Easy-02에서 Where's를 덩어리로 가르쳐도 되는지 확인.
 import { GRAMMAR_COURSES } from './grammarCourses.js'
+import easy from './scenes/easy.js'
+import int from './scenes/int.js'
+import adv from './scenes/adv.js'
+import mid from './scenes/mid.js'
+import high from './scenes/high.js'
 
 const P = (id, courseId, order, titleKo, goalKo, conceptId, prereqIds, extra = {}) => ({
   id, courseId, order, titleKo, goalKo, conceptId, prereqIds, status: 'preparing',
@@ -227,7 +232,7 @@ const READY_UNITS = [
     titleKo: '…이 있어요 There is', goalKo: '방에 무엇이 있는지 말할 수 있어요',
     conceptId: 'there-is-are', prereqIds: ['g-easy-02'], status: 'ready', reviewStatus: 'unreviewed',
     scene: {
-      id: 'park', titleKo: '폴타운 공원', bgKo: '공원 배경(하늘·잔디)', characters: ['paul', 'cookie'],
+      id: 'park', mode: 'full', titleKo: '폴타운 공원', bgKo: '공원 배경(하늘·잔디)', characters: ['paul', 'cookie'],
       objects: {
         dog:   { en: 'dog',   enPlural: 'dogs',    ko: '강아지' },
         tree:  { en: 'tree',  enPlural: 'trees',   ko: '나무' },
@@ -1807,7 +1812,16 @@ const OUTLINE_UNITS = [
   // High School (6)
 ]
 
-export const GRAMMAR_UNITS = [...READY_UNITS, ...OUTLINE_UNITS]
+// Scene v2: scenes/<course>.js의 { '단원id': { scene, wordsAdd } }를 단원에 붙인다(단원에 이미 scene이 있으면 그대로). wordsAdd는 words에 en 중복 없이 합친다.
+const SCENES = { ...easy, ...int, ...adv, ...mid, ...high }
+const withScene = (u) => {
+  const d = SCENES[u.id]
+  if (!d) return u
+  const have = new Set((u.words || []).map((w) => w.en.toLowerCase()))
+  const add = (d.wordsAdd || []).filter((w) => !have.has(w.en.toLowerCase()))
+  return { ...u, scene: u.scene || d.scene, ...(u.words || add.length ? { words: [...(u.words || []), ...add] } : {}) }
+}
+export const GRAMMAR_UNITS = [...READY_UNITS, ...OUTLINE_UNITS].map(withScene)
 
 export const grammarUnitById = (id) => GRAMMAR_UNITS.find((u) => u.id === id) || null
 export const unitsForCourse = (courseId) => GRAMMAR_UNITS.filter((u) => u.courseId === courseId).sort((a, b) => a.order - b.order)
