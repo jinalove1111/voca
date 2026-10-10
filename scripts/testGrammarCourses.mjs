@@ -450,5 +450,12 @@ const miniBall = LI([{ obj: 'ball' }], { mini: true })[0], miniFar = LI([{ obj: 
 check('scene v2 D: 작은 무대(mini) — 가장 긴 변 ≥22(공 16→22), far는 0.6배지만 16 아래로 내려가지 않고 near보다 작음, 연필 같은 얇은 물건도 ≥22, 큰 무대는 그대로, Stage sm이 mini를 켬',
   Math.max(miniBall.w, miniBall.h) >= 22 - 1e-9 && Math.max(miniFar.w, miniFar.h) >= 16 - 1e-9 && miniFar.w < miniBall.w && Math.max(miniPen.w, miniPen.h) >= 22 && nearBall.w === 16 && LI([{ obj: 'ball', dist: 'far' }])[0].w === 9.6 && STX.includes("mini: size === 'sm'")
   && ['pencil', 'key', 'ball', 'egg', 'phone', 'medal', 'money'].every((k) => { const t = LI([{ obj: k }], { mini: true })[0]; return Math.max(t.w, t.h) >= 22 - 1e-9 }))
+// 2026-10-10 그림 담당(공원 실제 이미지 + 이모지 줄이기)
+check('scene v2 park: 공원 배경은 기존 backgrounds 실파일(하늘·산울타리)만 import, env/ 폴더는 import 안 함, 작은 무대(mini)에선 산울타리 생략, 파일은 실제로 존재',
+  /import skyBackdrop from '\.\.\/\.\.\/assets\/town\/backgrounds\/village-sky-backdrop\.webp'/.test(STG) && /import hedgeBorder from '\.\.\/\.\.\/assets\/town\/backgrounds\/village-hedge-border\.webp'/.test(STG)
+  && !/assets\/town\/env/.test(STG) && STG.includes('{!mini && <>') && fs.existsSync(new URL('../src/assets/town/backgrounds/village-sky-backdrop.webp', import.meta.url)) && fs.existsSync(new URL('../src/assets/town/backgrounds/village-hedge-border.webp', import.meta.url)))
+check('scene v2 park: 손으로 그린 해·구름 도형 없음(default 배경에 노란 원·흰 타원 없음)', (() => { const d = STG.slice(STG.indexOf('default: return'), STG.indexOf('const fig =')); return !/#fde047|ellipse cx="80"|ellipse cx="108"/.test(d) })())
+check('scene v2 이모지: SceneCards에 🔊·✅ 글자 없음, 듣기 버튼은 인라인 SVG 스피커 + aria-label "듣기" 유지(testid 그대로), 동작 배지(ACTIONS)는 그대로',
+  !/🔊|✅/.test(SC) && SC.includes('const Speaker = () => <svg aria-hidden="true"') && SC.includes('aria-label="듣기"') && SC.includes('<Speaker />') && /ACTIONS\.run|emoji: '🏃'/.test(read('src/utils/grammar/sceneProps.js')))
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
 console.log('\nALL PASS')

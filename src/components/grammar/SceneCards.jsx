@@ -25,7 +25,9 @@ function Pic({ c, o, paul = true, ...rest }) {
 // 보기 표시 순서(add만 섞음, 시범 full은 데이터 순서). 번호·testid·선택 상태는 항상 데이터 번호
 const ordFor = (c, n) => (c.unitScene.mode === 'add' ? displayOrder(n, c.seed) : Array.from({ length: n }, (_, i) => i))
 const Prompt = ({ children }) => <p className="text-base font-black text-gray-900 break-keep">{children}</p>
-const Listen = ({ testid, en }) => <button data-testid={testid} aria-label="듣기" onClick={() => speak(en)} className={`${BTN} !px-3 bg-white card-shadow text-lg shrink-0`}>🔊</button>
+// 2026-10-10 이모지 없이 작은 인라인 SVG 스피커 아이콘(글자 대신 그림, 접근성 이름은 aria-label '듣기')
+const Speaker = () => <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor" /><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" /></svg>
+const Listen = ({ testid, en }) => <button data-testid={testid} aria-label="듣기" onClick={() => speak(en)} className={`${BTN} !px-3 bg-white card-shadow text-lg shrink-0`}><Speaker /></button>
 const Line = ({ en, ko, testid, listenTestid }) => (
   <div className="flex items-center gap-2">
     <div className="min-w-0 flex-1"><p data-testid={testid} className="text-lg font-black text-gray-900 break-words">{en}</p>{ko && <p className="text-sm text-gray-600 break-keep">{ko}</p>}</div>
@@ -34,7 +36,7 @@ const Line = ({ en, ko, testid, listenTestid }) => (
 )
 const Result = ({ ok, whyKo, onRetry, extra }) => (
   <div data-testid="scene-result" data-ok={ok ? 'true' : 'false'} className="space-y-1">
-    <p data-testid="scene-why" className={`text-sm break-keep ${ok ? 'text-emerald-700' : 'text-gray-700'}`}>{ok ? '✅ 맞아요. ' : '다시 보세요. '}{extra}{whyKo}</p>
+    <p data-testid="scene-why" className={`text-sm break-keep ${ok ? 'text-emerald-700' : 'text-gray-700'}`}>{ok ? '맞아요. ' : '다시 보세요. '}{extra}{whyKo}</p>
     {!ok && <button data-testid="scene-retry" onClick={onRetry} className={SECOND}>다시 풀기</button>}
   </div>
 )
@@ -204,7 +206,7 @@ function ListenPick({ c, a, set, clear }) {
   return (
     <div className="space-y-3">
       <Prompt>{c.step.promptKo || '문장을 듣고 맞는 그림을 골라요.'}</Prompt>
-      <button data-testid="scene-listen-play" onClick={() => speak(it.en)} className={`${BTN} text-base bg-indigo-100 text-indigo-800`}>🔊 문장 듣기</button>
+      <button data-testid="scene-listen-play" onClick={() => speak(it.en)} className={`${BTN} text-base bg-sky-100 text-sky-900 inline-flex items-center justify-center gap-2`}><Speaker /><span>문장 듣기</span></button>
       <div className="grid grid-cols-2 gap-2">
         {ord.map((j, pos) => [it.options[j], j, pos]).map(([o, j, pos]) => (
           <button key={j} data-testid={`scene-pic-${j}`} disabled={a.checked} aria-label={`그림 ${pos + 1}`} aria-pressed={picked === j}
@@ -233,7 +235,7 @@ function SpeakPractice({ c, a, set, my }) {
       {(s.alternatives || []).length > 0 && <p className="text-sm text-gray-700 break-words">이렇게 말해도 돼요: {s.alternatives.join(' / ')}</p>}
       <RecorderControls rec={rec} prefix="scene" />
       <button data-testid="scene-said" onClick={() => set({ done: true })} className={PRIMARY}>말해 봤어요</button>
-      {a.done && <p className="text-sm font-bold text-emerald-700 break-keep">✅ 잘했어요. 내 말이 달라도 괜찮아요.</p>}
+      {a.done && <p className="text-sm font-bold text-emerald-700 break-keep">잘했어요. 내 말이 달라도 괜찮아요.</p>}
     </div>)
 }
 
@@ -284,7 +286,7 @@ function Finish({ c, studentId }) {
   useEffect(() => { if (sent.current) return; sent.current = true; trackEvent?.(studentId, 'grammar_scene_finish') }, [studentId]) // 분석 이벤트 하나뿐(보상·XP 없음)
   return (
     <div data-testid="scene-finish" className="space-y-3">
-      <ul className="space-y-1">{step.canDoKo.map((l, i) => <li key={i} data-testid={`scene-cando-${i}`} className="text-base font-black text-gray-900 break-keep">✅ {l}</li>)}</ul>
+      <ul className="space-y-1">{step.canDoKo.map((l, i) => <li key={i} data-testid={`scene-cando-${i}`} className="text-base font-black text-gray-900 break-keep">{l}</li>)}</ul>
       <div className="flex items-center gap-3">
         <img src={paulGreat} alt="" aria-hidden="true" className="h-20 w-auto shrink-0" />
         <p data-testid="scene-paul-bubble" className="rounded-2xl bg-sky-50 border-2 border-sky-100 px-3 py-2 text-base font-bold text-gray-800 break-keep">{step.paulKo}</p>

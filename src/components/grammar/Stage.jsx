@@ -1,23 +1,30 @@
 import { townAsset } from '../../assets/town'
 import { paulHappy } from '../../assets/paul'
+// 공원 배경: 기존 프로젝트 이미지(마을 하늘·산울타리). Vite가 4KB 초과 파일을 해시 파일로 따로 내보내므로 lazy 청크엔 URL 문자열만 들어간다.
+import skyBackdrop from '../../assets/town/backgrounds/village-sky-backdrop.webp'
+import hedgeBorder from '../../assets/town/backgrounds/village-hedge-border.webp'
 import { PROPS, ACTIONS, CONTAINERS } from '../../utils/grammar/sceneProps'
 import { layoutItems, tally, viewOf } from '../../utils/grammar/sceneMission'
 
 // 2026-10-10 Scene v2 범용 그림 무대(인라인 SVG, viewBox 360x220). 문장·정답은 그림에 넣지 않는다(aria-label도 한국어 설명만).
 // 물건은 sceneProps의 PROPS 키로만 그린다: Town 스프라이트(asset)가 있으면 그것, paul은 Paul 이미지, 나머지는 아래 임시 SVG 도형.
-// TODO assets (운영자가 주면 아래 임시 도형만 교체; 파일 이름 = PROPS 키 + .webp/.png):
-//   배경 일러스트: park(하늘·잔디·길), home(거실 벽·바닥·창문), school(칠판·교실 바닥), street(건물·인도·도로), plain(부드러운 그라데이션)
-//   캐릭터: cookie(쿠키 전용 강아지; 지금은 Town puppy가 대신), mia, tom, mom, dad, teacher, kid, grandma, driver
-//   동물: bird, fish
-//   물건: ball, box, book, bag, pencil, cup, apple, bike, car, bus, phone, chair, table, bed, door, umbrella, hat, letter, cake, pizza, milk, egg, key, map, clock,
-//         guitar, kite, tv, computer, window, desk, board, money, ticket, gift, shoes, jacket, homework, newspaper, medal, trophy
-//   동작 배지: ACTIONS의 이모지(임시) 전부
-//   (실제 스프라이트가 이미 있는 tree·bench·flower·lamp·postbox·fountain·house·school·cafe·shop·bridge·tower·dog·cat·owl은 townAsset 그대로 쓴다)
+// TODO assets — 그림 파일 현황 (규칙: src/assets/town/<group>/<kebab-name>.webp + 같은 이름 @2x, 흰 배경 없는 투명 PNG→WebP)
+//  실제 파일 사용 중: 공원 하늘 backgrounds/village-sky-backdrop.webp, 산울타리 backgrounds/village-hedge-border.webp(공원 배경, 작은 그림 sm에선 생략),
+//   Paul paul/*, Town 스프라이트 tree·bench·flower(flower-garden)·lamp(street-lamp)·postbox·fountain·house·school·cafe·shop·bridge·tower·dog/cookie(puppy)·cat·owl.
+//  아직 임시 도형(SVG) — 필요한 파일과 제안 위치:
+//   배경: backgrounds/park-backdrop.webp(공원 하늘·잔디·길을 한 장으로; 지금은 하늘/산울타리 실파일 + 잔디·길 단색 도형), backgrounds/home-backdrop.webp, school-backdrop.webp, street-backdrop.webp, plain-backdrop.webp
+//   쿠키: character/cookie-idle.webp, character/cookie-sit.webp (지금은 Town puppy)
+//   사람: character/mia.webp, tom, mom, dad, teacher, kid, grandma, driver (각 character/<이름>.webp)
+//   동물: animals/bird.webp, animals/fish.webp
+//   물건(props/<키>.webp): ball, box, book, bag, pencil, cup, apple, bike, car, bus, phone, chair, table, bed, door, umbrella, hat, letter, cake, pizza, milk, egg, key, map, clock,
+//         guitar, kite, tv, computer, window, desk, board, money, ticket, gift, shoes, jacket, homework, newspaper, medal, trophy  (예: props/ball.webp)
+//   동작 배지: ACTIONS의 이모지(임시, 유지) → ui/action-<키>.webp
+//   (town 환경 이미지 폴더는 town/v2 전용 가드(testTownEnvAssets)가 있어 여기서 import하지 않는다)
 export const BG_KO = { park: '공원', home: '집', school: '학교', street: '거리', plain: '장면' }
 const REL_KO = { in: '안', on: '위', under: '아래', 'next to': '옆', behind: '뒤', 'in front of': '앞' }
 const OUT = '#374151'
 
-function Bg({ bg }) {
+function Bg({ bg, mini }) {
   switch (bg) {
     case 'home': return (<>
       <rect width="360" height="220" fill="#fef3c7" /><rect y="150" width="360" height="70" fill="#d9b98a" /><rect y="146" width="360" height="6" fill="#b48a5a" />
@@ -34,9 +41,10 @@ function Bg({ bg }) {
       <defs><linearGradient id="stage-plain-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#e0f2fe" /><stop offset="1" stopColor="#fef9c3" /></linearGradient></defs>
       <rect width="360" height="220" fill="url(#stage-plain-grad)" /><ellipse cx="180" cy="200" rx="160" ry="14" fill="#fff" opacity="0.6" /></>)
     default: return (<>
-      <rect width="360" height="220" fill="#bfe6ff" /><circle cx="318" cy="34" r="18" fill="#fde047" />
-      <ellipse cx="80" cy="40" rx="34" ry="12" fill="#fff" opacity="0.9" /><ellipse cx="108" cy="34" rx="24" ry="10" fill="#fff" opacity="0.9" />
-      <rect y="116" width="360" height="104" fill="#a7dc8c" /><ellipse cx="190" cy="206" rx="170" ry="14" fill="#e9d8a6" opacity="0.8" /></>)
+      <rect width="360" height="220" fill="#dbeaf5" /><image href={skyBackdrop} x="0" y="0" width="360" height="124" preserveAspectRatio="xMidYMid slice" />
+      <rect y="116" width="360" height="104" fill="#b9d3a2" />
+      {!mini && <><image href={hedgeBorder} x="0" y="70" width="360" height="54" preserveAspectRatio="xMidYMax slice" /><rect y="70" width="360" height="54" fill="#f5efdc" opacity="0.18" /></>}
+      <ellipse cx="190" cy="206" rx="170" ry="14" fill="#eadfbf" opacity="0.85" /></>)
   }
 }
 
@@ -161,7 +169,7 @@ function StageSvg({ layout = [], placed = [], spots = [], highlight, tapObj, onT
   return (
     <svg {...(testId ? { 'data-testid': testId } : {})} data-counts={Object.entries(counts).map(([o, n]) => `${o}:${n}`).join(',')} data-size={size} data-bg={bg} viewBox="0 0 360 220" role="img" aria-label={`${BG_KO[bg] || '장면'} 그림${desc ? `: ${desc}` : ': 비어 있음'}`}
       className={className || `block w-full ${size === 'sm' ? 'max-w-[170px]' : 'max-w-[360px]'} h-auto mx-auto rounded-2xl select-none`}>
-      <Bg bg={bg} />
+      <Bg bg={bg} mini={size === 'sm'} />
       {withPaul && <image href={paulHappy} x="2" y="128" width="58" height="62" preserveAspectRatio="xMidYMax meet" aria-hidden="true" data-testid="scene-paul" />}
       {drawn.map((it) => <Obj key={`${it.obj}-${it.i}`} it={it} hl={highlight === it.obj} tap={onTapObject} reduced={reduced} cookie={withCookie && it.obj === 'dog' && it.i === 0 && size !== 'sm'} mini={size === 'sm'} />)}
       {spots.map((s, i) => {
