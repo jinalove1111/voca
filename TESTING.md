@@ -2039,3 +2039,12 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. 기존 `testProto25d*` 12개 스위트와 스프라이트 스위트 PASS(구현자 실행). `testQaGate` 17/0. `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts`, `testTownEnvAssets` PASS(문법 lazy 청크 256.4 KB raw / 71.3 KB gzip). 스펙 4개 `node --check` 통과. 서버 렌더 스모크: 파일럿 카드에 🔊·✅ 없음, 확인 전 듣기 영어 없음.
 - **브라우저 미실행 (RAM)**: 여유 RAM 2.01 GB(<3 GB 규칙). `[town-mission]`은 한 번도 돈 적이 없어 CDP 터치 탭과 걷기 타이밍이 검증되지 않았고, 첫 실행 실패는 스펙 오류일 수도 제품 결함일 수도 있다. `[grammar-scenes]`, `[grammar-scene]`, `[grammar]`, `[proto25d]` 회귀도 대기. 분류 후 갱신할 것. 화면 동작은 확인된 바 없다.
 - **재실행**: 239차와 같은 방법(워크트리 루트, RAM ≥3GB, 한 번에 1개). `[town-mission]` 먼저, 스크린샷을 눈으로 확인한다.
+
+### 242차 추가 (2026-10-10): 폴타운 아트 키트 반입 — 정적 스위트 신규, 합성 미리보기, 브라우저 미실행
+
+- **신규 `scripts/testTownKitAssets.mjs`**: 1417개 점검 PASS. manifest와 실제 파일 일치(1x·@2x 쌍), 파일별 크기 예산, kebab-case 이름, 허용된 importer(문법 쪽은 `parkArt.js` 하나). 하네스 등록은 구현자 영역.
+- **`testTownMissionSpots`**: 표지판 좌표 변경 뒤 84/84 PASS(241차 54/54에서 증가).
+- **미리보기 `scripts/town/renderScenePreview.mjs/.py`**: g-easy-05의 모든 그림(21장)을 앱과 같은 배치 함수로 합성(Pillow). 기하·가로세로비·투명도 확인 전용이며 **브라우저 테스트가 아니다**. 리드가 모음을 눈으로 확인: 잘림 없음, 발이 잔디 위, 개수 분명, 투명 가장자리 깨끗.
+- **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS(공원 7개 단원 핀 포함: 360×220 안, 겹침 ≤15%, 균등 간격, 이름표 무대 안, 개수 = 문장). `testTownMissions`, `testQaGate` 17/0, `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts`, `testTownEnvAssets`, `testProto25d*` ALL PASS. 파일럿 장면 카드 13장 서버 렌더 스모크 통과. 문법 청크 257.7 KB raw / 72.1 KB gzip, Proto25DScreen 63.3 KB raw / 20.3 KB gzip.
+- **브라우저 미실행 (RAM)**: 여유 RAM 2.62 GB(<3 GB 규칙). `[town-mission]`, `[grammar-scene]`, `[grammar-scenes]`, `[grammar]`, `[proto25d]` 모두 대기. 실화면 미확인: 기기의 이미지 로딩, 실제 카드 너비의 slice 잘림, 누르기·끌기, 음성, 2.5D 마을의 표지판과 Cookie, 모바일 360×640 잘림. 합성 미리보기는 이를 대신하지 않는다. 확인됐다고 쓰지 않는다.
+- **재실행**: 워크트리 루트, RAM ≥3GB, 한 번에 1개. `[town-mission]` 먼저, 스크린샷을 눈으로 확인한다(표지판 옆 Cookie, 공원 배경 slice).

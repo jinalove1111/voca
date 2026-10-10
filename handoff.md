@@ -9,6 +9,7 @@ _233차 갱신: 2026-10-10 (233차 — **Grammar 커리큘럼 재구성: 5 과�
 _234차 갱신: 2026-10-10 (234차 — **Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙**. Easy 8/8 콘텐츠 구현 완료, 교사 검수 완료 0, Intermediate 1, 미제작 25(Intermediate 7·Advanced 6·Middle 6·High 6) — **커리큘럼 전체 완료 아님**. 코드 `d2842265`. 정적 PASS, 더미 env 빌드 경고 0, `[grammar]` 238/0, `[student-home]` 223/0/1 SKIP. 클릭 경로: 홈 [📘 문법 과정] → Easy (ready 8/8 · 검수 0) → 3. 나는 …이야 am·is·are …. PR #62 Draft·QA 전용. 아래 234차 섹션 참고.)_
 _235차 갱신: 2026-10-10 (235차 — **Paul 로고 모자 PNG 8장을 기존 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 대응으로 적용** + HatCollection 장착 버튼 44px 수정 + 모자 이름 2건 정정. 앱에 "8단계 모자"는 없고 세 축(XP 랭크 5·크기 5단계·수집 모자 8종)이 따로 있어 수집 모자 8종에 대응(리드 판단, **운영자 확인 필요: 남색/주황 대응, 승급 체인 아님**). 점수·승급 규칙·해금·XP 무변경. 커밋 `da4f2d66`·`e4e622d9`·`a97074ef`, 이름 커밋 `f5156fa8`. 신규 `[hats]` 67/0 + 회귀 PASS. Preview 실화면(SSO)·실기기 미확인. PR #62 Draft·QA 전용. 아래 235차 섹션 참고.)_
 _238차 갱신: 2026-10-10 (238차 — **문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드(5카드 그리드)**. 클릭 경로: 홈 [📘 문법 / Grammar] → Easy → 1. 부탁하기 → 카드 1/23 목표 → 다음 … → 선택 문제 → 답 확인 → 다음 … → 마무리. 콘텐츠 34/34 불변, 교사 검수 0, PR #62 QA 전용, DB·저장 0. 아래 238차 섹션 참고.)_
+_242차 갱신: 2026-10-10 (242차 — **폴타운 아트 키트 반입 + 공원 미션 실제 이미지 적용**. 운영자가 `src/assets/town/`에 넣었다는 이미지는 어느 체크아웃에도 없었고 Dropbox의 PNG 원본 95장뿐이라 최적화 사본(94개 → WebP 188개 + manifest, 약 7.3 MB)으로 반입(`e23014a5`). 공원 미션이 실제 그림(`b108a7f4`), 마을 표지판+Cookie(`cee61c01`). 공 그림이 없어 단원 `ball`을 `flower`로 교체. 새 보상·XP·DB·저장 0. 정적 PASS; **브라우저 미실행(RAM 2.62 GB <3 GB)**, 실화면에서 확인된 것 없음. `paul-portrait` 반입 보류(운영자 확인). 아래 242차 섹션과 설계 문서 §9~§13 참고.)_
 _241차 갱신: 2026-10-10 (241차 — **폴타운 장소 미션: 공원 미션 마을 진입~복귀 + 34단원 장소 연결표(설계 제안)**. 마을 표지판 또는 문법 홈 카드 → 상황 소개 → 기존 15장 덱(문법·듣기·말하기·쓰기) → '마을로 돌아가기'. 커밋 3개. 새 보상·XP·DB·저장 0, 중복 보상 없음. 정적 PASS; **브라우저 미실행(RAM 2.01 GB <3 GB)**, 신규 `[town-mission]` 스펙은 한 번도 돈 적 없음. 연결된 장소 1/26. 클릭 경로: 홈 마을 → 표지판 → '공원 미션 시작' / 홈 [문법 Grammar] → '폴타운 미션'. 설계 문서 `docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md`. 아래 241차 섹션 참고.)_
 _240차 갱신: 2026-10-10 (240차 — **그림 미션 34단원 확장(Scene v2)**: 시범(There is/are)의 그림·상황 활동을 기존 34단원 전부로 확장(새 단원 없음). 한 장씩 덱에 그림 설명 카드(구조 카드 뒤)·그림 활동 카드(오류 카드 뒤)를 끼워 넣고 기존 카드·id·정답·피드백은 불변. 커밋 `3b3c409e`(33단원 장면 데이터)·`6a8a5bb8`(v2 프레임워크)·`2b7643d6`(테스트). 독립 검수 3건이 찾은 결함(답 새어 나감·다의 정답·거짓 규칙 진술 등) 수정. 정적 PASS·더미 빌드 경고 0. **상태**: 임시 이미지 34/34 단원 / 실제(최종) 에셋 0/34 단원(실제 스프라이트 소품 7종, 임시 31종) / **브라우저 검증 0/34(미실행, RAM <3GB)** / 교사 검수 0/34. 클릭 경로: 홈 [📘 문법 Grammar] → 과정 → 단원 → 구조 카드 뒤 그림 설명 → 오류 카드 뒤 그림 활동. 아래 240차 섹션 참고.)_
 _239차 갱신: 2026-10-10 (239차 — **그림 상황 미션 시범 단원: Easy 5. There is/are 공원 + 공통 장면 컴포넌트**. 커밋 `bd62cc15`(구현)·`18afbb35`(설계 문서)·`58767b3f`(e2e). 클릭 경로: 홈 [📘 문법 Grammar] → Easy → 5. …이 있어요 There is → 카드 1/15 목표 → 다음 → 발견(강아지 누르기) → 비교 → 선택 ×3 → 만들기(나무 2) → 읽기 → 듣기 ×2 → 말하기 연습/시험 → 쓰기 → 마무리 → 요약. 정적 PASS·더미 빌드 경고 0. **브라우저 미검증**: 시범 단원과 `c47b1e10` 컴팩트 헤더 모두 e2e 미실행(RAM <3GB). 임시 SVG 배경·공, Cookie는 강아지 대역 — 운영자 에셋 필요. 콘텐츠 34/34 구현·교사 검수 0. 아래 239차 섹션 참고.)_
@@ -51,6 +52,34 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-10 (242차) — 폴타운 아트 키트 반입 + 공원 미션 실제 이미지 적용 (14:25~14:55)
+
+운영자 요청: 폴타운 이미지를 학습 장면에 실제로 쓴다. 이미지는 `src/assets/town/`에 넣었다고 했으나 작업 폴더와 `C:\voca` 어디에도 없었고, 운영자의 Dropbox 폴더에 PNG 원본 95장(각 1~3 MB)만 있었다. 원본은 수정하지 않고 저장소에도 넣지 않았으며 최적화 사본만 반입했다. 기준 `59058820`, PR #62 QA 전용. 설계 문서 §9~§13: `docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md`(§10에 95행 표).
+
+**구현 (커밋 3개)**
+1. `e23014a5` 아트 키트 반입: 94개 대상 → WebP 188개(1x 긴 변 ≤256 px, @2x ≤512 px, 배경 768/1536 px) + `src/assets/town/kit/manifest.json`, 약 7.3 MB. 파이프라인 `scripts/town/buildTownKit.py` + `scripts/town/kit_map.tsv`(다시 실행해도 결과 동일). `scripts/testTownKitAssets.mjs` 1417개 점검(manifest↔파일, 파일별 예산, kebab-case, 허용된 importer). `character/paul-portrait`(원본 폴얼굴.png, 인물 초상)는 운영자 확인 전까지 skipped. 표시: `props/water-barrel`은 그림이 위쪽 캔버스 끝에 닿음(원본에서 잘렸을 수 있음), `backgrounds/plaza-topdown`은 품질 70에서도 예산 초과(미사용).
+2. `b108a7f4` 공원 미션 실제 이미지: 문법 쪽 키트 import는 `src/utils/grammar/parkArt.js` 하나. 6개 그림 × 2배율(park-backdrop, cookie-stand, cookie-sit, tree, bench, sunflower-pot). 공원 배경이 무대를 채우고(slice) 바닥선 198. 무대 크기 dog 61×73, tree 90×90(4칸 만들기에서 76), bench 76×73, flower 46×67, Paul 74×79(기존 Paul PNG). 줄은 Paul 오른쪽 잔디에 가운데 정렬·균등 간격, dog은 서기/앉기를 번갈아 세 마리가 분명히 구분되게. **공 그림 없음 → 단원 `ball`을 모든 곳에서 `flower`로 교체**(선택 3번 'There ___ three flowers.', 듣기 1번 'There is a flower.' 보기 flower×1 / flower×2 / dog×1, 말하기 대안, 쓰기 메모, 단어 ball/balls 제거·flower/flowers 추가). 덱 15장·단계 종류·id 불변. 핀: 공원 배경 7개 단원의 모든 그림이 360×220 안, 겹침 ≤15%, 균등 간격, Cookie 이름표가 무대 안, 개수 = 문장. 공원 그림은 공원 장면에서만 참조(g-easy-03·04, g-int-04·06, g-adv-06, g-mid-01도 새 배경을 받고 g-int-06·g-adv-06은 키트 dog·tree도 받음). g-easy-05의 임시 도형 0개.
+3. `cee61c01` 마을 표지판: `props/signpost`가 기존 표지판 스프라이트를 대신하고 그 옆에 Cookie(`cookie-stand`)가 선다(장식, 누를 수 없음). 누르는 영역·도착 칸·시작 버튼·완료 칩 불변. 모바일 표지판 44×67 px, Cookie 20×24 px, 옆 Paul 40×53 px.
+
+**미리보기 도구**: `scripts/town/renderScenePreview.mjs/.py`가 g-easy-05의 모든 그림(21장)을 앱과 같은 배치 함수로 합성한다. 기하·가로세로비·투명도 확인 전용이고 브라우저 시험이 아니다. 리드가 모음을 두 번 보고 확대·중앙 정렬 보정을 한 번 요청했다.
+
+**번들**: 공원 이미지 12개(배경 74 KB / @2x 231 KB, 스프라이트 19~28 KB / @2x 52~90 KB)는 lazy 문법 청크 자산, 표지판 4개(signpost 16/45 KB, cookie-stand 23/72 KB). `GrammarCourseScreen` 257.7 KB raw / 72.1 KB gzip, `Proto25DScreen` 63.3 KB raw / 20.3 KB gzip. @2x는 devicePixelRatio > 1일 때만.
+
+**진도·보상**: 241차와 동일. 새 보상·XP·DB·스토리지 없음, 마무리 분석 이벤트는 입구와 무관하게 하루 한 번 중복 제거.
+
+**현재 사용 여부**: 95개 중 사용 중 7개(문법 6개 + signpost), 나머지 87개는 반입만 됨(코드 미참조, 번들 미포함).
+
+**부족한 이미지(정확한 파일명)**: 공원 `props/ball`·`character/cookie-run`(선택)·`character/paul-stand`; 사람 `character/mia`·`tom`·`mom`·`dad`·`teacher`·`kid`; 소품 `props/apple`·`bread-basket`·`cake`·`pizza`·`milk`·`juice`·`book`·`pencil`·`bag`·`box`; `buildings/train-station`, `props/notice-board`·`newspaper-stand`·`timetable-board`·`letter`; 배경 `backgrounds/school-backdrop`·`home-backdrop`·`street-backdrop`·`cafe-backdrop`·`bakery-backdrop`·`fruit-shop-backdrop`; `ui/action-<key>`(지금 이모지). 이전 §5 "새로 필요" 중 bakery·fruit-shop·cafe·bookshop·school·clock-tower·다리·우체통·매표소·기관차·분수는 이번에 반입됨. 글자가 구워진 건물(gift-shop "SHOP", school, bookshop, my-cottage)은 마을 건물로만, 정답이 되는 그림으로는 쓰지 않는다.
+
+**검증**
+- 정적 PASS: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. `testTownKitAssets` 1417/1417. `testTownMissionSpots` 84/84. `testTownMissions`, `testQaGate` 17/0, `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts`, `testTownEnvAssets`, `testProto25d*` ALL PASS. 파일럿 장면 카드 13장 서버 렌더 스모크 통과.
+- 시각: 합성 미리보기만(Pillow, 같은 기하). 리드 확인: 잘림 없음, 발이 잔디 위, 개수 분명, 투명 가장자리 깨끗.
+- **브라우저 미실행**: 여유 RAM 2.62 GB(<3 GB 규칙). 실화면 미확인: 기기의 이미지 로딩, 실제 카드 너비의 slice 잘림, 누르기·끌기, 음성, 2.5D 마을의 표지판과 Cookie, 실제 레이아웃의 모바일 360×640 잘림. 확인됐다고 쓰지 않는다.
+
+**클릭 경로(241차 동일)**: (A) 마을 표지판 → 공원 미션 시작 → 15장 → 마을로 돌아가기. (B) 문법 홈 → 폴타운 미션.
+
+**열린 항목 / 다음**: RAM ≥3GB에서 `[town-mission]`·`[grammar-scene]`·`[grammar-scenes]`·`[grammar]`·`[proto25d]` 실행. 운영자: `paul-portrait` 사용 여부, 부족 파일 제공, 장소 연결표 확정. 새 그림 없이 가능한 다음 미션: 카페(g-int-08), 책방(g-easy-08), 공원 놀이(g-easy-04).
 
 ## 2026-10-10 (241차) — 폴타운 장소 미션: 공원 미션 마을 진입~복귀 + 장소 연결표 (14:05~14:20)
 
