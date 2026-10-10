@@ -66,6 +66,8 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - 보상·XP·DB·SQL·새 저장 키 0.
 
 - **정정(245차 후속)**: 홈 메뉴의 기존 `student-home-town` 버튼 라우팅에 `townWorldEnabled` 분기를 넣었던 것이 회귀(`studentHome.spec` 4 FAIL, `townMission.spec` 3 FAIL: 기존 허브/2.5D 경로를 가로챔)였다. 분기와 `canEnterTown`의 `townWorldEnabled`를 제거해 기존 경로 복원하고, 홈에 별도 버튼 `student-home-town-world`(`onGoWorld`일 때만)를 추가. `townWorld.spec`은 이 버튼으로 진입, 시나리오 (i)로 기존 버튼이 새 마을을 열지 않음을 확인. 브라우저 재실행은 리드 몫.
+- **리드 브라우저 실행 결과(245차, 최종 HEAD 빌드, 더미 env, 전 네트워크 mock, 스펙 1개씩)**: `[town-world]` 96/0/0(캐릭터 표시·화살표/WASD 이동·카메라 추적·충돌·지도 이동·마을 전용 테스터 (g)·일반 학생 차단 (h)·기존 홈 버튼 보존 (i)), `[student-home]` 242/0/1(기존 SKIP), `[town-mission]` 23/0/0, `[student]` 34/0/0, `[town-pilot-allowlist]` 33/0/0, `[town-v1]` 528/0/0, `[town-v2]` 448/0/0, `[grammar-village]` 53/0/1(기존 SKIP). `[town-proto2.5d]` 1560/1/0 — FAIL 1건은 S37[1280x800, modal-churn] `locator.waitFor` 3000ms 타임아웃(여유 RAM 약 1 GB에서 실행, 3 GB 규칙 미충족; 244차 같은 스펙은 1572/1572). 이번 변경과의 인과는 확인하지 못함. 실기기·실계정·실제 Preview URL에서는 미검증. Preview와 운영 Supabase 분리 여부 미확인(Vercel SSO).
+- **244차 보충**: 244차 문서에 '실행 중'으로 남았던 `[town-proto2.5d]`는 그때 1572/1572로 끝났다.
 
 ## 2026-10-10 (244차) — Paul Town 하이브리드 2.5D 마을(C 방식) 3구역 프로토타입 (18:30~19:30)
 
