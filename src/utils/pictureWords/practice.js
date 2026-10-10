@@ -2,7 +2,7 @@
 export const STEPS = ['look', 'listen', 'repeat', 'quiz', 'review']
 
 // mulberry32: small deterministic PRNG
-function rng(seed) {
+export function rng(seed) {
   let a = (Number(seed) || 0) >>> 0
   const next = () => {
     a = (a + 0x6D2B79F5) >>> 0
@@ -14,7 +14,7 @@ function rng(seed) {
   return { next, int: (n) => Math.floor(next() * n) }
 }
 
-function shuffled(arr, r) {
+export function shuffled(arr, r) {
   const a = arr.slice()
   for (let i = a.length - 1; i > 0; i--) { const j = r.int(i + 1); [a[i], a[j]] = [a[j], a[i]] }
   return a

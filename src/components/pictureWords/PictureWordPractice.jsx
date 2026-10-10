@@ -6,9 +6,7 @@ import { STEPS, buildSession, buildQuiz, reviewQueue, summarise } from '../../ut
 import { playWordAudio, stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls, PARTNER_REC_LABELS } from '../SpeakingPracticeItem'
-
-const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, query: '?url', import: 'default' })
-const imgUrl = (asset) => IMG[`../../assets/pictureWords/${asset}.webp`]
+import { imgUrl } from './pictureImg.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 const PRIMARY = `${BTN} bg-purple-600 text-white`

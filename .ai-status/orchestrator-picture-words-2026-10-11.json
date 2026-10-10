@@ -1,12 +1,12 @@
 {
   "agent_name": "implementer",
   "role": "구현",
-  "task_id": "picture-words-practice-2026-10-11",
-  "task": "249차 그림 단어 연습(테스터 전용) + 결정 파일 반입 경로",
-  "status": "completed",
+  "task_id": "picture-words-games-2026-10-11",
+  "task": "250차 그림 단어 게임(알파벳 망치/숨은 글자)+레벨+가게 선반",
+  "status": "working",
   "progress": 100,
   "started_at": "2026-10-11T01:00:00+09:00",
-  "updated_at": "2026-10-11T04:00:00+09:00",
+  "updated_at": "2026-10-11T05:00:00+09:00",
   "files_owned": [
     "scripts/pictureWords/buildPictureWords.py",
     "scripts/pictureWords/buildPictureWordsData.mjs",
@@ -32,9 +32,15 @@
     "src/App.jsx",
     "src/components/Dashboard.jsx",
     "src/components/StudentHome.jsx",
-    "tests/e2e/pictureWordPractice.spec.mjs"
+    "tests/e2e/pictureWordPractice.spec.mjs",
+    "src/utils/pictureWords/games.js",
+    "scripts/testPictureWordGames.mjs",
+    "src/components/pictureWords/pictureImg.jsx"
   ],
-  "summary": "리드 실행 6 FAIL은 스펙 문제로 수정, [picture-practice] 66/0. 앱 변경 없음.",
+  "summary": "stage done: 1 levels+games.js+tests+registry",
   "blocker": null,
-  "next_action": "리드: 필요 시 재확인"
+  "next_action": "stage 2: AlphabetHammer.jsx",
+  "stages_done": [
+    "1 levels+games.js+tests+registry"
+  ]
 }

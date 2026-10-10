@@ -60,3 +60,20 @@ export function applyDecisions(entries, decisions) {
     return { ...e, decision: 'approve', learn: true, en, ko, edited: en !== e.en || ko !== e.ko, tracks: e.tracks.length ? e.tracks : APPROVED_TRACKS(e) }
   })
 }
+
+// Levels (250차) — STRUCTURE ONLY. Phonics here = short plain words chosen by LENGTH, nothing more:
+// the real unit/sound order of the textbook is unconfirmed (operator instruction), so this never uses
+// phonicsCandidate groups and never orders or classifies by sound. Revisit once the order is confirmed.
+export const LEVELS = [
+  { id: 'phonics', labelKo: 'Phonics — 짧고 쉬운 단어', enabled: true },
+  { id: 'conversation', labelKo: 'Conversation — 생활 단어와 가게 물건', enabled: true },
+  { id: 'advanced', labelKo: '높은 단계 (준비 중)', enabled: false },
+]
+const SHORT_WORD = /^[a-z]{3,4}$/
+// Learnable words only, alphabetical by id (callers shuffle with a seed). advanced = [] placeholder.
+export function wordsForLevel(levelId, entries = PICTURE_WORDS) {
+  const all = learnableWords(entries).slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  if (levelId === 'phonics') return all.filter((e) => SHORT_WORD.test(String(e.en).toLowerCase()))
+  if (levelId === 'conversation') return all
+  return []
+}

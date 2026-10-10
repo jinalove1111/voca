@@ -151,9 +151,9 @@ ok(!/localStorage|from 'react'/.test(dataSrc), 'data module is pure (no storage/
 
 // ---- isolation: only the admin panel + the practice screen (and the data dir) may reference assets/pictureWords
 const importers = importersOf('assets/pictureWords')
-ok(importers.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx' || f === 'src/components/pictureWords/PictureWordPractice.jsx'), `assets/pictureWords referenced only by the panel + practice screen: ${importers.join(', ')}`)
+ok(importers.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx' || f === 'src/components/pictureWords/pictureImg.jsx'), `assets/pictureWords referenced only by the panel + the shared picture module: ${importers.join(', ')}`)
 const dataImporters = importersOf('data/pictureWords')
-ok(dataImporters.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx' || f.startsWith('src/components/pictureWords/') || f.startsWith('src/data/pictureWords/')), `data/pictureWords imported only by admin panel, src/components/pictureWords/, data dir: ${dataImporters.join(', ')}`)
+ok(dataImporters.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx' || f.startsWith('src/components/pictureWords/') || f.startsWith('src/utils/pictureWords/') || f.startsWith('src/data/pictureWords/')), `data/pictureWords imported only by admin panel, src/components/pictureWords/, src/utils/pictureWords/, data dir: ${dataImporters.join(', ')}`)
 
 // ---- panel source pins
 const panel = fs.readFileSync(path.join(ROOT, 'src/components/admin/PictureWordReviewPanel.jsx'), 'utf8')
