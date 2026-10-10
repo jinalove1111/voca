@@ -43,7 +43,7 @@
     "scripts/pictureWords/fixtures/decisions.sample.json",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "stage done: 7 docs",
+  "summary": "fix round done",
   "blocker": null,
   "next_action": "done",
   "stages_done": [
@@ -53,6 +53,7 @@
     "4 PictureGames+ShopShelf+mode picker+connected entry+budget 2.2MB",
     "5 sample decisions fixture + in-memory tests",
     "6 browser spec (run 1: 66 PASS / 0 FAIL)",
-    "7 docs"
+    "7 docs",
+    "fix round: hammer fly animation, bigger tiles (spec 68/0)"
   ]
 }

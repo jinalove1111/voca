@@ -60,9 +60,20 @@ const click = async (page, loc, touch) => {
 const slotsFilled = (page) => page.locator('[data-testid^="pwh-slot-"]').evaluateAll((l) => l.map((e) => e.getAttribute('data-filled')).join(''))
 const tiles = (page) => page.locator('[data-testid^="pwh-tile-"]').evaluateAll((l) => l.map((e) => ({ id: e.getAttribute('data-testid'), t: e.textContent, used: e.getAttribute('data-used') === 'true' })))
 
+// 연속 빠른 탭: 앞의 두 글자 타일을 기다리지 않고 연달아 눌러 두 칸이 순서대로 채워지는지 보고 나머지는 이어서 끝낸다.
+async function rapidWord(page, w) {
+  const letters = [...w.en].map((ch, i) => [ch, i]).filter(([ch]) => isLetter(ch))
+  const ts = await tiles(page)
+  const a = ts.find((x) => lc(x.t) === lc(letters[0][0]))
+  const b = ts.find((x) => x.id !== a.id && lc(x.t) === lc(letters[1][0]))
+  await T(page, a.id).click(); await T(page, b.id).click()
+  const filled = await page.waitForFunction(({ i0, i1 }) => ['pwh-slot-' + i0, 'pwh-slot-' + i1].every((id) => document.querySelector(`[data-testid="${id}"]`)?.getAttribute('data-filled') === 'true'), { i0: letters[0][1], i1: letters[1][1] }, { timeout: 3000 }).then(() => true).catch(() => false)
+  const rest = await hammerWord(page, w, { skip: 2 })
+  return { ...rest, rapidOk: filled && !!a && !!b }
+}
 // 알파벳 망치 한 단어를 정답 순서로 끝낸다(오답 1번을 먼저 누르는 옵션).
-async function hammerWord(page, w, { wrongFirst = false, touch = false } = {}) {
-  const info = { wrongOk: true, slotsOk: true }
+async function hammerWord(page, w, { wrongFirst = false, touch = false, probeFly = false, skip = 0 } = {}) {
+  const info = { wrongOk: true, slotsOk: true, fly: null, flyGone: null }
   if (wrongFirst) {
     const before = await slotsFilled(page)
     const need0 = [...w.en].find(isLetter)
@@ -74,11 +85,17 @@ async function hammerWord(page, w, { wrongFirst = false, touch = false } = {}) {
     }
   }
   const cells = [...w.en]
+  let seen = 0
   for (let i = 0; i < cells.length; i++) {
     if (!isLetter(cells[i])) continue
+    if (seen++ < skip) continue
     const t = (await tiles(page)).find((x) => !x.used && lc(x.t) === lc(cells[i]))
     await click(page, T(page, t.id), touch)
+    if (probeFly && info.fly === null) {
+      info.fly = (await T(page, 'pwh-fly').count()) > 0 || (await T(page, t.id).evaluate((e) => getComputedStyle(e).transform !== 'none'))
+    }
     await page.waitForFunction(({ id, i2 }) => document.querySelector(`[data-testid="pwh-slot-${i2}"]`)?.getAttribute('data-filled') === 'true', { id: t.id, i2: i }, { timeout: 3000 })
+    if (probeFly && info.flyGone === null) info.flyGone = await page.waitForFunction(() => document.querySelectorAll('[data-testid="pwh-fly"]').length === 0, null, { timeout: 1000 }).then(() => true).catch(() => false)
   }
   return info
 }
@@ -156,10 +173,12 @@ export async function run(browser, baseURL) {
         const txt = (await T(page, 'pwh-root').innerText()).toLowerCase()
         const attrs = await T(page, 'pwh-root').evaluate((root) => [...root.querySelectorAll('*'), root].flatMap((el) => [...el.attributes].map((a) => a.name)).filter((n) => /correct|answer|right|aria-label/i.test(n)))
         r.check(`${name} 완성 전: pwh-word 0개 / 화면 글에 단어 없음 / 정답 속성 0 / alt 그림`, (await T(page, 'pwh-word').count()) === 0 && !txt.includes(w.en) && attrs.length === 0 && (await T(page, 'pwh-picture').getAttribute('alt')) === '그림', JSON.stringify({ attrs, txt: txt.slice(0, 80) }))
-        r.check(`${name} 타일 높이/너비 48px 이상 + 한국어 뜻 표시`, await page.locator('[data-testid^="pwh-tile-"]').evaluateAll((l) => l.every((e) => { const b = e.getBoundingClientRect(); return b.height >= 47.9 && b.width >= 47.9 })) && ((await T(page, 'pwh-ko').textContent()) === w.ko))
+        r.check(`${name} 타일·빈 칸 56px 이상(1280) + 한국어 뜻 표시`, await page.locator('[data-testid^="pwh-tile-"]').evaluateAll((l) => l.every((e) => { const b = e.getBoundingClientRect(); return b.height >= 55.9 && b.width >= 55.9 })) && (await page.locator('[data-testid^="pwh-slot-"][data-filled="false"]').evaluateAll((l) => l.every((e) => e.getBoundingClientRect().height >= 55.9 && e.getBoundingClientRect().width >= 55.9))) && ((await T(page, 'pwh-ko').textContent()) === w.ko))
         r.check(`${name} 시작만으로는 소리 재생 없음(자동재생 없음)`, (await page.evaluate(() => window.__speak.length)) === 0)
       }
-      const info = await hammerWord(page, w, { wrongFirst: i === 0 })
+      const info = i === 1 ? await rapidWord(page, w) : await hammerWord(page, w, { wrongFirst: i === 0, probeFly: i === 0 })
+      if (i === 0) r.check(`${name} 맞는 탭 직후 글자가 날아감(pwh-fly 또는 타일 transform) → 1초 안에 칸 채움 + pwh-fly 사라짐`, info.fly === true && info.flyGone === true, JSON.stringify(info))
+      if (i === 1) r.check(`${name} 빠르게 연속 두 번 탭해도 칸 두 개가 순서대로 채워짐`, info.rapidOk === true, JSON.stringify(info))
       if (i === 0) r.check(`${name} 오답 타일 → data-result=wrong, 칸 변화 없음, 부드러운 안내`, info.wrongOk)
       await T(page, 'pwh-word').waitFor({ state: 'visible', timeout: 5000 })
       r.check(`${name} 단어 ${i + 1}: 모든 칸 채움 → 단어/완료 표시`, (await T(page, 'pwh-word').textContent()) === w.en && (await T(page, 'pwh-root').getAttribute('data-done')) === 'true' && (await T(page, 'pwh-feedback').getAttribute('data-result')) === 'right')
@@ -302,7 +321,7 @@ export async function run(browser, baseURL) {
     const tl = await tiles(page)
     let anyCovered = false
     for (const t of tl) if (await covered(T(page, t.id))) anyCovered = true
-    r.check(`${name} 알파벳 망치: 넘침 0 / 타일 가림 0 / 타일 48px 이상`, (await overflow(page)) <= 0 && !anyCovered && (await page.locator('[data-testid^="pwh-tile-"]').evaluateAll((l) => l.every((e) => e.getBoundingClientRect().height >= 47.9 && e.getBoundingClientRect().width >= 47.9))), `${await overflow(page)}/${anyCovered}`)
+    r.check(`${name} 알파벳 망치: 넘침 0 / 타일 가림 0 / 타일 48px 이상`, (await overflow(page)) <= 0 && !anyCovered && (await page.locator('[data-testid^="pwh-tile-"], [data-testid^="pwh-slot-"][data-filled="false"]').evaluateAll((l) => l.every((e) => e.getBoundingClientRect().height >= 47.9 && e.getBoundingClientRect().width >= 47.9))), `${await overflow(page)}/${anyCovered}`)
     const info = await hammerWord(page, w, { wrongFirst: true, touch: true })
     await T(page, 'pwh-word').waitFor({ state: 'visible', timeout: 5000 })
     const nextCovered = await covered(T(page, 'pwh-next'))

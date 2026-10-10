@@ -104,6 +104,10 @@ if (exists('src/components/pictureWords/AlphabetHammer.jsx')) {
   ok(/prefers-reduced-motion/.test(imgSrc) && /useReducedMotion\(\)/.test(hs), 'hammer: reduced-motion branch')
   ok(!/import [^\n]*\.(png|webp|svg|jpe?g)/.test(hs), 'hammer: no image import (hammer is an emoji)')
   for (const id of ['pwh-root', 'pwh-listen', 'pwh-slot-', 'pwh-tile-', 'pwh-hammer', 'pwh-feedback', 'pwh-next', 'data-used', 'data-filled']) ok(hs.includes(id), `testid ${id}`)
+  ok(/getBoundingClientRect\(\)/.test(hs) && /slotRefs/.test(hs) && /transition: `transform \$\{FLY_MS\}ms/.test(hs) && /pwh-fly/.test(hs), 'hammer: travel animation measures tile+slot rects and transitions a transform')
+  ok(/if \(!reduced && next\.last === 'right' && el\)/.test(hs), 'hammer: reduced-motion skips the travel (instant placement)')
+  ok(/return \(\) => \{ clearTimeout\(a\); clearTimeout\(b\) \}/.test(hs), 'hammer: fly timers cleaned up on unmount')
+  ok(/text-6xl/.test(hs) && /text-3xl/.test(hs) && /pw-cell/.test(hs) && /\.pw-cell\{min-width:48px;min-height:48px\}[\s\S]*min-width:390px[\s\S]*min-width:56px;min-height:56px/.test(imgSrc), 'hammer: big emoji, 30px letters, 48px (56px at >=390px) cells')
   ok(imgSrc.includes('${testid}') || imgSrc.includes('testid'), 'shared picture takes a testid')
 }
 if (exists('src/components/pictureWords/HiddenLetters.jsx')) {
@@ -113,6 +117,7 @@ if (exists('src/components/pictureWords/HiddenLetters.jsx')) {
   ok(/GamePicture/.test(ls), 'hidden: neutral picture')
   ok(/\{st\.done && \([\s\S]{0,300}data-testid="pwl-word"/.test(ls), 'hidden: pwl-word mounted only after completion')
   for (const id of ['pwl-root', 'pwl-listen', 'pwl-cell-', 'pwl-opt-', 'pwl-diff-', 'pwl-feedback', 'pwl-next', 'data-blank', 'data-filled', 'data-difficulty']) ok(ls.includes(id), `testid ${id}`)
+  ok(/min-h-\[56px\]/.test(ls) && /text-2xl/.test(ls), 'hidden: option buttons min 56px, 24px letters')
   ok(!/data-blank=\{[^}]*\.ch/.test(ls), 'hidden: data-blank carries no letter')
 }
 if (exists('src/components/pictureWords/PictureGames.jsx')) {

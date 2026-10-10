@@ -75,6 +75,9 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - **검증**: `testPictureWordGames.mjs` 100/100(전 학습 가능 단어 x 시드 3 x 난이도 3), `testPictureWords.mjs` 728/728, 브라우저 `[picture-games]` 66/0(1회, 프리뷰 4193). `verify:all`·`testBrowserE2E` 미실행.
 - **한계/미구현**: 타일이 칸으로 날아가는 이동 애니메이션 대신 칸 pop + 타일 축소 전환(CSS). 보상/별/점수 없음. advanced 레벨 내용 없음. 푸시 안 함(Preview 배포 미승인).
 
+### 250차 보정 (같은 날)
+- 알파벳 망치: 맞는 탭에서 타일·칸 rect를 재서 글자가 칸으로 날아간다(FLIP, `pwh-fly`, 망치 150ms → 이동 280ms; 상태가 진실 원천이라 빠른 연속 탭도 순서대로 채워짐, reduced-motion이면 즉시 배치, 언마운트 시 타이머 정리). 타일·칸 48px(390px 이상 56px), 글자 30px, 🔨 60px. 숨은 글자 보기 56px/24px. 이전 "비행 애니메이션 미구현" 한계는 해소. 새 spec 68/0.
+
 ## 2026-10-11 (249차) — 그림 단어 연습(테스터 전용) + 결정 파일 반입
 
 - **결정 반입(데이터만)**: `scripts/pictureWords/source/decisions.json`(= `{"v":1,"decisions":{}}`, 비어 있음 — 운영자 내보내기 미도착). `node scripts/pictureWords/validateDecisions.mjs [경로]`로 붙여 넣은 내보내기를 검증(v===1, 존재하는 id, action approve|exclude, en/ko 40자 이하 trim 문자열, MATCH id 결정 금지, UNUSABLE은 exclude만; 승인(수정 포함)/제외/남음/미지 id/오류 수 출력, 오류 시 exit 1). 생성기가 같은 검증기를 먼저 돌리고 실패하면 중단. 항목마다 `decision`, `learn`(MATCH 또는 approve), 최종 `en/ko`(수정 시 덮어씀)와 `suggested`, `tracks`. `counts`에 learnable/approved/edited/excluded/pending + 최상위 `pending` id 목록. 지금은 learnable 119 / pending 31 / excluded 0.
