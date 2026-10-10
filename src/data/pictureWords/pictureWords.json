@@ -2,7 +2,8 @@
  "generated": "by scripts/pictureWords/buildPictureWordsData.mjs — do not hand-edit",
  "phonicsReview": {
   "orderConfirmed": false,
-  "note": "학습 순서 미확정 — 커리큘럼 확인 필요(임의 순서 아님). 그룹 내 정렬은 표시용일 뿐이다."
+  "classified": false,
+  "note": "학습 순서 미확정 — 교재의 유닛별 소리 순서 확인 전까지 Phonics를 분류하지 않는다(운영자 지시). 후보 그룹은 검토용일 뿐이다."
  },
  "counts": {
   "total": 151,
@@ -23,10 +24,48 @@
    "pet": 1,
    "clothes": 16
   },
-  "phonics": 33,
+  "phonicsCandidates": 33,
+  "learnable": 119,
+  "approved": 0,
+  "edited": 0,
+  "excluded": 0,
+  "pending": 31,
   "existingWord": 18,
   "newCandidate": 133
  },
+ "pending": [
+  "pics2/apple",
+  "pics2/board",
+  "pics2/bread",
+  "pics2/bun",
+  "pics2/cattail",
+  "pics2/chocholate cake",
+  "pics2/climb",
+  "pics2/dock",
+  "pics2/duck",
+  "pics2/firefighter",
+  "pics2/flower",
+  "pics2/flower111",
+  "pics2/flower2",
+  "pics2/flower3",
+  "pics2/flower4",
+  "pics2/flower6",
+  "pics2/flwoer5",
+  "pics2/glasses",
+  "pics2/global",
+  "pics2/grapefruit",
+  "pics2/horse",
+  "pics2/letter",
+  "pics2/micro",
+  "pics2/mushroom",
+  "pics2/pants",
+  "pics2/pink book",
+  "pics2/spiral",
+  "pics2/stone",
+  "pics2/teapot",
+  "pics2/tube",
+  "pics2/white brocolli"
+ ],
  "entries": [
   {
    "id": "pics2/anchor",
@@ -35,16 +74,22 @@
    "status": "MATCH",
    "shown": "닻",
    "en": "anchor",
-   "enUS": null,
    "ko": "닻",
+   "suggested": {
+    "en": "anchor",
+    "ko": "닻"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "decoration",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary",
     "townObject"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -65,12 +110,18 @@
    "status": "MULTIPLE",
    "shown": "체크 천을 깐 바구니에 사과 여러 개",
    "en": "apples",
-   "enUS": null,
    "ko": "사과 바구니",
+   "suggested": {
+    "en": "apples",
+    "ko": "사과 바구니"
+   },
+   "enUS": null,
    "reason": "사과와 바구니 두 대상 — 사과 한 개는 apple1.png",
    "shop": "food",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -91,15 +142,21 @@
    "status": "MATCH",
    "shown": "애플파이",
    "en": "apple pie",
-   "enUS": null,
    "ko": "애플파이",
+   "suggested": {
+    "en": "apple pie",
+    "ko": "애플파이"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -120,15 +177,21 @@
    "status": "MATCH",
    "shown": "사과",
    "en": "apple",
-   "enUS": null,
    "ko": "사과",
+   "suggested": {
+    "en": "apple",
+    "ko": "사과"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(apple)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -149,15 +212,21 @@
    "status": "MATCH",
    "shown": "아보카도",
    "en": "avocado",
-   "enUS": null,
    "ko": "아보카도",
+   "suggested": {
+    "en": "avocado",
+    "ko": "아보카도"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "avocado",
    "newCandidate": false,
    "autoLink": true,
@@ -178,20 +247,24 @@
    "status": "MATCH",
    "shown": "가방",
    "en": "bag",
-   "enUS": "backpack",
    "ko": "가방",
+   "suggested": {
+    "en": "bag",
+    "ko": "가방"
+   },
+   "enUS": "backpack",
    "reason": "영국식 우선",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short a",
     "pattern": "a (CVC)",
-    "ipa": "/bæɡ/",
-    "phonicsOrder": null
+    "ipa": "/bæɡ/"
    },
    "existingWord": "backpack",
    "newCandidate": false,
@@ -213,15 +286,21 @@
    "status": "MATCH",
    "shown": "바게트",
    "en": "baguette",
-   "enUS": null,
    "ko": "바게트",
+   "suggested": {
+    "en": "baguette",
+    "ko": "바게트"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(baguette)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -242,15 +321,21 @@
    "status": "MATCH",
    "shown": "바나나",
    "en": "banana",
-   "enUS": null,
    "ko": "바나나",
+   "suggested": {
+    "en": "banana",
+    "ko": "바나나"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -271,16 +356,22 @@
    "status": "MATCH",
    "shown": "바구니",
    "en": "basket",
-   "enUS": null,
    "ko": "바구니",
+   "suggested": {
+    "en": "basket",
+    "ko": "바구니"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "decoration",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary",
     "townObject"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -301,15 +392,21 @@
    "status": "MATCH",
    "shown": "농구공",
    "en": "basketball",
-   "enUS": null,
    "ko": "농구공",
+   "suggested": {
+    "en": "basketball",
+    "ko": "농구공"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "basketball",
    "newCandidate": false,
    "autoLink": true,
@@ -330,12 +427,18 @@
    "status": "UNUSABLE",
    "shown": "basket.png와 완전히 같은 파일",
    "en": "basket",
-   "enUS": null,
    "ko": "바구니",
+   "suggested": {
+    "en": "basket",
+    "ko": "바구니"
+   },
+   "enUS": null,
    "reason": "중복 파일(바이트 동일) — basket.png 하나만 사용",
    "shop": "decoration",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -356,15 +459,21 @@
    "status": "MATCH",
    "shown": "곰 인형",
    "en": "teddy bear",
-   "enUS": null,
    "ko": "곰 인형",
+   "suggested": {
+    "en": "teddy bear",
+    "ko": "곰 인형"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -385,15 +494,21 @@
    "status": "MATCH",
    "shown": "자전거",
    "en": "bicycle",
-   "enUS": null,
    "ko": "자전거",
+   "suggested": {
+    "en": "bicycle",
+    "ko": "자전거"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(bicycle)",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -414,12 +529,18 @@
    "status": "UNCERTAIN",
    "shown": "A자형 세움 칠판",
    "en": "blackboard",
-   "enUS": null,
    "ko": "칠판",
+   "suggested": {
+    "en": "blackboard",
+    "ko": "칠판"
+   },
+   "enUS": null,
    "reason": "교실 칠판이 아니라 가게 앞 세움 간판 모양",
    "shop": "school",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -440,20 +561,24 @@
    "status": "MATCH",
    "shown": "배",
    "en": "boat",
-   "enUS": null,
    "ko": "배",
+   "suggested": {
+    "en": "boat",
+    "ko": "배"
+   },
+   "enUS": null,
    "reason": "장난감·소형 모형 그림",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long o",
     "pattern": "oa",
-    "ipa": "/bəʊt/",
-    "phonicsOrder": null
+    "ipa": "/bəʊt/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -475,20 +600,24 @@
    "status": "MATCH",
    "shown": "책",
    "en": "book",
-   "enUS": null,
    "ko": "책",
+   "suggested": {
+    "en": "book",
+    "ko": "책"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "oo (short)",
     "pattern": "oo",
-    "ipa": "/bʊk/",
-    "phonicsOrder": null
+    "ipa": "/bʊk/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -510,15 +639,21 @@
    "status": "MATCH",
    "shown": "브라우니",
    "en": "brownie",
-   "enUS": null,
    "ko": "브라우니",
+   "suggested": {
+    "en": "brownie",
+    "ko": "브라우니"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(brownie)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -539,12 +674,18 @@
    "status": "MULTIPLE",
    "shown": "바구니에 바게트·크루아상·둥근 빵",
    "en": "bread",
-   "enUS": null,
    "ko": "빵 바구니",
+   "suggested": {
+    "en": "bread",
+    "ko": "빵 바구니"
+   },
+   "enUS": null,
    "reason": "빵 종류 여러 개와 바구니 — 식빵은 bread11.png",
    "shop": "food",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -565,20 +706,24 @@
    "status": "MATCH",
    "shown": "빵",
    "en": "bread",
-   "enUS": null,
    "ko": "빵",
+   "suggested": {
+    "en": "bread",
+    "ko": "빵"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(bread)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "review: irregular",
     "pattern": "ea as short e",
-    "ipa": "/bred/",
-    "phonicsOrder": null
+    "ipa": "/bred/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -600,15 +745,21 @@
    "status": "MATCH",
    "shown": "브로콜리",
    "en": "broccoli",
-   "enUS": null,
    "ko": "브로콜리",
+   "suggested": {
+    "en": "broccoli",
+    "ko": "브로콜리"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(broccoli)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -629,15 +780,21 @@
    "status": "MATCH",
    "shown": "붓",
    "en": "paintbrush",
-   "enUS": null,
    "ko": "붓",
+   "suggested": {
+    "en": "paintbrush",
+    "ko": "붓"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -658,12 +815,18 @@
    "status": "UNCERTAIN",
    "shown": "둥근 빵 한 덩이",
    "en": "bread roll",
-   "enUS": "bun",
    "ko": "둥근 빵",
+   "suggested": {
+    "en": "bread roll",
+    "ko": "둥근 빵"
+   },
+   "enUS": "bun",
    "reason": "bun/roll/bread 중 결정 필요",
    "shop": "food",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -684,15 +847,21 @@
    "status": "MATCH",
    "shown": "버터",
    "en": "butter",
-   "enUS": null,
    "ko": "버터",
+   "suggested": {
+    "en": "butter",
+    "ko": "버터"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -713,20 +882,24 @@
    "status": "MATCH",
    "shown": "케이크",
    "en": "cake",
-   "enUS": null,
    "ko": "케이크",
+   "suggested": {
+    "en": "cake",
+    "ko": "케이크"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long a",
     "pattern": "a_e",
-    "ipa": "/keɪk/",
-    "phonicsOrder": null
+    "ipa": "/keɪk/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -748,20 +921,24 @@
    "status": "MATCH",
    "shown": "사탕",
    "en": "sweet",
-   "enUS": "candy",
    "ko": "사탕",
+   "suggested": {
+    "en": "sweet",
+    "ko": "사탕"
+   },
+   "enUS": "candy",
    "reason": "영국식 우선",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long e",
     "pattern": "ee",
-    "ipa": "/swiːt/",
-    "phonicsOrder": null
+    "ipa": "/swiːt/"
    },
    "existingWord": "sweet",
    "newCandidate": false,
@@ -783,20 +960,24 @@
    "status": "MATCH",
    "shown": "자동차",
    "en": "car",
-   "enUS": null,
    "ko": "자동차",
+   "suggested": {
+    "en": "car",
+    "ko": "자동차"
+   },
+   "enUS": null,
    "reason": "장난감·소형 모형 그림",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "r-controlled",
     "pattern": "ar",
-    "ipa": "/kɑː/",
-    "phonicsOrder": null
+    "ipa": "/kɑː/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -818,12 +999,18 @@
    "status": "UNCERTAIN",
    "shown": "물가 풀(부들·갈대) 한 포기",
    "en": "reeds",
-   "enUS": "cattail",
    "ko": "갈대",
+   "suggested": {
+    "en": "reeds",
+    "ko": "갈대"
+   },
+   "enUS": "cattail",
    "reason": "bulrush/cattail/reeds 중 무엇으로 가르칠지 불명확, 저레벨 단어 아님",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -844,15 +1031,21 @@
    "status": "MATCH",
    "shown": "시리얼",
    "en": "cereal",
-   "enUS": null,
    "ko": "시리얼",
+   "suggested": {
+    "en": "cereal",
+    "ko": "시리얼"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -873,20 +1066,24 @@
    "status": "MATCH",
    "shown": "의자",
    "en": "chair",
-   "enUS": null,
    "ko": "의자",
+   "suggested": {
+    "en": "chair",
+    "ko": "의자"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(chair)",
    "shop": "furniture",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "r-controlled",
     "pattern": "air",
-    "ipa": "/tʃeə/",
-    "phonicsOrder": null
+    "ipa": "/tʃeə/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -908,20 +1105,24 @@
    "status": "MATCH",
    "shown": "치즈",
    "en": "cheese",
-   "enUS": null,
    "ko": "치즈",
+   "suggested": {
+    "en": "cheese",
+    "ko": "치즈"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long e",
     "pattern": "ee",
-    "ipa": "/tʃiːz/",
-    "phonicsOrder": null
+    "ipa": "/tʃiːz/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -943,15 +1144,21 @@
    "status": "MATCH",
    "shown": "체리",
    "en": "cherries",
-   "enUS": null,
    "ko": "체리",
+   "suggested": {
+    "en": "cherries",
+    "ko": "체리"
+   },
+   "enUS": null,
    "reason": "그림은 체리 두 알",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -972,15 +1179,21 @@
    "status": "MATCH",
    "shown": "초콜릿",
    "en": "chocolate",
-   "enUS": null,
    "ko": "초콜릿",
+   "suggested": {
+    "en": "chocolate",
+    "ko": "초콜릿"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(chocolate)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1001,12 +1214,18 @@
    "status": "MISMATCH",
    "shown": "종이컵에 든 초콜릿 머핀",
    "en": "muffin",
-   "enUS": null,
    "ko": "머핀",
+   "suggested": {
+    "en": "muffin",
+    "ko": "머핀"
+   },
+   "enUS": null,
    "reason": "케이크가 아니라 머핀 1개",
    "shop": "food",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1027,12 +1246,18 @@
    "status": "MISMATCH",
    "shown": "암벽·그물이 있는 놀이터 정글짐",
    "en": "climbing frame",
-   "enUS": "jungle gym",
    "ko": "정글짐",
+   "suggested": {
+    "en": "climbing frame",
+    "ko": "정글짐"
+   },
+   "enUS": "jungle gym",
    "reason": "climb은 동작 — 그림은 놀이 기구",
    "shop": "decoration",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1053,15 +1278,21 @@
    "status": "MATCH",
    "shown": "코코넛",
    "en": "coconut",
-   "enUS": null,
    "ko": "코코넛",
+   "suggested": {
+    "en": "coconut",
+    "ko": "코코넛"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1082,15 +1313,21 @@
    "status": "MATCH",
    "shown": "쿠키",
    "en": "biscuit",
-   "enUS": "cookie",
    "ko": "쿠키",
+   "suggested": {
+    "en": "biscuit",
+    "ko": "쿠키"
+   },
+   "enUS": "cookie",
    "reason": "영국식 우선",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1111,15 +1348,21 @@
    "status": "MATCH",
    "shown": "옥수수",
    "en": "sweetcorn",
-   "enUS": "corn",
    "ko": "옥수수",
+   "suggested": {
+    "en": "sweetcorn",
+    "ko": "옥수수"
+   },
+   "enUS": "corn",
    "reason": "영국식 우선",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1140,15 +1383,21 @@
    "status": "MATCH",
    "shown": "크레용",
    "en": "crayon",
-   "enUS": null,
    "ko": "크레용",
+   "suggested": {
+    "en": "crayon",
+    "ko": "크레용"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1169,15 +1418,21 @@
    "status": "MATCH",
    "shown": "크루아상",
    "en": "croissant",
-   "enUS": null,
    "ko": "크루아상",
+   "suggested": {
+    "en": "croissant",
+    "ko": "크루아상"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1198,15 +1453,21 @@
    "status": "MATCH",
    "shown": "오이",
    "en": "cucumber",
-   "enUS": null,
    "ko": "오이",
+   "suggested": {
+    "en": "cucumber",
+    "ko": "오이"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1227,20 +1488,24 @@
    "status": "MATCH",
    "shown": "컵",
    "en": "cup",
-   "enUS": null,
    "ko": "컵",
+   "suggested": {
+    "en": "cup",
+    "ko": "컵"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "furniture",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short u",
     "pattern": "u (CVC)",
-    "ipa": "/kʌp/",
-    "phonicsOrder": null
+    "ipa": "/kʌp/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -1262,20 +1527,24 @@
    "status": "MATCH",
    "shown": "책상",
    "en": "desk",
-   "enUS": null,
    "ko": "책상",
+   "suggested": {
+    "en": "desk",
+    "ko": "책상"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "furniture",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short e",
     "pattern": "e + sk",
-    "ipa": "/desk/",
-    "phonicsOrder": null
+    "ipa": "/desk/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -1297,12 +1566,18 @@
    "status": "UNCERTAIN",
    "shown": "밧줄 기둥이 있는 나무 선착장",
    "en": "jetty",
-   "enUS": "dock",
    "ko": "선착장",
+   "suggested": {
+    "en": "jetty",
+    "ko": "선착장"
+   },
+   "enUS": "dock",
    "reason": "dock/jetty/pier 중 결정 필요",
    "shop": "decoration",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1323,15 +1598,21 @@
    "status": "MATCH",
    "shown": "강아지 밥그릇",
    "en": "dog bowl",
-   "enUS": null,
    "ko": "강아지 밥그릇",
+   "suggested": {
+    "en": "dog bowl",
+    "ko": "강아지 밥그릇"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "pet",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1352,15 +1633,21 @@
    "status": "MATCH",
    "shown": "도넛",
    "en": "doughnut",
-   "enUS": "donut",
    "ko": "도넛",
+   "suggested": {
+    "en": "doughnut",
+    "ko": "도넛"
+   },
+   "enUS": "donut",
    "reason": "영국식 우선",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1381,20 +1668,24 @@
    "status": "MATCH",
    "shown": "원피스",
    "en": "dress",
-   "enUS": null,
    "ko": "원피스",
+   "suggested": {
+    "en": "dress",
+    "ko": "원피스"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short e",
     "pattern": "dr + e + ss",
-    "ipa": "/dres/",
-    "phonicsOrder": null
+    "ipa": "/dres/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -1416,12 +1707,18 @@
    "status": "UNCERTAIN",
    "shown": "노란 고무 오리 장난감",
    "en": "rubber duck",
-   "enUS": null,
    "ko": "고무 오리",
+   "suggested": {
+    "en": "rubber duck",
+    "ko": "고무 오리"
+   },
+   "enUS": null,
    "reason": "duck(동물)으로 가르칠지 장난감으로 가르칠지 결정 필요",
    "shop": "toy",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1442,20 +1739,24 @@
    "status": "MATCH",
    "shown": "달걀",
    "en": "egg",
-   "enUS": null,
    "ko": "달걀",
+   "suggested": {
+    "en": "egg",
+    "ko": "달걀"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short e",
     "pattern": "e + gg",
-    "ipa": "/eɡ/",
-    "phonicsOrder": null
+    "ipa": "/eɡ/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -1477,15 +1778,21 @@
    "status": "MATCH",
    "shown": "지우개",
    "en": "rubber",
-   "enUS": "eraser",
    "ko": "지우개",
+   "suggested": {
+    "en": "rubber",
+    "ko": "지우개"
+   },
+   "enUS": "eraser",
    "reason": "영국식 우선",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1506,12 +1813,18 @@
    "status": "MISMATCH",
    "shown": "사다리가 달린 빨간 소방차",
    "en": "fire engine",
-   "enUS": "fire truck",
    "ko": "소방차",
+   "suggested": {
+    "en": "fire engine",
+    "ko": "소방차"
+   },
+   "enUS": "fire truck",
    "reason": "사람(소방관)이 아니라 차량",
    "shop": "toy",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1532,15 +1845,21 @@
    "status": "MATCH",
    "shown": "낚싯대",
    "en": "fishing rod",
-   "enUS": "fishing pole",
    "ko": "낚싯대",
+   "suggested": {
+    "en": "fishing rod",
+    "ko": "낚싯대"
+   },
+   "enUS": "fishing pole",
    "reason": "영국식 우선",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1561,12 +1880,18 @@
    "status": "MULTIPLE",
    "shown": "화분 상자에 심긴 분홍 튤립",
    "en": "tulips",
-   "enUS": null,
    "ko": "튤립 화단",
+   "suggested": {
+    "en": "tulips",
+    "ko": "튤립 화단"
+   },
+   "enUS": null,
    "reason": "꽃과 화분 상자",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1587,12 +1912,18 @@
    "status": "UNCERTAIN",
    "shown": "분홍 장미 한 송이",
    "en": "rose",
-   "enUS": null,
    "ko": "장미",
+   "suggested": {
+    "en": "rose",
+    "ko": "장미"
+   },
+   "enUS": null,
    "reason": "flower로 가르칠지 rose로 가르칠지 결정 필요",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1613,12 +1944,18 @@
    "status": "MULTIPLE",
    "shown": "화분 상자에 심긴 노란 수선화",
    "en": "daffodils",
-   "enUS": null,
    "ko": "수선화 화단",
+   "suggested": {
+    "en": "daffodils",
+    "ko": "수선화 화단"
+   },
+   "enUS": null,
    "reason": "꽃과 화분 상자",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1639,12 +1976,18 @@
    "status": "MULTIPLE",
    "shown": "화분 상자에 심긴 파란 수국",
    "en": "hydrangeas",
-   "enUS": null,
    "ko": "수국 화단",
+   "suggested": {
+    "en": "hydrangeas",
+    "ko": "수국 화단"
+   },
+   "enUS": null,
    "reason": "꽃과 화분 상자, 저레벨 단어 아님",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1665,12 +2008,18 @@
    "status": "UNCERTAIN",
    "shown": "분홍 장미 덤불",
    "en": "rose bush",
-   "enUS": null,
    "ko": "장미 덤불",
+   "suggested": {
+    "en": "rose bush",
+    "ko": "장미 덤불"
+   },
+   "enUS": null,
    "reason": "roses/rose bush/flowers 중 결정 필요",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1691,12 +2040,18 @@
    "status": "MISMATCH",
    "shown": "허브(바질·로즈메리·차이브)가 심긴 화단",
    "en": "herbs",
-   "enUS": null,
    "ko": "허브 화단",
+   "suggested": {
+    "en": "herbs",
+    "ko": "허브 화단"
+   },
+   "enUS": null,
    "reason": "꽃보다 허브가 중심",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1717,12 +2072,18 @@
    "status": "MISMATCH",
    "shown": "호박이 열린 텃밭 화단",
    "en": "pumpkin patch",
-   "enUS": null,
    "ko": "호박 텃밭",
+   "suggested": {
+    "en": "pumpkin patch",
+    "ko": "호박 텃밭"
+   },
+   "enUS": null,
    "reason": "꽃이 아니라 호박",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1743,20 +2104,24 @@
    "status": "MATCH",
    "shown": "유리컵",
    "en": "glass",
-   "enUS": null,
    "ko": "유리컵",
+   "suggested": {
+    "en": "glass",
+    "ko": "유리컵"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "furniture",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "review: irregular",
     "pattern": "a as /ɑː/ in British",
-    "ipa": "/ɡlɑːs/",
-    "phonicsOrder": null
+    "ipa": "/ɡlɑːs/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -1778,12 +2143,18 @@
    "status": "MISMATCH",
    "shown": "청록색 테 선글라스(검은 렌즈)",
    "en": "sunglasses",
-   "enUS": null,
    "ko": "선글라스",
+   "suggested": {
+    "en": "sunglasses",
+    "ko": "선글라스"
+   },
+   "enUS": null,
    "reason": "렌즈가 검은 선글라스",
    "shop": "clothes",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1804,12 +2175,18 @@
    "status": "MISMATCH",
    "shown": "받침대 있는 지구본",
    "en": "globe",
-   "enUS": null,
    "ko": "지구본",
+   "suggested": {
+    "en": "globe",
+    "ko": "지구본"
+   },
+   "enUS": null,
    "reason": "global은 형용사 — 물건은 globe",
    "shop": "school",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1830,20 +2207,24 @@
    "status": "MATCH",
    "shown": "장갑",
    "en": "glove",
-   "enUS": null,
    "ko": "장갑",
+   "suggested": {
+    "en": "glove",
+    "ko": "장갑"
+   },
+   "enUS": null,
    "reason": "그림은 한 짝",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "review: irregular",
     "pattern": "o_e as /ʌ/",
-    "ipa": "/ɡlʌv/",
-    "phonicsOrder": null
+    "ipa": "/ɡlʌv/"
    },
    "existingWord": "glove",
    "newCandidate": false,
@@ -1865,15 +2246,21 @@
    "status": "MATCH",
    "shown": "풀",
    "en": "glue stick",
-   "enUS": null,
    "ko": "풀",
+   "suggested": {
+    "en": "glue stick",
+    "ko": "풀"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1894,12 +2281,18 @@
    "status": "MISMATCH",
    "shown": "망고 한 개(잎 달린 붉은·노란 과일)",
    "en": "mango",
-   "enUS": null,
    "ko": "망고",
+   "suggested": {
+    "en": "mango",
+    "ko": "망고"
+   },
+   "enUS": null,
    "reason": "자몽이 아니라 망고 모양과 색",
    "shop": "food",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -1920,15 +2313,21 @@
    "status": "MATCH",
    "shown": "포도",
    "en": "grapes",
-   "enUS": null,
    "ko": "포도",
+   "suggested": {
+    "en": "grapes",
+    "ko": "포도"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1949,15 +2348,21 @@
    "status": "MATCH",
    "shown": "기타",
    "en": "guitar",
-   "enUS": null,
    "ko": "기타",
+   "suggested": {
+    "en": "guitar",
+    "ko": "기타"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -1978,15 +2383,21 @@
    "status": "MATCH",
    "shown": "햄버거",
    "en": "hamburger",
-   "enUS": null,
    "ko": "햄버거",
+   "suggested": {
+    "en": "hamburger",
+    "ko": "햄버거"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2007,15 +2418,21 @@
    "status": "MATCH",
    "shown": "헬멧",
    "en": "helmet",
-   "enUS": null,
    "ko": "헬멧",
+   "suggested": {
+    "en": "helmet",
+    "ko": "헬멧"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2036,15 +2453,21 @@
    "status": "MATCH",
    "shown": "꿀",
    "en": "honey",
-   "enUS": null,
    "ko": "꿀",
+   "suggested": {
+    "en": "honey",
+    "ko": "꿀"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "honey",
    "newCandidate": false,
    "autoLink": true,
@@ -2065,12 +2488,18 @@
    "status": "MISMATCH",
    "shown": "나무 흔들 목마",
    "en": "rocking horse",
-   "enUS": null,
    "ko": "흔들 목마",
+   "suggested": {
+    "en": "rocking horse",
+    "ko": "흔들 목마"
+   },
+   "enUS": null,
    "reason": "살아 있는 말이 아니라 장난감",
    "shop": "toy",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -2091,15 +2520,21 @@
    "status": "MATCH",
    "shown": "핫도그",
    "en": "hot dog",
-   "enUS": null,
    "ko": "핫도그",
+   "suggested": {
+    "en": "hot dog",
+    "ko": "핫도그"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2120,15 +2555,21 @@
    "status": "MATCH",
    "shown": "아이스크림",
    "en": "ice cream",
-   "enUS": null,
    "ko": "아이스크림",
+   "suggested": {
+    "en": "ice cream",
+    "ko": "아이스크림"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(ice cream)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2149,20 +2590,24 @@
    "status": "MATCH",
    "shown": "잉크",
    "en": "ink",
-   "enUS": null,
    "ko": "잉크",
+   "suggested": {
+    "en": "ink",
+    "ko": "잉크"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short i",
     "pattern": "i + nk",
-    "ipa": "/ɪŋk/",
-    "phonicsOrder": null
+    "ipa": "/ɪŋk/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -2184,15 +2629,21 @@
    "status": "MATCH",
    "shown": "재킷",
    "en": "jacket",
-   "enUS": null,
    "ko": "재킷",
+   "suggested": {
+    "en": "jacket",
+    "ko": "재킷"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2213,20 +2664,24 @@
    "status": "MATCH",
    "shown": "잼",
    "en": "jam",
-   "enUS": null,
    "ko": "잼",
+   "suggested": {
+    "en": "jam",
+    "ko": "잼"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short a",
     "pattern": "a (CVC)",
-    "ipa": "/dʒæm/",
-    "phonicsOrder": null
+    "ipa": "/dʒæm/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -2248,15 +2703,21 @@
    "status": "MATCH",
    "shown": "줄넘기",
    "en": "skipping rope",
-   "enUS": "jump rope",
    "ko": "줄넘기",
+   "suggested": {
+    "en": "skipping rope",
+    "ko": "줄넘기"
+   },
+   "enUS": "jump rope",
    "reason": "영국식 우선",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2277,21 +2738,25 @@
    "status": "MATCH",
    "shown": "열쇠",
    "en": "key",
-   "enUS": null,
    "ko": "열쇠",
+   "suggested": {
+    "en": "key",
+    "ko": "열쇠"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "decoration",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary",
-    "phonics",
     "townObject"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long e",
     "pattern": "ey",
-    "ipa": "/kiː/",
-    "phonicsOrder": null
+    "ipa": "/kiː/"
    },
    "existingWord": "key",
    "newCandidate": false,
@@ -2313,20 +2778,24 @@
    "status": "MATCH",
    "shown": "연",
    "en": "kite",
-   "enUS": null,
    "ko": "연",
+   "suggested": {
+    "en": "kite",
+    "ko": "연"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long i",
     "pattern": "i_e",
-    "ipa": "/kaɪt/",
-    "phonicsOrder": null
+    "ipa": "/kaɪt/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -2348,15 +2817,21 @@
    "status": "MATCH",
    "shown": "키위",
    "en": "kiwi",
-   "enUS": null,
    "ko": "키위",
+   "suggested": {
+    "en": "kiwi",
+    "ko": "키위"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2377,15 +2852,21 @@
    "status": "MATCH",
    "shown": "레몬",
    "en": "lemon",
-   "enUS": null,
    "ko": "레몬",
+   "suggested": {
+    "en": "lemon",
+    "ko": "레몬"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(lemon)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2406,12 +2887,18 @@
    "status": "MISMATCH",
    "shown": "닫힌 흰 편지 봉투",
    "en": "envelope",
-   "enUS": null,
    "ko": "봉투",
+   "suggested": {
+    "en": "envelope",
+    "ko": "봉투"
+   },
+   "enUS": null,
    "reason": "편지지·글씨가 보이지 않고 봉투만 있음",
    "shop": "school",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -2432,15 +2919,21 @@
    "status": "MATCH",
    "shown": "상추",
    "en": "lettuce",
-   "enUS": null,
    "ko": "상추",
+   "suggested": {
+    "en": "lettuce",
+    "ko": "상추"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(lettuce)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2461,15 +2954,21 @@
    "status": "MATCH",
    "shown": "도시락",
    "en": "lunchbox",
-   "enUS": null,
    "ko": "도시락",
+   "suggested": {
+    "en": "lunchbox",
+    "ko": "도시락"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(lunchbox)",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2490,15 +2989,21 @@
    "status": "MATCH",
    "shown": "멜론",
    "en": "melon",
-   "enUS": null,
    "ko": "멜론",
+   "suggested": {
+    "en": "melon",
+    "ko": "멜론"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2519,12 +3024,18 @@
    "status": "MISMATCH",
    "shown": "손잡이 달린 돋보기",
    "en": "magnifying glass",
-   "enUS": null,
    "ko": "돋보기",
+   "suggested": {
+    "en": "magnifying glass",
+    "ko": "돋보기"
+   },
+   "enUS": null,
    "reason": "현미경(현미경.png)이 아님",
    "shop": "school",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -2545,20 +3056,24 @@
    "status": "MATCH",
    "shown": "우유",
    "en": "milk",
-   "enUS": null,
    "ko": "우유",
+   "suggested": {
+    "en": "milk",
+    "ko": "우유"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short i",
     "pattern": "i + lk",
-    "ipa": "/mɪlk/",
-    "phonicsOrder": null
+    "ipa": "/mɪlk/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -2580,12 +3095,18 @@
    "status": "UNCERTAIN",
    "shown": "무늬가 있는 장식용 버섯 3개",
    "en": "mushrooms",
-   "enUS": null,
    "ko": "버섯 장식",
+   "suggested": {
+    "en": "mushrooms",
+    "ko": "버섯 장식"
+   },
+   "enUS": null,
    "reason": "먹는 버섯(mushroom2323.png)과 다름, 여러 개",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -2606,15 +3127,21 @@
    "status": "MATCH",
    "shown": "버섯",
    "en": "mushroom",
-   "enUS": null,
    "ko": "버섯",
+   "suggested": {
+    "en": "mushroom",
+    "ko": "버섯"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(mushroom)",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "mushroom",
    "newCandidate": false,
    "autoLink": true,
@@ -2635,15 +3162,21 @@
    "status": "MATCH",
    "shown": "공책",
    "en": "notebook",
-   "enUS": null,
    "ko": "공책",
+   "suggested": {
+    "en": "notebook",
+    "ko": "공책"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2664,15 +3197,21 @@
    "status": "MATCH",
    "shown": "양파",
    "en": "onion",
-   "enUS": null,
    "ko": "양파",
+   "suggested": {
+    "en": "onion",
+    "ko": "양파"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2693,15 +3232,21 @@
    "status": "MATCH",
    "shown": "오렌지",
    "en": "orange",
-   "enUS": null,
    "ko": "오렌지",
+   "suggested": {
+    "en": "orange",
+    "ko": "오렌지"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2722,15 +3267,21 @@
    "status": "MATCH",
    "shown": "팔레트",
    "en": "palette",
-   "enUS": null,
    "ko": "팔레트",
+   "suggested": {
+    "en": "palette",
+    "ko": "팔레트"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2751,15 +3302,21 @@
    "status": "MATCH",
    "shown": "팬케이크",
    "en": "pancake",
-   "enUS": null,
    "ko": "팬케이크",
+   "suggested": {
+    "en": "pancake",
+    "ko": "팬케이크"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2780,12 +3337,18 @@
    "status": "MISMATCH",
    "shown": "끈 달린 청록색 반바지",
    "en": "shorts",
-   "enUS": null,
    "ko": "반바지",
+   "suggested": {
+    "en": "shorts",
+    "ko": "반바지"
+   },
+   "enUS": null,
    "reason": "길이가 무릎 위 — 긴 바지(trousers.png)와 다름",
    "shop": "clothes",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -2806,20 +3369,24 @@
    "status": "MATCH",
    "shown": "복숭아",
    "en": "peach",
-   "enUS": null,
    "ko": "복숭아",
+   "suggested": {
+    "en": "peach",
+    "ko": "복숭아"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long e",
     "pattern": "ea",
-    "ipa": "/piːtʃ/",
-    "phonicsOrder": null
+    "ipa": "/piːtʃ/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -2841,20 +3408,24 @@
    "status": "MATCH",
    "shown": "배",
    "en": "pear",
-   "enUS": null,
    "ko": "배",
+   "suggested": {
+    "en": "pear",
+    "ko": "배"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "r-controlled",
     "pattern": "ear (/eə/)",
-    "ipa": "/peə/",
-    "phonicsOrder": null
+    "ipa": "/peə/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -2876,20 +3447,24 @@
    "status": "MATCH",
    "shown": "펜",
    "en": "pen",
-   "enUS": null,
    "ko": "펜",
+   "suggested": {
+    "en": "pen",
+    "ko": "펜"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short e",
     "pattern": "e (CVC)",
-    "ipa": "/pen/",
-    "phonicsOrder": null
+    "ipa": "/pen/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -2911,15 +3486,21 @@
    "status": "MATCH",
    "shown": "연필",
    "en": "pencil",
-   "enUS": null,
    "ko": "연필",
+   "suggested": {
+    "en": "pencil",
+    "ko": "연필"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2940,15 +3521,21 @@
    "status": "MATCH",
    "shown": "연필깎이",
    "en": "pencil sharpener",
-   "enUS": null,
    "ko": "연필깎이",
+   "suggested": {
+    "en": "pencil sharpener",
+    "ko": "연필깎이"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(pencil sharpener)",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2969,15 +3556,21 @@
    "status": "MATCH",
    "shown": "피망",
    "en": "pepper",
-   "enUS": "bell pepper",
    "ko": "피망",
+   "suggested": {
+    "en": "pepper",
+    "ko": "피망"
+   },
+   "enUS": "bell pepper",
    "reason": "영국식 우선",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -2998,15 +3591,21 @@
    "status": "MATCH",
    "shown": "파인애플",
    "en": "pineapple",
-   "enUS": null,
    "ko": "파인애플",
+   "suggested": {
+    "en": "pineapple",
+    "ko": "파인애플"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3027,12 +3626,18 @@
    "status": "UNCERTAIN",
    "shown": "장미 무늬 분홍 책",
    "en": "book",
-   "enUS": null,
    "ko": "책",
+   "suggested": {
+    "en": "book",
+    "ko": "책"
+   },
+   "enUS": null,
    "reason": "일기장인지 알 수 없음 — book.png와 단어가 겹침",
    "shop": "school",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -3053,15 +3658,21 @@
    "status": "MATCH",
    "shown": "피자",
    "en": "pizza",
-   "enUS": null,
    "ko": "피자",
+   "suggested": {
+    "en": "pizza",
+    "ko": "피자"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3082,15 +3693,21 @@
    "status": "MATCH",
    "shown": "필통",
    "en": "pencil case",
-   "enUS": null,
    "ko": "필통",
+   "suggested": {
+    "en": "pencil case",
+    "ko": "필통"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(pencil case)",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3111,15 +3728,21 @@
    "status": "MATCH",
    "shown": "감자",
    "en": "potato",
-   "enUS": null,
    "ko": "감자",
+   "suggested": {
+    "en": "potato",
+    "ko": "감자"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3140,15 +3763,21 @@
    "status": "MATCH",
    "shown": "호박",
    "en": "pumpkin",
-   "enUS": null,
    "ko": "호박",
+   "suggested": {
+    "en": "pumpkin",
+    "ko": "호박"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3169,15 +3798,21 @@
    "status": "MATCH",
    "shown": "라켓",
    "en": "racket",
-   "enUS": null,
    "ko": "라켓",
+   "suggested": {
+    "en": "racket",
+    "ko": "라켓"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "racket",
    "newCandidate": false,
    "autoLink": true,
@@ -3198,15 +3833,21 @@
    "status": "MATCH",
    "shown": "무",
    "en": "radish",
-   "enUS": null,
    "ko": "무",
+   "suggested": {
+    "en": "radish",
+    "ko": "무"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "radish",
    "newCandidate": false,
    "autoLink": true,
@@ -3227,15 +3868,21 @@
    "status": "MATCH",
    "shown": "장화",
    "en": "wellington boot",
-   "enUS": "rain boot",
    "ko": "장화",
+   "suggested": {
+    "en": "wellington boot",
+    "ko": "장화"
+   },
+   "enUS": "rain boot",
    "reason": "영국식 우선 · 그림은 한 짝",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3256,20 +3903,24 @@
    "status": "MATCH",
    "shown": "밥",
    "en": "rice",
-   "enUS": null,
    "ko": "밥",
+   "suggested": {
+    "en": "rice",
+    "ko": "밥"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long i",
     "pattern": "i_e + soft c",
-    "ipa": "/raɪs/",
-    "phonicsOrder": null
+    "ipa": "/raɪs/"
    },
    "existingWord": "rice",
    "newCandidate": false,
@@ -3291,15 +3942,21 @@
    "status": "MATCH",
    "shown": "로봇",
    "en": "robot",
-   "enUS": null,
    "ko": "로봇",
+   "suggested": {
+    "en": "robot",
+    "ko": "로봇"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3320,15 +3977,21 @@
    "status": "MATCH",
    "shown": "자",
    "en": "ruler",
-   "enUS": null,
    "ko": "자",
+   "suggested": {
+    "en": "ruler",
+    "ko": "자"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3349,16 +4012,22 @@
    "status": "MATCH",
    "shown": "모래 놀이터",
    "en": "sandpit",
-   "enUS": "sandbox",
    "ko": "모래 놀이터",
+   "suggested": {
+    "en": "sandpit",
+    "ko": "모래 놀이터"
+   },
+   "enUS": "sandbox",
    "reason": "영국식 우선",
    "shop": "decoration",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary",
     "townObject"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3379,15 +4048,21 @@
    "status": "MATCH",
    "shown": "샌드위치",
    "en": "sandwich",
-   "enUS": null,
    "ko": "샌드위치",
+   "suggested": {
+    "en": "sandwich",
+    "ko": "샌드위치"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "sandwich",
    "newCandidate": false,
    "autoLink": true,
@@ -3408,20 +4083,24 @@
    "status": "MATCH",
    "shown": "목도리",
    "en": "scarf",
-   "enUS": null,
    "ko": "목도리",
+   "suggested": {
+    "en": "scarf",
+    "ko": "목도리"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "r-controlled",
     "pattern": "ar",
-    "ipa": "/skɑːf/",
-    "phonicsOrder": null
+    "ipa": "/skɑːf/"
    },
    "existingWord": "scarf",
    "newCandidate": false,
@@ -3443,15 +4122,21 @@
    "status": "MATCH",
    "shown": "킥보드",
    "en": "scooter",
-   "enUS": null,
    "ko": "킥보드",
+   "suggested": {
+    "en": "scooter",
+    "ko": "킥보드"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(scooter)",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3472,15 +4157,21 @@
    "status": "MATCH",
    "shown": "가위",
    "en": "scissors",
-   "enUS": null,
    "ko": "가위",
+   "suggested": {
+    "en": "scissors",
+    "ko": "가위"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "scissors",
    "newCandidate": false,
    "autoLink": true,
@@ -3501,16 +4192,22 @@
    "status": "MATCH",
    "shown": "시소",
    "en": "seesaw",
-   "enUS": null,
    "ko": "시소",
+   "suggested": {
+    "en": "seesaw",
+    "ko": "시소"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(seesaw)",
    "shop": "decoration",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary",
     "townObject"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3531,20 +4228,24 @@
    "status": "MATCH",
    "shown": "셔츠",
    "en": "shirt",
-   "enUS": null,
    "ko": "셔츠",
+   "suggested": {
+    "en": "shirt",
+    "ko": "셔츠"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "r-controlled",
     "pattern": "ir",
-    "ipa": "/ʃɜːt/",
-    "phonicsOrder": null
+    "ipa": "/ʃɜːt/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -3566,15 +4267,21 @@
    "status": "MATCH",
    "shown": "스케이트보드",
    "en": "skateboard",
-   "enUS": null,
    "ko": "스케이트보드",
+   "suggested": {
+    "en": "skateboard",
+    "ko": "스케이트보드"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3595,20 +4302,24 @@
    "status": "MATCH",
    "shown": "치마",
    "en": "skirt",
-   "enUS": null,
    "ko": "치마",
+   "suggested": {
+    "en": "skirt",
+    "ko": "치마"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "r-controlled",
     "pattern": "ir",
-    "ipa": "/skɜːt/",
-    "phonicsOrder": null
+    "ipa": "/skɜːt/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -3630,21 +4341,25 @@
    "status": "MATCH",
    "shown": "미끄럼틀",
    "en": "slide",
-   "enUS": null,
    "ko": "미끄럼틀",
+   "suggested": {
+    "en": "slide",
+    "ko": "미끄럼틀"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "decoration",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary",
-    "phonics",
     "townObject"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long i",
     "pattern": "i_e",
-    "ipa": "/slaɪd/",
-    "phonicsOrder": null
+    "ipa": "/slaɪd/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -3666,15 +4381,21 @@
    "status": "MATCH",
    "shown": "운동화",
    "en": "trainer",
-   "enUS": "sneaker",
    "ko": "운동화",
+   "suggested": {
+    "en": "trainer",
+    "ko": "운동화"
+   },
+   "enUS": "sneaker",
    "reason": "영국식 우선 · 그림은 한 짝",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3695,15 +4416,21 @@
    "status": "MATCH",
    "shown": "축구공",
    "en": "football",
-   "enUS": "soccer ball",
    "ko": "축구공",
+   "suggested": {
+    "en": "football",
+    "ko": "축구공"
+   },
+   "enUS": "soccer ball",
    "reason": "영국식 우선",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3724,20 +4451,24 @@
    "status": "MATCH",
    "shown": "양말",
    "en": "sock",
-   "enUS": null,
    "ko": "양말",
+   "suggested": {
+    "en": "sock",
+    "ko": "양말"
+   },
+   "enUS": null,
    "reason": "그림은 한 짝",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "short o",
     "pattern": "o + ck",
-    "ipa": "/sɒk/",
-    "phonicsOrder": null
+    "ipa": "/sɒk/"
    },
    "existingWord": "sock",
    "newCandidate": false,
@@ -3759,20 +4490,24 @@
    "status": "MATCH",
    "shown": "수프",
    "en": "soup",
-   "enUS": null,
    "ko": "수프",
+   "suggested": {
+    "en": "soup",
+    "ko": "수프"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long u / oo",
     "pattern": "ou",
-    "ipa": "/suːp/",
-    "phonicsOrder": null
+    "ipa": "/suːp/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -3794,12 +4529,18 @@
    "status": "MISMATCH",
    "shown": "아이싱 올린 시나몬 롤",
    "en": "cinnamon roll",
-   "enUS": null,
    "ko": "시나몬 롤",
+   "suggested": {
+    "en": "cinnamon roll",
+    "ko": "시나몬 롤"
+   },
+   "enUS": null,
    "reason": "spiral은 모양 설명일 뿐 물건 이름이 아님",
    "shop": "food",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -3820,15 +4561,21 @@
    "status": "MATCH",
    "shown": "스테이플러",
    "en": "stapler",
-   "enUS": null,
    "ko": "스테이플러",
+   "suggested": {
+    "en": "stapler",
+    "ko": "스테이플러"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3849,12 +4596,18 @@
    "status": "UNCERTAIN",
    "shown": "이끼와 꽃이 낀 바위 여러 개",
    "en": "rocks",
-   "enUS": null,
    "ko": "바위",
+   "suggested": {
+    "en": "rocks",
+    "ko": "바위"
+   },
+   "enUS": null,
    "reason": "stone/rock/rocks 중 결정 필요(여러 개)",
    "shop": "garden",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -3875,15 +4628,21 @@
    "status": "MATCH",
    "shown": "딸기",
    "en": "strawberry",
-   "enUS": null,
    "ko": "딸기",
+   "suggested": {
+    "en": "strawberry",
+    "ko": "딸기"
+   },
+   "enUS": null,
    "reason": "그림은 딸기 한 개",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "strawberry",
    "newCandidate": false,
    "autoLink": true,
@@ -3904,16 +4663,22 @@
    "status": "MATCH",
    "shown": "해바라기",
    "en": "sunflower",
-   "enUS": null,
    "ko": "해바라기",
+   "suggested": {
+    "en": "sunflower",
+    "ko": "해바라기"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "garden",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary",
     "townObject"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": "sunflower",
    "newCandidate": false,
    "autoLink": true,
@@ -3934,15 +4699,21 @@
    "status": "MATCH",
    "shown": "스웨터",
    "en": "jumper",
-   "enUS": "sweater",
    "ko": "스웨터",
+   "suggested": {
+    "en": "jumper",
+    "ko": "스웨터"
+   },
+   "enUS": "sweater",
    "reason": "영국식 우선",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3963,15 +4734,21 @@
    "status": "MATCH",
    "shown": "고구마",
    "en": "sweet potato",
-   "enUS": null,
    "ko": "고구마",
+   "suggested": {
+    "en": "sweet potato",
+    "ko": "고구마"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -3992,15 +4769,21 @@
    "status": "MATCH",
    "shown": "티셔츠",
    "en": "T-shirt",
-   "enUS": null,
    "ko": "티셔츠",
+   "suggested": {
+    "en": "T-shirt",
+    "ko": "티셔츠"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4021,20 +4804,24 @@
    "status": "MATCH",
    "shown": "테이프",
    "en": "tape",
-   "enUS": null,
    "ko": "테이프",
+   "suggested": {
+    "en": "tape",
+    "ko": "테이프"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long a",
     "pattern": "a_e",
-    "ipa": "/teɪp/",
-    "phonicsOrder": null
+    "ipa": "/teɪp/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -4056,12 +4843,18 @@
    "status": "MISMATCH",
    "shown": "받침 접시 위 차가 담긴 찻잔",
    "en": "teacup",
-   "enUS": null,
    "ko": "찻잔",
+   "suggested": {
+    "en": "teacup",
+    "ko": "찻잔"
+   },
+   "enUS": null,
    "reason": "주전자가 아님 — 찻주전자는 teapot1.png",
    "shop": "furniture",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -4082,15 +4875,21 @@
    "status": "MATCH",
    "shown": "찻주전자",
    "en": "teapot",
-   "enUS": null,
    "ko": "찻주전자",
+   "suggested": {
+    "en": "teapot",
+    "ko": "찻주전자"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(teapot)",
    "shop": "furniture",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4111,15 +4910,21 @@
    "status": "MATCH",
    "shown": "망원경",
    "en": "telescope",
-   "enUS": null,
    "ko": "망원경",
+   "suggested": {
+    "en": "telescope",
+    "ko": "망원경"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정(telescope)",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4140,15 +4945,21 @@
    "status": "MATCH",
    "shown": "토마토",
    "en": "tomato",
-   "enUS": null,
    "ko": "토마토",
+   "suggested": {
+    "en": "tomato",
+    "ko": "토마토"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4169,15 +4980,21 @@
    "status": "MATCH",
    "shown": "팽이",
    "en": "spinning top",
-   "enUS": null,
    "ko": "팽이",
+   "suggested": {
+    "en": "spinning top",
+    "ko": "팽이"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4198,20 +5015,24 @@
    "status": "MATCH",
    "shown": "기차",
    "en": "train",
-   "enUS": null,
    "ko": "기차",
+   "suggested": {
+    "en": "train",
+    "ko": "기차"
+   },
+   "enUS": null,
    "reason": "장난감·소형 모형 그림",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "long a",
     "pattern": "ai",
-    "ipa": "/treɪn/",
-    "phonicsOrder": null
+    "ipa": "/treɪn/"
    },
    "existingWord": "train",
    "newCandidate": false,
@@ -4233,15 +5054,21 @@
    "status": "MATCH",
    "shown": "바지",
    "en": "trousers",
-   "enUS": "pants",
    "ko": "바지",
+   "suggested": {
+    "en": "trousers",
+    "ko": "바지"
+   },
+   "enUS": "pants",
    "reason": "영국식 우선",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4262,12 +5089,18 @@
    "status": "MISMATCH",
    "shown": "빨강·흰색 구명 튜브(밧줄 달림)",
    "en": "lifebuoy",
-   "enUS": "life ring",
    "ko": "구명 튜브",
+   "suggested": {
+    "en": "lifebuoy",
+    "ko": "구명 튜브"
+   },
+   "enUS": "life ring",
    "reason": "물놀이 튜브가 아니라 구명 부표",
    "shop": "decoration",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -4288,15 +5121,21 @@
    "status": "MATCH",
    "shown": "우산",
    "en": "umbrella",
-   "enUS": null,
    "ko": "우산",
+   "suggested": {
+    "en": "umbrella",
+    "ko": "우산"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "clothes",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4317,20 +5156,24 @@
    "status": "MATCH",
    "shown": "꽃병",
    "en": "vase",
-   "enUS": null,
    "ko": "꽃병",
+   "suggested": {
+    "en": "vase",
+    "ko": "꽃병"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "furniture",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
-    "shopVocabulary",
-    "phonics"
+    "shopVocabulary"
    ],
-   "phonics": {
+   "phonicsCandidate": {
     "group": "review: irregular",
     "pattern": "a_e but British /vɑːz/",
-    "ipa": "/vɑːz/",
-    "phonicsOrder": null
+    "ipa": "/vɑːz/"
    },
    "existingWord": null,
    "newCandidate": true,
@@ -4352,15 +5195,21 @@
    "status": "MATCH",
    "shown": "수박",
    "en": "watermelon",
-   "enUS": null,
    "ko": "수박",
+   "suggested": {
+    "en": "watermelon",
+    "ko": "수박"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4381,12 +5230,18 @@
    "status": "MISMATCH",
    "shown": "잎에 싸인 콜리플라워",
    "en": "cauliflower",
-   "enUS": null,
    "ko": "콜리플라워",
+   "suggested": {
+    "en": "cauliflower",
+    "ko": "콜리플라워"
+   },
+   "enUS": null,
    "reason": "\"white broccoli\"는 단어가 아님",
    "shop": "food",
+   "decision": null,
+   "learn": false,
    "tracks": [],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": false,
@@ -4407,15 +5262,21 @@
    "status": "MATCH",
    "shown": "요요",
    "en": "yo-yo",
-   "enUS": null,
    "ko": "요요",
+   "suggested": {
+    "en": "yo-yo",
+    "ko": "요요"
+   },
+   "enUS": null,
    "reason": "파일명과 그림 일치",
    "shop": "toy",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4436,15 +5297,21 @@
    "status": "MATCH",
    "shown": "애호박",
    "en": "courgette",
-   "enUS": "zucchini",
    "ko": "애호박",
+   "suggested": {
+    "en": "courgette",
+    "ko": "애호박"
+   },
+   "enUS": "zucchini",
    "reason": "파일명 철자·번호 교정(zucchini) · 영국식 우선",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4465,15 +5332,21 @@
    "status": "MATCH",
    "shown": "양배추",
    "en": "cabbage",
-   "enUS": null,
    "ko": "양배추",
+   "suggested": {
+    "en": "cabbage",
+    "ko": "양배추"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정((한글 파일명))",
    "shop": "food",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,
@@ -4494,15 +5367,21 @@
    "status": "MATCH",
    "shown": "현미경",
    "en": "microscope",
-   "enUS": null,
    "ko": "현미경",
+   "suggested": {
+    "en": "microscope",
+    "ko": "현미경"
+   },
+   "enUS": null,
    "reason": "파일명 철자·번호 교정((한글 파일명))",
    "shop": "school",
+   "decision": null,
+   "learn": true,
    "tracks": [
     "pictureVocabulary",
     "shopVocabulary"
    ],
-   "phonics": null,
+   "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
    "autoLink": true,

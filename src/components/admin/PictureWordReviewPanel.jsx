@@ -135,7 +135,7 @@ function ResultTab() {
         <p className="text-xs text-gray-600 mt-1"><b>직접 확인</b> = 그림을 직접 열어 본 것(그림 내용). <b>추론</b> = 뜻·카테고리·미국식·파닉스 그룹처럼 그림과 철자에서 추정한 값. 기존 단어 대조는 문자열 비교.</p>
       </section>
       <section>
-        <h3 className="font-black text-gray-800 mb-1">Phonics {COUNTS.phonics}</h3>
+        <h3 className="font-black text-gray-800 mb-1">Phonics 검토 후보 {COUNTS.phonicsCandidates} (미분류)</h3>
         <p data-testid="pwr-phonics-order-notice" className="text-xs font-bold text-red-600 bg-red-50 rounded-lg px-2 py-1 mb-2">학습 순서 미확정 — 커리큘럼 확인 필요(임의 순서 아님)</p>
         <div className="space-y-2">
           {groups.map(({ group, items }) => (
@@ -146,7 +146,7 @@ function ResultTab() {
                   <div key={e.id} className="w-[104px] min-w-0 text-center">
                     <img src={imgUrl(e.asset)} alt={e.shown} loading="lazy" className="w-16 h-16 mx-auto object-contain bg-gray-50 rounded-lg" />
                     <p className="text-xs font-black text-gray-800 break-words">{e.en}</p>
-                    <p className="text-[10px] text-gray-500 break-words">{e.phonics.pattern} · {e.phonics.ipa}</p>
+                    <p className="text-[10px] text-gray-500 break-words">{e.phonicsCandidate.pattern} · {e.phonicsCandidate.ipa}</p>
                   </div>
                 ))}
               </div>

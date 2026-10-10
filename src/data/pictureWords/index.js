@@ -12,9 +12,9 @@ export const byStatus = (status, entries = PICTURE_WORDS) => entries.filter((e) 
 export function phonicsGroups(entries = PICTURE_WORDS) {
   const map = new Map() // Map keeps first-appearance order = stable; NOT a curriculum order
   for (const e of entries) {
-    if (!e.phonics) continue
-    if (!map.has(e.phonics.group)) map.set(e.phonics.group, [])
-    map.get(e.phonics.group).push(e)
+    if (!e.phonicsCandidate) continue // 검토 후보일 뿐 — 분류/학습 순서 아님
+    if (!map.has(e.phonicsCandidate.group)) map.set(e.phonicsCandidate.group, [])
+    map.get(e.phonicsCandidate.group).push(e)
   }
   return [...map].map(([group, items]) => ({ group, items }))
 }
@@ -25,15 +25,26 @@ export function shopGroups(entries = PICTURE_WORDS) {
 }
 
 export function reuseSummary(entries = PICTURE_WORDS) {
-  const match = entries.filter((e) => e.status === 'MATCH')
-  const existing = match.filter((e) => e.existingWord)
-  const newCandidates = match.filter((e) => !e.existingWord)
-  return { existing, newCandidates, pendingApproval: entries.length - match.length }
+  const learn = entries.filter((e) => e.learn)
+  return { existing: learn.filter((e) => e.existingWord), newCandidates: learn.filter((e) => !e.existingWord), pendingApproval: entries.length - learn.length }
+}
+
+export const learnableWords = (entries = PICTURE_WORDS) => entries.filter((e) => e.learn)
+export const pendingWords = (entries = PICTURE_WORDS) => entries.filter((e) => ['MISMATCH', 'UNCERTAIN', 'MULTIPLE'].includes(e.status) && !e.decision)
+
+// Practice sets: one per shop, fixed order. ready = enough words for a 4-option quiz.
+export const SET_ORDER = ['food', 'school', 'toy', 'clothes', 'furniture', 'decoration', 'garden', 'pet']
+const SHOP_LABEL_EN = { food: 'Food Shop', school: 'School Shop', toy: 'Toy Shop', clothes: 'Clothes Shop', furniture: 'Furniture Shop', decoration: 'Decoration Shop', garden: 'Garden Shop', pet: 'Pet Shop' }
+export function shopSets(entries = PICTURE_WORDS) {
+  const all = learnableWords(entries)
+  return SET_ORDER.map((shop) => {
+    const words = all.filter((e) => e.shop === shop)
+    return { shop, labelKo: SHOP_LABEL_KO[shop], labelEn: SHOP_LABEL_EN[shop], words, ready: words.length >= 4 }
+  })
 }
 
 const APPROVED_TRACKS = (e) => [
   'pictureVocabulary', 'shopVocabulary',
-  ...(e.phonics ? ['phonics'] : []),
   ...(e.shop === 'garden' || e.shop === 'decoration' ? ['townObject'] : []),
 ]
 
@@ -43,9 +54,9 @@ export function applyDecisions(entries, decisions) {
   return entries.map((e) => {
     const x = Object.prototype.hasOwnProperty.call(d, e.id) ? d[e.id] : null
     if (!x || (x.action !== 'approve' && x.action !== 'exclude')) return { ...e, decision: null }
-    if (x.action === 'exclude') return { ...e, decision: 'exclude', tracks: [] }
+    if (x.action === 'exclude') return { ...e, decision: 'exclude', learn: false, tracks: [] }
     const en = typeof x.en === 'string' && x.en.trim() ? x.en.trim() : e.en
     const ko = typeof x.ko === 'string' && x.ko.trim() ? x.ko.trim() : e.ko
-    return { ...e, decision: 'approve', en, ko, edited: en !== e.en || ko !== e.ko, tracks: e.tracks.length ? e.tracks : APPROVED_TRACKS(e) }
+    return { ...e, decision: 'approve', learn: true, en, ko, edited: en !== e.en || ko !== e.ko, tracks: e.tracks.length ? e.tracks : APPROVED_TRACKS(e) }
   })
 }
