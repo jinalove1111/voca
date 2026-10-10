@@ -1,5 +1,5 @@
 // tests/e2e/townWorld.spec.mjs — 하이브리드 2.5D 월드(townWorld) 브라우저 시나리오. 네트워크 전체 mock, 저장 0.
-// 가정(배선 에이전트): 플래그 paulTownWorld + QA 계정이면 홈 마을 버튼(student-home-town)이 town-world를 연다.
+// 가정(배선 에이전트): 플래그 paulTownWorld + QA 계정이면 홈의 별도 버튼(student-home-town-world)이 town-world를 연다(기존 student-home-town은 기존 경로 유지).
 // (g) 마을 전용 테스터(id …a002, 기본 플래그) 대시보드 진입 (h) 일반 학생 진입 없음(245차). 로그인 학생 id 덮어쓰기: installMocks(page, { studentId }) — verify-student-pin mock이 그 id를 내려준다.
 // (a) 데스크톱 이동/충돌/공원 걷기 (b) 지도 빠른 이동 (c) 미션 왕복(문법·쓰기·발표) (d) 모바일 조이스틱/HUD/문 (e) 준비 중 구역 (f) 쓰기 0/저장소 불변/콘솔 오류 0.
 import { mkdirSync } from 'node:fs'
@@ -100,8 +100,8 @@ async function loginToDashboard(page) {
   await sleep(1500)
 }
 async function enterWorld(page) {
-  await T(page, 'student-home-town').waitFor({ state: 'visible', timeout: 15000 })
-  await T(page, 'student-home-town').click()
+  await T(page, 'student-home-town-world').waitFor({ state: 'visible', timeout: 15000 })
+  await T(page, 'student-home-town-world').click()
   await T(page, 'town-world').waitFor({ state: 'visible', timeout: 20000 })
 }
 const pos = (page) => page.evaluate(() => { const e = document.querySelector('[data-testid="town-world"]'); return { x: Number(e.dataset.x), y: Number(e.dataset.y), zone: e.dataset.zone } })
@@ -416,8 +416,17 @@ export async function run(browser, baseURL) {
     r.check(`${name} (e) 걸어서 어떤 준비 중 구역 사각형 안에도 들어가지 못함(${s2.length}샘플)`, s2.every((q) => !inSoon(q) && !hitsAnySolid(q)), JSON.stringify(s2.find(inSoon)))
   }, { hasTouch: true })
 
+  // ---- (i) 기존 홈 '내 마을' 버튼은 새 마을을 열지 않는다(기존 경로 보존) ----
+  await scenario('(i) 기존 내 마을 버튼 보존', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await T(page, 'student-home-town').waitFor({ state: 'visible', timeout: 15000 })
+    await T(page, 'student-home-town').click()
+    await sleep(1500)
+    r.check(`${name} student-home-town 클릭해도 town-world 안 열림(기존 허브/2.5D 경로)`, (await T(page, 'town-world').count()) === 0)
+  })
+
   // ---- (g) 마을 전용 테스터(…a002): 기본 플래그, 대시보드 버튼으로 새 마을 진입 ----
   const PARK = ZONES.find((z) => z.id === 'park')
+  const SCHOOL_PLACE = PLACES.find((p) => p.zone === 'school').id
   const inRect = (p, z) => p.x > z.rect.x && p.x < z.rect.x + z.rect.w && p.y > z.rect.y && p.y < z.rect.y + z.rect.h
   const inVp = (b, vp) => !!b && b.width > 0 && b.height > 0 && b.x >= 0 && b.y >= 0 && b.x + b.width <= vp.width && b.y + b.height <= vp.height
   await scenario('(g) 마을 전용 테스터', { width: 1280, height: 800 }, async ({ page, name }) => {
@@ -447,8 +456,14 @@ export async function run(browser, baseURL) {
     await holdSampling(page, 'ArrowUp', 3000, sm); await holdSampling(page, 'ArrowLeft', 3000, sm); await holdSampling(page, 'ArrowDown', 3000, sm)
     r.check(`${name} 건물/충돌 박스를 침범하지 않음(${sm.length}샘플)`, sm.every((q) => !hitsAnySolid(q)), JSON.stringify(sm.find(hitsAnySolid)))
     // 지도로 공원 이동
+    // 충돌 걷기가 공원에서 끝날 수 있으므로 먼저 지도로 학교에 가서 출발 구역을 고정한다
+    await T(page, 'tw-map-open').click(); await T(page, `tw-map-place-${SCHOOL_PLACE}`).click()
+    await waitUntil(async () => (await pos(page)).zone === 'school', { timeout: 5000 })
+    const ps = await pos(page)
+    r.check(`${name} 지도로 학교 이동: 위치가 학교 구역 안`, inRect(ps, ZONES.find((z) => z.id === 'school')), JSON.stringify(ps))
     const chip0 = ((await T(page, 'tw-zone-chip').textContent()) || '').trim()
     await T(page, 'tw-map-open').click(); await T(page, 'tw-map-place-park-green').click()
+    await waitUntil(async () => (await pos(page)).zone === 'park', { timeout: 5000 })
     await T(page, 'tw-mission-enter').waitFor({ state: 'visible', timeout: 5000 })
     const pp = await pos(page), chip1 = ((await T(page, 'tw-zone-chip').textContent()) || '').trim()
     r.check(`${name} 지도로 공원 이동: 위치가 공원 구역 안 + 구역 칩 변경`, inRect(pp, PARK) && chip1 !== chip0, JSON.stringify({ pp, chip0, chip1 }))
