@@ -242,7 +242,7 @@ function GrammarUnitDeck({ unit, units, from, initial, onStateChange, onBasics, 
   return (
     <div data-testid="grammar-unit" data-unit={unit.id} className="space-y-3">
       <div>{backBtn}</div>
-      <div data-testid="gd-root" data-unit={unit.id} data-idx={idx} data-total={total} data-kind={c.kind} className="space-y-3">
+      <div data-testid="gd-root" data-unit={unit.id} data-idx={idx} data-total={total} data-kind={c.kind} className="space-y-3 pb-28">
         <div className="space-y-1">
           <p className="text-sm font-black text-indigo-700 break-keep">{unit.order}. {unit.titleKo}<ReviewBadge unit={unit} testid="gu-review-status" /></p>
           <div className="flex items-center justify-between gap-2">
@@ -252,7 +252,7 @@ function GrammarUnitDeck({ unit, units, from, initial, onStateChange, onBasics, 
           <div className="h-2 rounded-full bg-gray-200 overflow-hidden"><div data-testid="gd-bar" className="h-full bg-indigo-500" style={{ width: `${((idx + 1) / total) * 100}%` }} /></div>
         </div>
         <div className="max-w-lg mx-auto">
-          <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="bg-white rounded-3xl p-5 card-shadow max-h-[72vh] overflow-y-auto space-y-3">
+          <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="bg-white rounded-3xl p-5 card-shadow max-h-[56vh] sm:max-h-[64vh] overflow-y-auto space-y-3">
             <h2 ref={headingRef} tabIndex={-1} className="text-lg font-black text-gray-900 break-keep outline-none">{c.title}{sub}</h2>
             <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
           </div>

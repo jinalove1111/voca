@@ -640,6 +640,12 @@ export async function run(browser, baseURL) {
       // 덱 카드 하나: 가로 스크롤·잘림 없음, 작은 버튼 없음, 이전/다음 높이 >=56, 둘 다 가로 스크롤 없이 닿을 수 있음
       const checkCard = async (label) => {
         const small = await smallButtons(page, 'gd-root'); const cl = await clipped(page, 'gd-root')
+        // 플로팅 속도 위젯(약 76px)에 가려지지 않게: 스크롤 없이 다음 버튼 바닥이 위젯 위에 있어야 함(폰 폭만)
+        let widgetBad = ''
+        if (vp.width <= 390 && (await T(page, 'gd-next').count()) > 0) {
+          const nb = await T(page, 'gd-next').evaluate((el) => ({ bottom: el.getBoundingClientRect().bottom, right: el.getBoundingClientRect().right, ih: window.innerHeight, iw: window.innerWidth }))
+          if (nb.bottom > nb.ih - 76 || nb.right > nb.iw) widgetBad = `gd-next 위젯과 겹침 bottom ${Math.round(nb.bottom)} > ${nb.ih - 76}`
+        }
         const navs = []
         for (const id of ['gd-prev', 'gd-next']) {
           if ((await T(page, id).count()) === 0) continue
@@ -647,7 +653,7 @@ export async function run(browser, baseURL) {
           navs.push([id, await T(page, id).evaluate((el) => { const b = el.getBoundingClientRect(); return { h: b.height, ok: b.bottom <= window.innerHeight + 1 && b.top >= -1 && b.left >= -1 && b.right <= window.innerWidth + 1 } })])
         }
         const badNav = navs.filter(([, v]) => v.h < 56 || !v.ok).map(([id, v]) => `${id}:h${Math.round(v.h)}${v.ok ? '' : ':뷰포트 밖'}`)
-        r.check(`${name} ${label} 가로 스크롤·잘림 없음/버튼 >=44px/이전·다음 >=56px·닿을 수 있음`, (await noOverflow(page)) && cl.length === 0 && small.length === 0 && badNav.length === 0 && navs.length >= 1, `${small.join(',')} ${cl.join(',')} ${badNav.join(',')}`)
+        r.check(`${name} ${label} 가로 스크롤·잘림 없음/버튼 >=44px/이전·다음 >=56px·닿을 수 있음`, (await noOverflow(page)) && cl.length === 0 && small.length === 0 && badNav.length === 0 && !widgetBad && navs.length >= 1, `${small.join(',')} ${cl.join(',')} ${badNav.join(',')} ${widgetBad}`)
       }
       if (vp.width === 360) { await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 }); await shot('home') }
       await toCourses(); await check('과정 목록')
