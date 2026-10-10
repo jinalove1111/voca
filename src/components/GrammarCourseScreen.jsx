@@ -5,6 +5,7 @@ import { Choice } from './UnitScreen'
 import { GRAMMAR_COURSES } from '../utils/grammar/grammarCourses'
 import { unitsForCourse, grammarUnitById, courseCounts, reviewStatusOf, SCHOOL_GRAMMAR_NOTE_KO } from '../utils/grammar/grammarUnits'
 import SceneCards, { sceneCanAdvance } from './grammar/SceneCards'
+import { missionForUnit, readyMissions } from '../utils/grammar/townMissions'
 import { buildDeck, isPractice, deckCounts, cardIndexById } from '../utils/grammar/grammarDeck'
 
 // 2026-10-10 문법 과정 화면(QA 전용): 과정 5개 → 단원 목록(학습 목표) → 단원 카드 덱(한 화면에 설명 카드 하나 또는 문제 하나). 점수·저장·DB 없음(화면 상태일 뿐).
@@ -107,7 +108,8 @@ const canAdvance = (c, a) => {
   return true
 }
 
-function CardBody({ c, a, set, clear, deck, answers, unit, studentId, onBasics, onRetryWrong, onList }) {
+function CardBody({ c, a, set, clear, deck, answers, unit, studentId, returnTown, onBasics, onRetryWrong, onList }) {
+  const mission = missionForUnit(unit.id)
   switch (c.kind) {
     case 'scene': return <SceneCards card={c} unit={unit} answers={answers} onAnswer={set} onClear={clear} studentId={studentId} />
     case 'goal': {
@@ -117,6 +119,11 @@ function CardBody({ c, a, set, clear, deck, answers, unit, studentId, onBasics, 
           <p className="text-base font-black text-gray-900 break-keep">{c.titleKo}</p>
           <p className="text-base font-black text-gray-900 break-keep">{c.goalKo}</p>
           {c.situationKo && <p className="text-sm text-gray-700 break-keep">상황: {c.situationKo}</p>}
+          {mission && (
+            <div data-testid="gd-mission-intro" className="rounded-2xl bg-emerald-50 border-2 border-emerald-200 p-3 space-y-1">
+              <p className="text-sm font-black text-emerald-800 break-keep">{mission.placeKo}</p>
+              <p className="text-base text-gray-800 break-keep">{mission.introKo}</p>
+            </div>)}
           {basics && (
             <button data-testid="gu-basics-link" onClick={() => onBasics(basics.id)} className={`${BTN} text-base bg-indigo-100 text-indigo-800`}>
               기초 설명 보기 → {basics.titleKo}{basics.status !== 'ready' ? ' (준비 중)' : ''}
@@ -208,13 +215,14 @@ function CardBody({ c, a, set, clear, deck, answers, unit, studentId, onBasics, 
               {wrong.map((x) => <p key={x.id} data-testid={`gd-summary-wrong-${x.id}`} className="text-sm text-gray-800 break-keep">• {x.q ? x.q.promptKo : x.label}</p>)}
               <button data-testid="gd-retry-wrong" onClick={onRetryWrong} className={`${BTN} text-base bg-amber-200 text-gray-800`}>틀린 문제 다시 풀기</button>
             </div>)}
-          <button data-testid="gd-to-list" onClick={onList} className={`${BTN} text-base bg-sky-500 text-white`}>단원 목록으로</button>
+          {returnTown && <button data-testid="gd-to-town" onClick={onList} className={`${BTN} min-h-[44px] text-base bg-emerald-500 text-white`}>마을로 돌아가기</button>}
+          {!returnTown && <button data-testid="gd-to-list" onClick={onList} className={`${BTN} min-h-[44px] text-base bg-sky-500 text-white`}>단원 목록으로</button>}
         </div>)
     }
   }
 }
 
-function GrammarUnitDeck({ unit, units, studentId, from, initial, onStateChange, onBasics, onBack }) {
+function GrammarUnitDeck({ unit, units, studentId, from, returnTown, initial, onStateChange, onBasics, onBack, onMissionComplete }) {
   const deck = useMemo(() => buildDeck(unit, units), [unit, units])
   const [idx, setIdx] = useState(Math.min(initial?.idx || 0, deck.length - 1))
   const [answers, setAnswers] = useState(initial?.answers || {})
@@ -227,6 +235,7 @@ function GrammarUnitDeck({ unit, units, studentId, from, initial, onStateChange,
   useEffect(() => { headingRef.current?.focus() }, [idx])
   useEffect(() => { onStateChange?.({ idx, answers }) }, [idx, answers]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => stopSpeaking(), [])
+  useEffect(() => { if (c.kind === 'summary') { const m = missionForUnit(unit.id); if (m) onMissionComplete?.(m.id) } }, [c.kind]) // eslint-disable-line react-hooks/exhaustive-deps -- 요약 카드에 닿을 때마다 1회(App이 중복 제거)
   const go = (i) => { stopSpeaking(); window.scrollTo({ top: 0 }); setIdx(Math.max(0, Math.min(total - 1, i))) }
   const set = (patch) => setAnswers((s) => ({ ...s, [c.id]: { ...s[c.id], ...patch } }))
   const clear = () => setAnswers((s) => { const n = { ...s }; delete n[c.id]; return n })
@@ -243,7 +252,7 @@ function GrammarUnitDeck({ unit, units, studentId, from, initial, onStateChange,
   const TXT_BACK = 'min-h-[44px] px-2 font-black text-gray-600 btn-press shrink-0'
   const backBtn = from
     ? <button data-testid="gu-basics-back" onClick={() => leave(false)} className={TXT_BACK}>← 돌아가기</button>
-    : <button data-testid="gu-back" onClick={() => leave(true)} className={TXT_BACK}>← 단원 목록</button>
+    : <button data-testid="gu-back" data-return={returnTown ? 'town' : undefined} onClick={() => leave(true)} className={TXT_BACK}>{returnTown ? '← 마을' : '← 단원 목록'}</button>
   return (
     <div data-testid="grammar-unit" data-unit={unit.id} className="space-y-3">
       <div data-testid="gd-root" data-unit={unit.id} data-idx={idx} data-total={total} data-kind={c.kind} className="space-y-3 pb-28">
@@ -261,7 +270,7 @@ function GrammarUnitDeck({ unit, units, studentId, from, initial, onStateChange,
         <div className="max-w-lg mx-auto">
           <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="bg-white rounded-3xl p-5 card-shadow max-h-[52vh] sm:max-h-[64vh] overflow-y-auto space-y-3">
             <h2 ref={headingRef} tabIndex={-1} className="text-lg font-black text-gray-900 break-keep outline-none">{c.title}{sub}</h2>
-            <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} unit={unit} studentId={studentId} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
+            <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} unit={unit} studentId={studentId} returnTown={returnTown} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
           </div>
         </div>
         <div className="flex gap-3 mt-3">
@@ -274,7 +283,7 @@ function GrammarUnitDeck({ unit, units, studentId, from, initial, onStateChange,
   )
 }
 
-function GrammarUnitView({ unit, units, studentId, from, initial, onStateChange, onBasics, onBack }) {
+function GrammarUnitView({ unit, units, studentId, from, returnTown, initial, onStateChange, onBasics, onBack, onMissionComplete }) {
   if (unit.status !== 'ready') {
     const back = () => { stopSpeaking(); onBack(!from) }
     return (
@@ -288,12 +297,13 @@ function GrammarUnitView({ unit, units, studentId, from, initial, onStateChange,
       </div>
     )
   }
-  return <GrammarUnitDeck unit={unit} units={units} studentId={studentId} from={from} initial={initial} onStateChange={onStateChange} onBasics={onBasics} onBack={onBack} />
+  return <GrammarUnitDeck unit={unit} units={units} studentId={studentId} from={from} returnTown={returnTown} initial={initial} onStateChange={onStateChange} onBasics={onBasics} onBack={onBack} onMissionComplete={onMissionComplete} />
 }
 
-export default function GrammarCourseScreen({ units, onBack, studentId }) {
+export default function GrammarCourseScreen({ units, onBack, studentId, initialUnitId = null, returnTo = null, onMissionComplete }) {
   const [courseId, setCourseId] = useState(null)
-  const [unitId, setUnitId] = useState(null)
+  const [unitId, setUnitId] = useState(initialUnitId)
+  const town = returnTo === 'town' // 마을에서 들어온 경우 — 덱을 나가면 목록이 아니라 마을로
   const [fromId, setFromId] = useState(null) // 기초 설명으로 건너온 경우 돌아갈 단원
   const deckStates = useRef(new Map()) // 단원 id → { idx, answers } — 기초 설명을 다녀와도 같은 카드·답이 남는다(화면 상태일 뿐, 저장 없음)
   useEffect(() => () => stopSpeaking(), [])
@@ -308,16 +318,24 @@ export default function GrammarCourseScreen({ units, onBack, studentId }) {
           <h1 className="text-xl font-black text-indigo-700">문법 과정</h1>
         </div>
         {unit && (
-          <GrammarUnitView key={unit.id} unit={unit} units={units} studentId={studentId} from={fromId}
+          <GrammarUnitView key={unit.id} unit={unit} units={units} studentId={studentId} from={fromId} returnTown={town && !fromId} onMissionComplete={onMissionComplete}
             initial={deckStates.current.get(unit.id)}
             onStateChange={(s) => deckStates.current.set(unit.id, s)}
             onBasics={(id) => { setFromId(unit.id); setUnitId(id) }}
             onBack={(toList) => {
               if (toList) deckStates.current.delete(unit.id) // 목록으로 나가면 다음에 처음부터
-              if (fromId) { deckStates.current.delete(unit.id); setUnitId(fromId); setFromId(null) } else setUnitId(null)
+              if (fromId) { deckStates.current.delete(unit.id); setUnitId(fromId); setFromId(null) } else if (town) onBack(); else setUnitId(null)
             }} />)}
         {!unit && !course && (
           <>
+            {readyMissions().length > 0 && (
+              <div data-testid="grammar-missions" className="space-y-2">
+                <p className="text-base font-black text-gray-800">폴타운 미션</p>
+                {readyMissions().map((m) => { const mu = grammarUnitById(m.unitId); return mu && (
+                  <button key={m.id} data-testid={`grammar-mission-${m.id}`} onClick={() => { setFromId(null); deckStates.current.delete(mu.id); setUnitId(mu.id) }} className={`${ITEM} min-h-[64px] text-white bg-gradient-to-br from-emerald-500 to-teal-700 font-black break-keep`}>
+                    {m.titleKo} · {m.grammarEn}
+                  </button>) })}
+              </div>)}
             <p className="text-base font-black text-gray-800">어떤 과정을 할까요?</p>
             {GRAMMAR_COURSES.map((c) => { const { ready, reviewed, total } = courseCounts(c.id); return (
               <button key={c.id} data-testid={`grammar-course-${c.id}`} onClick={() => setCourseId(c.id)} className={`${ITEM} text-white bg-gradient-to-br from-indigo-500 to-violet-700`}>
@@ -337,7 +355,7 @@ export default function GrammarCourseScreen({ units, onBack, studentId }) {
             {list.map((u) => { const ready = u.status === 'ready'; return (
               <button key={u.id} data-testid={`grammar-unit-${u.id}`} disabled={!ready} aria-disabled={!ready} onClick={() => { setFromId(null); deckStates.current.delete(u.id); setUnitId(u.id) }}
                 className={`${ITEM} ${ready ? 'text-white bg-gradient-to-br from-teal-400 to-emerald-600' : 'bg-white text-gray-400'}`}>
-                <span className="block text-lg font-black break-keep">{u.order}. {u.titleKo}{!ready && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">준비 중</span>}{ready && <ReviewBadge unit={u} testid={`grammar-unit-${u.id}-review`} />}</span>
+                <span className="block text-lg font-black break-keep">{u.order}. {u.titleKo}{missionForUnit(u.id) && <span data-testid="gu-place-tag" className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">{missionForUnit(u.id).placeKo}</span>}{!ready && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">준비 중</span>}{ready && <ReviewBadge unit={u} testid={`grammar-unit-${u.id}-review`} />}</span>
                 <span className="block text-xs font-bold opacity-90 break-keep">{u.goalKo}</span>
               </button>) })}
           </div>)}

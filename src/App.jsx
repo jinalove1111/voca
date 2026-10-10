@@ -12,6 +12,7 @@ const WritingPractice = React.lazy(() => import('./components/WritingPractice'))
 const UnitScreen = React.lazy(() => import('./components/UnitScreen'))
 // 2026-10-10 문법 과정 5개(Easy~High School) — QA 계정 홈에서만. 시범 Unit 데이터(pilotUnits)를 선택 연습에 재사용
 const GrammarCourseScreen = React.lazy(() => import('./components/GrammarCourseScreen'))
+import { readyMissions, missionById } from './utils/grammar/townMissions'
 const loadPilotUnits = () => import('./utils/curriculum/units')
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
@@ -265,6 +266,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 228차: 홈의 말하기·쓰기·오늘의 학습이 같은 과정→단계→단원 선택기로 들어온다. 선택은 세션 상태일 뿐(저장 없음)
   const [curriculumSel, setCurriculumSel] = useState(null) // { courseId, blockId, entryId } | null
   const [unitIntent, setUnitIntent] = useState(null) // 'speaking' | 'writing' | null
+  // 폴타운 미션(2026-10-10) — 마을에서 문법 단원으로 들어온 세션 상태(저장 없음). 완료 id는 중복 없이 모은다
+  const [grammarEntry, setGrammarEntry] = useState(null) // { unitId, returnTo: 'proto25d' } | null
+  const [completedMissionIds, setCompletedMissionIds] = useState([])
   const [pilotUnitsFailed, setPilotUnitsFailed] = useState(false) // 226차: 청크 로드 실패 시 빈 화면 대신 안내 + 홈
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
@@ -324,6 +328,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 자격/파일럿 허용목록/paulTownV2와 절대 결합하지 않는다(기존 Town V1/V2
   // 게이팅과 완전히 무관한 독립 dev/QA 서피스).
   const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false) && qaTestStudent
+  const townReturn = !!grammarEntry && grammarEntry.returnTo === 'proto25d' && paulTown2_5dEnabled // 플래그가 꺼졌으면 홈으로
   // 2026-09-27 경제 단계 A2 — paulTown2_5d 단독 플래그(townShopV1/townV1
   // 자격 없이)로도 코인 배지가 실제 서버 잔액을 읽을 수 있도록 훅 게이트를
   // 넓힌다. 위 STEP 0 안전성 검토(get_town_shop_state RPC는 순수 SELECT,
@@ -904,13 +909,16 @@ function AppInner({ studentId, studentName, onLogout }) {
           <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '문법 과정을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.' : '불러오는 중...'}</p>
           <div className="flex flex-wrap justify-center gap-2">
             {pilotUnitsFailed && <button data-testid="grammar-load-reload" onClick={() => window.location.reload()} className="min-h-[44px] px-5 rounded-2xl font-black bg-teal-500 text-white btn-press">🔄 새로고침</button>}
-            <button data-testid="grammar-load-home" onClick={() => setScreen('home')} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+            <button data-testid="grammar-load-home" onClick={() => { setGrammarEntry(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
           </div>
         </div>
       )}
       {qaTestStudent && screen === 'grammarCourses' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <GrammarCourseScreen units={pilotUnits} studentId={studentId} onBack={() => setScreen('home')} />
+          <GrammarCourseScreen units={pilotUnits} studentId={studentId}
+            initialUnitId={townReturn ? grammarEntry.unitId : null} returnTo={townReturn ? 'town' : null}
+            onMissionComplete={(id) => setCompletedMissionIds((s) => (s.includes(id) ? s : [...s, id]))}
+            onBack={() => { setGrammarEntry(null); setScreen(townReturn ? 'proto25d' : 'home') }} />
         </React.Suspense>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
@@ -1236,6 +1244,10 @@ function AppInner({ studentId, studentName, onLogout }) {
               같은 플래그로 지갑도 게이팅한다(townShopV1이 꺼져 있어도 코인 배지가
               보여야 함) — 소스는 여전히 townShop.state 하나(읽기 전용, 새 fetch 없음). */}
           <Proto25DScreen wallet={paulTown2_5dEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null}
+            missions={readyMissions()} completedMissionIds={completedMissionIds}
+            onStartMission={(id) => { const m = missionById(id); if (!m) return
+              setGrammarEntry({ unitId: m.unitId, returnTo: 'proto25d' }); setPilotUnitsFailed(false)
+              loadPilotUnits().then((r) => setPilotUnits(r.UNITS)).catch(() => setPilotUnitsFailed(true)); setScreen('grammarCourses') }}
             onBack={() => setScreen(studentHomeEnabled ? 'home' : 'dashboard')} />
         </React.Suspense>
       )}
