@@ -65,6 +65,8 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - **미검증**: 브라우저 `[town-world]`(신규 시나리오 (g) 마을 전용 테스터 `…a002` / (h) 일반 학생 `…b001`, 로그인 id는 `installMocks(page, { studentId })`) — 리드 실행 예정. 실기기·실계정 확인 안 함.
 - 보상·XP·DB·SQL·새 저장 키 0.
 
+- **정정(245차 후속)**: 홈 메뉴의 기존 `student-home-town` 버튼 라우팅에 `townWorldEnabled` 분기를 넣었던 것이 회귀(`studentHome.spec` 4 FAIL, `townMission.spec` 3 FAIL: 기존 허브/2.5D 경로를 가로챔)였다. 분기와 `canEnterTown`의 `townWorldEnabled`를 제거해 기존 경로 복원하고, 홈에 별도 버튼 `student-home-town-world`(`onGoWorld`일 때만)를 추가. `townWorld.spec`은 이 버튼으로 진입, 시나리오 (i)로 기존 버튼이 새 마을을 열지 않음을 확인. 브라우저 재실행은 리드 몫.
+
 ## 2026-10-10 (244차) — Paul Town 하이브리드 2.5D 마을(C 방식) 3구역 프로토타입 (18:30~19:30)
 
 운영자 요청: C 방식(캐릭터 직접 이동 + 지도 빠른 이동)으로 7개 구역이 이어진 마을을 만든다. 과목 배정은 공원=Grammar, 학교=Writing, 시장=Speaking, 집과 정원=Conversation, 광장=Presentation(기본 시작), 연못과 강=Reading, 언덕과 농장=Voca. 탐험 모드(PC 방향키·WASD, 모바일 터치 조이스틱, 건물 근처 미션 표시, 길·건물 충돌, 이동 중 학습 상태 유지), 지도 모드(전체 지도 버튼, 7개 구역, 장소를 고르면 구역 입구로 이동, 같은 학습 기록, 이동 방식으로 중복 보상 없음), 쓸 수 있는 그림 우선 사용(크기·그림자·원근·겹침 통일, 바닥과 중복되는 그림 제외, 결정 대기 그림 미사용, 구역별 배치 목록), 기존 기록·미션 id 유지, 문법 '정답 미리 보임'은 별도 작업으로 분리해 상태만 보고. 1단계는 광장 + 공원 + 학교만. PR #62 보존, 별도 브랜치, DB·SQL 없음, 병합·배포 없음, Preview만. 브랜치 `feat/paul-town-hybrid-world-2026-10-10`(PR #62 head `d12f145b`에서 분기). 설계 문서: `docs/design/PAUL_TOWN_HYBRID_WORLD_2026-10-10.md`(사실/계획 구분, 7개 구역 그림 배치 표 §7).
