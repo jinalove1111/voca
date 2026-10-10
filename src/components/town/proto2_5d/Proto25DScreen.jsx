@@ -149,6 +149,7 @@ import {
 } from '../../../utils/town/proto2_5d/camera'
 import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase, findTappedShop, shopArrivalOk } from '../../../utils/town/proto2_5d/shopInteraction'
 import ProtoShopScreen from './ProtoShopScreen'
+import { MISSION_SPOTS, missionArrival, isNearMissionSpot, findTappedMissionSpot } from '../../../utils/town/proto2_5d/missionSpots'
 import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
 import { PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements, movePlacement, removePlacement } from '../../../utils/town/proto2_5d/placementSlots'
 
@@ -266,7 +267,12 @@ const FACING_MIN_DX_PCT = 1.0
 // `isSpriteV2ManifestActive`가 true가 된다 — 아래 모든 v2 관련 분기가 이제
 // 실제로 실행된다(위 파일 헤더 "Phase 6C" 주석 참고). 호출부가 명시적으로
 // `spriteManifest={undefined}` 등 다른 값을 넘기면 그 값이 우선한다.
-export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, wallet = null, onBack = null } = {}) {
+const NO_MISSIONS = []
+export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, wallet = null, onBack = null, missions = NO_MISSIONS, completedMissionIds = NO_MISSIONS, onStartMission = null } = {}) {
+  // 미션 표지판(2026-10-10) — missions가 비었거나 onStartMission이 없으면 아무것도 렌더/판정하지 않는다.
+  const missionSpots = typeof onStartMission === 'function' && Array.isArray(missions)
+    ? MISSION_SPOTS.filter((sp) => missions.some((m) => m && m.id === sp.id))
+    : []
   const reducedMotion = usePrefersReducedMotion()
   // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
   // useState lazy init으로 충분 — 매 렌더 재파싱 불필요).
@@ -1030,17 +1036,31 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // placingRef 가드에 막혀 아무 것도 안 열려, 캐릭터가 문 앞에서 그냥 멈추는
     // 막다른 길이었다. 가드 자체는 이중 방어선으로 그대로 둔다.
     const tappedShop = (tappedBench || tappedPlaced || placingRef.current) ? null : findTappedShop(rawPoint, groundPx)
-    return { tappedBench, tappedPlaced, tappedShop }
+    // 미션 표지판 — 벤치/배치 의자/건물이 아닐 때만, 배치 모드 중엔 제외(건물과 동일 관례).
+    const tappedMission = (tappedBench || tappedPlaced || tappedShop || placingRef.current || missionSpots.length === 0)
+      ? null : findTappedMissionSpot(rawPoint, groundPx, missionSpots)
+    return { tappedBench, tappedPlaced, tappedShop, tappedMission }
+  }
+
+  // 표지판 탭/키보드 → 표지판 오른쪽 앞 도착 지점까지 일반 걷기(도착해도 자동 시작 없음,
+  // "공원 미션 시작" 버튼만 뜬다). 일반 걷기 재사용이라 새 pending 상태가 없다.
+  function startWalkToMission(spot) {
+    const a = missionArrival(spot)
+    if (!a) return
+    const p = nearestWalkablePoint(a.x, a.y, obstaclesWithPlacements(placementsRef.current))
+    startPlainWalk(p)
   }
 
   // 분류된 탭 하나를 실제 걷기로 옮기는 4분기 — idle 탭과 기립 후 재지정 공용.
-  function dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop }) {
+  function dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop, tappedMission }) {
     if (tappedBench) {
       startWalkToBench()
     } else if (tappedPlaced) {
       startWalkToPlacedSeat(tappedPlaced.pl, tappedPlaced.rect)
     } else if (tappedShop) {
       startWalkToShop(tappedShop)
+    } else if (tappedMission) {
+      startWalkToMission(tappedMission)
     } else {
       startPlainWalk(rawPoint)
     }
@@ -1193,7 +1213,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 타겟이 44x44px 이상이 되도록, 새 이벤트 경로 없이 이 hit-test 단계의
     // 패딩 크기만 조정한다).
     const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
-    const { tappedBench, tappedPlaced, tappedShop } = classifyTap(rawPoint, groundPx)
+    const { tappedBench, tappedPlaced, tappedShop, tappedMission } = classifyTap(rawPoint, groundPx)
     const tappedSeatKey = tappedBench ? 'bench' : (tappedPlaced ? `placed:${tappedPlaced.pl.itemId}` : null)
 
     // 항목7 — 이미 좌석(벤치든 배치 의자든)을 향해 걷는 중(pendingSit)에
@@ -1215,7 +1235,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 여기서 탭 리플을 띄운다(항목C2 — startPlainWalk/startWalkToBench와
     // 같은 지점, 마우스/터치 공용 — 이 핸들러가 두 입력 모두를 받는다).
     showTapRipple({ x: rawLeftPct, y: rawTopPct })
-    dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop })
+    dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop, tappedMission })
   }
 
   function handleGroundPointerCancel(e) {
@@ -1593,6 +1613,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 보여줄 필요가 없다(요구사항 — 벤치와 가게 입장 반경이 겹칠 이론상
   // 경우까지 방어).
   const nearShop = isNearShopEntrance(character.leftPct, character.topPct)
+  const missionUiOpen = !shopOpen && !placingItemId && !myItemsOpen
+  const nearMission = missionUiOpen && character.phase !== 'sitting'
+    ? missionSpots.find((sp) => isNearMissionSpot(sp, character.leftPct, character.topPct)) || null
+    : null
 
   return (
     <div
@@ -2187,6 +2211,53 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           />
         ))}
 
+        {/* 미션 표지판 — 시각 + 접근성 요소. 마우스/터치 탭은 바닥의 world 좌표
+            hit-test(classifyTap)가 처리하므로 pointer-events-none(벤치와 동일 관례),
+            키보드는 Enter/Space. 오버레이(가게/내 물건/배치)가 열리면 숨긴다. */}
+        {missionUiOpen && missionSpots.map((sp) => {
+          const url = townAsset(sp.assetKey)
+          if (!url) return null
+          const widthPx = objectRenderedWidthPx(sp, groundSize)
+          const done = Array.isArray(completedMissionIds) && completedMissionIds.includes(sp.id)
+          const z = obstacleZIndex(`mission-${sp.id}`, sp.anchor.y)
+          return (
+            <div
+              key={sp.id}
+              role="button"
+              tabIndex={0}
+              aria-label={sp.labelKo}
+              data-testid={`proto25d-mission-spot-${sp.id}`}
+              data-done={done ? 'true' : undefined}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return
+                e.preventDefault()
+                if (character.phase === 'sitting' || character.phase === 'leaving') return
+                startWalkToMission(sp)
+              }}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${sp.anchor.x}%`,
+                top: `${sp.anchor.y}%`,
+                width: `${widthPx}px`,
+                height: `${widthPx * sp.naturalAspect}px`,
+                minHeight: '44px',
+                transform: 'translate(-50%, -100%)',
+                zIndex: z,
+              }}
+            >
+              <img src={url} alt="" draggable={false} className="block w-full h-full" />
+              {done && (
+                <span
+                  data-testid={`proto25d-mission-done-${sp.id}`}
+                  className="absolute left-1/2 -top-1 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-emerald-600 text-white text-xs font-black px-2 py-0.5 shadow"
+                >
+                  완료
+                </span>
+              )}
+            </div>
+          )
+        })}
+
         <ProtoCharacter
           phase={character.phase}
           leftPct={character.leftPct}
@@ -2223,6 +2294,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           }
         >
           🏪 가게 들어가기
+        </button>
+      )}
+      {nearMission && (
+        <button
+          type="button"
+          data-testid="proto25d-mission-enter"
+          onClick={() => onStartMission(nearMission.id)}
+          className="absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-emerald-600 text-white text-sm font-black shadow-lg pointer-events-auto"
+        >
+          {nearMission.labelKo} 시작
         </button>
       )}
       {/* Phase C — 배치 취소(배치 모드 동안만). F2 — 하단 가운데(가게 버튼 자리)는 짧은 화면에서

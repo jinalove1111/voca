@@ -134,6 +134,7 @@ async function main() {
       { name: '[town-v2-artwork]', modulePath: '../tests/e2e/townV2ArtworkPipeline.spec.mjs' },
       { name: '[town-proto2.5d]', modulePath: '../tests/e2e/townProto25d.spec.mjs' },
       { name: '[town-pilot-allowlist]', modulePath: '../tests/e2e/townPilotAllowlist.spec.mjs' },
+      { name: '[town-mission]', modulePath: '../tests/e2e/townMission.spec.mjs' },
     ]
 
     for (const spec of specs) {
