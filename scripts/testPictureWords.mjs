@@ -100,6 +100,42 @@ ok(run({ [mm]: { action: 'approve', en: '' } }).errors.length === 1 && run({ [mm
 ok(run({ [um]: { action: 'approve' } }).errors.length === 1, 'validator: UNUSABLE approve rejected')
 ok(run({}, 2).errors.length === 1, 'validator: v!==1 rejected')
 
+// ---- practice.js (pure)
+const P = await import('../src/utils/pictureWords/practice.js')
+ok(P.STEPS.join() === 'look,listen,repeat,quiz,review', 'practice STEPS order')
+const pool = H.learnableWords()
+let detOk = true, distinctOk = true, onceOk = true, diffOk = true, notConst = true, shopFirstOk = true
+for (const set of H.shopSets().filter((x) => x.ready)) {
+  for (let seed = 1; seed <= 25; seed++) {
+    const s1 = P.buildSession(set.words, { size: 6, seed }), s2 = P.buildSession(set.words, { size: 6, seed })
+    const q1 = P.buildQuiz(s1, pool, seed), q2 = P.buildQuiz(s2, pool, seed)
+    if (JSON.stringify([s1, q1]) !== JSON.stringify([s2, q2])) detOk = false
+    if (s1.length !== Math.min(6, set.words.length) || new Set(s1.map((w) => w.id)).size !== s1.length) detOk = false
+    q1.forEach((q, i) => {
+      const w = s1[i]
+      if (q.options.length !== 4 || new Set(q.options.map((o) => o.en.toLowerCase())).size !== 4) distinctOk = false
+      if (q.options.filter((o) => o.id === q.correctId).length !== 1 || q.correctId !== w.id) onceOk = false
+      if (q.options.some((o) => o.id !== w.id && o.en.toLowerCase() === w.en.toLowerCase())) diffOk = false
+      const same = q.options.filter((o) => o.id !== w.id && pool.find((p) => p.id === o.id).shop === w.shop).length
+      if (set.words.length >= 4 && same < Math.min(3, new Set(set.words.filter((p) => p.id !== w.id).map((p) => p.en.toLowerCase())).size)) shopFirstOk = false
+    })
+    if (new Set(q1.map((q) => q.options.findIndex((o) => o.id === q.correctId))).size < 2) notConst = false
+  }
+}
+ok(detOk, 'practice: deterministic per seed, session unique + sized')
+ok(distinctOk && onceOk && diffOk, 'practice: 4 distinct options, correct exactly once, distractor text != answer')
+ok(notConst, 'practice: correct index not constant across a session')
+ok(shopFirstOk, 'practice: distractors come from the same shop first')
+ok(JSON.stringify(P.buildSession(pool, { size: 6, seed: 1 })) !== JSON.stringify(P.buildSession(pool, { size: 6, seed: 2 })), 'practice: different seeds differ')
+ok(P.gradeAnswer({ correctId: 'a' }, 'a') && !P.gradeAnswer({ correctId: 'a' }, 'b'), 'practice: gradeAnswer')
+const RES = [{ id: 'a', correct: true }, { id: 'b', correct: false }, { id: 'c', correct: false }, { id: 'b', correct: true }, { id: 'c', correct: false }, { id: 'c', correct: true }]
+ok(P.reviewQueue(RES).join() === 'b,c' && P.reviewQueue([{ id: 'x', correct: true }]).length === 0, 'practice: reviewQueue first-wrong order')
+const SU = P.summarise(RES)
+ok(SU.total === 3 && SU.firstTryCorrect === 1 && SU.needsReview.join() === 'b,c', 'practice: summarise')
+
+const pracSrc = fs.readFileSync(path.join(ROOT, 'src/utils/pictureWords/practice.js'), 'utf8')
+ok(!/Math\.random|localStorage|sessionStorage|fetch\(|from 'react'|document\.|window\./.test(pracSrc), 'practice.js is pure (no random/storage/network/DOM)')
+
 // ---- source pins: data module
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((x) => (x.isDirectory() ? walk(path.join(d, x.name)) : [path.join(d, x.name)]))
 const rel = (f) => path.relative(ROOT, f).split(path.sep).join('/')
