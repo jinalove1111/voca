@@ -74,6 +74,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - **검증**: 정적 `testPictureWords` 754/0, `testPictureWordGames` 106/0 · 브라우저 `pictureWordPractice` 106/0(마이크 합성 스트림 + 진짜 MediaRecorder), `pictureWordGames` 68/0 · 빌드(더미 env)·번들 예산 2.2 MB 유지. **하지 않은 것**: verify:all/testBrowserE2E(메모리 부족으로 금지), 점수/별/보상, 실제 기기(iOS) 마이크 확인(합성 스트림만).
 - **알려진 한계**: `RecorderControls`의 고정 안내 "최대 20초까지 녹음돼요"가 어린이용으로는 작은 글씨 그대로다(공유 파일이라 수정하지 않음). 카드 묶음 동안 마이크 스트림 하나를 유지하고 카드 묶음을 떠나면 놓는다.
 
+- **리드 검증(251차 HEAD 빌드, 더미 env + 전 네트워크 mock, 스펙 1개씩)**: `[picture-practice]` 106/0/0, `[picture-games]` 68/0/0, `[picture-words]` 29/0/0, `[student]` 34/0/0, `[student-home]` 242/0/1(기존 SKIP), `[writing]` 83/0/0, `[town-world]` 146/0/0, `[speaking]` 608/0/0. 변경 파일은 pictureWords 폴더·practice.js·테스트·문서뿐(공유 음성 파일 무변경). **추가 실측(스크래치, 커밋 안 함)**: Chromium 가짜 미디어 장치(`--use-fake-device-for-media-stream`)로 스텁 없이 실제 getUserMedia + MediaRecorder 경로 실행 — 1280×800과 360×640(터치) 각각 단어 3개: 발음 듣기 요청(en-GB) → 🎤 → '녹음 중이에요…' → ⏹ → '녹음 완료!' + blob:(audio/webm 18~26KB) → ▶️ 재생 진행(currentTime 증가, 길이 1.56초) → 🔄 후 새 녹음(blob URL 변경) → 다음 단어에서 녹음기 초기화. 가로 넘침 0. 카드 진입 뒤 비-GET 요청은 앱 자체의 진도 동기화(student_progress, student_daily_progress)와 `/api/grant-xp`(mock)뿐 — 음성 전송 없음. **미검증**: 실제 Preview·실계정, 실기기 마이크/스피커(사람 목소리 녹음·재생), iOS Safari, 기기 영국식 음성 품질.
 ## 2026-10-11 (250차) — 그림 단어 게임 · 레벨 · 가게 구경 선반
 
 테스터 전용 그림 단어 화면(`pictureWords`)에 추가. 학생 기록·보상·저장 키·네트워크·DB·SQL 없음(상태는 React state뿐). 운영자 미승인 결정은 만들지 않았다(`source/decisions.json`은 빈 그대로).
