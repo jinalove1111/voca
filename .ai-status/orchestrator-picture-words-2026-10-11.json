@@ -35,12 +35,14 @@
     "tests/e2e/pictureWordPractice.spec.mjs",
     "src/utils/pictureWords/games.js",
     "scripts/testPictureWordGames.mjs",
-    "src/components/pictureWords/pictureImg.jsx"
+    "src/components/pictureWords/pictureImg.jsx",
+    "src/components/pictureWords/AlphabetHammer.jsx"
   ],
-  "summary": "stage done: 1 levels+games.js+tests+registry",
+  "summary": "stage done: 2 AlphabetHammer",
   "blocker": null,
-  "next_action": "stage 2: AlphabetHammer.jsx",
+  "next_action": "stage 3: HiddenLetters.jsx",
   "stages_done": [
-    "1 levels+games.js+tests+registry"
+    "1 levels+games.js+tests+registry",
+    "2 AlphabetHammer"
   ]
 }
