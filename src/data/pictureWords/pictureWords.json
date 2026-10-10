@@ -1,0 +1,4520 @@
+{
+ "generated": "by scripts/pictureWords/buildPictureWordsData.mjs — do not hand-edit",
+ "phonicsReview": {
+  "orderConfirmed": false,
+  "note": "학습 순서 미확정 — 커리큘럼 확인 필요(임의 순서 아님). 그룹 내 정렬은 표시용일 뿐이다."
+ },
+ "counts": {
+  "total": 151,
+  "byStatus": {
+   "MATCH": 119,
+   "MULTIPLE": 5,
+   "UNUSABLE": 1,
+   "UNCERTAIN": 10,
+   "MISMATCH": 16
+  },
+  "byShop": {
+   "decoration": 10,
+   "food": 61,
+   "school": 25,
+   "toy": 20,
+   "garden": 11,
+   "furniture": 7,
+   "pet": 1,
+   "clothes": 16
+  },
+  "phonics": 33,
+  "existingWord": 18,
+  "newCandidate": 133
+ },
+ "entries": [
+  {
+   "id": "pics2/anchor",
+   "sourceFile": "anchor.png",
+   "asset": "anchor",
+   "status": "MATCH",
+   "shown": "닻",
+   "en": "anchor",
+   "enUS": null,
+   "ko": "닻",
+   "reason": "파일명과 그림 일치",
+   "shop": "decoration",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "townObject"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/apple",
+   "sourceFile": "apple.png",
+   "asset": "apple",
+   "status": "MULTIPLE",
+   "shown": "체크 천을 깐 바구니에 사과 여러 개",
+   "en": "apples",
+   "enUS": null,
+   "ko": "사과 바구니",
+   "reason": "사과와 바구니 두 대상 — 사과 한 개는 apple1.png",
+   "shop": "food",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/apple pie",
+   "sourceFile": "apple pie.png",
+   "asset": "apple-pie",
+   "status": "MATCH",
+   "shown": "애플파이",
+   "en": "apple pie",
+   "enUS": null,
+   "ko": "애플파이",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/apple1",
+   "sourceFile": "apple1.png",
+   "asset": "apple1",
+   "status": "MATCH",
+   "shown": "사과",
+   "en": "apple",
+   "enUS": null,
+   "ko": "사과",
+   "reason": "파일명 철자·번호 교정(apple)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/avocado",
+   "sourceFile": "avocado.png",
+   "asset": "avocado",
+   "status": "MATCH",
+   "shown": "아보카도",
+   "en": "avocado",
+   "enUS": null,
+   "ko": "아보카도",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "avocado",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/bag",
+   "sourceFile": "bag.png",
+   "asset": "bag",
+   "status": "MATCH",
+   "shown": "가방",
+   "en": "bag",
+   "enUS": "backpack",
+   "ko": "가방",
+   "reason": "영국식 우선",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short a",
+    "pattern": "a (CVC)",
+    "ipa": "/bæɡ/",
+    "phonicsOrder": null
+   },
+   "existingWord": "backpack",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/bagette",
+   "sourceFile": "bagette.png",
+   "asset": "bagette",
+   "status": "MATCH",
+   "shown": "바게트",
+   "en": "baguette",
+   "enUS": null,
+   "ko": "바게트",
+   "reason": "파일명 철자·번호 교정(baguette)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/banana",
+   "sourceFile": "banana.png",
+   "asset": "banana",
+   "status": "MATCH",
+   "shown": "바나나",
+   "en": "banana",
+   "enUS": null,
+   "ko": "바나나",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/basket",
+   "sourceFile": "basket.png",
+   "asset": "basket",
+   "status": "MATCH",
+   "shown": "바구니",
+   "en": "basket",
+   "enUS": null,
+   "ko": "바구니",
+   "reason": "파일명과 그림 일치",
+   "shop": "decoration",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "townObject"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/basketball",
+   "sourceFile": "basketball.png",
+   "asset": "basketball",
+   "status": "MATCH",
+   "shown": "농구공",
+   "en": "basketball",
+   "enUS": null,
+   "ko": "농구공",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "basketball",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/baskettt",
+   "sourceFile": "baskettt.png",
+   "asset": "baskettt",
+   "status": "UNUSABLE",
+   "shown": "basket.png와 완전히 같은 파일",
+   "en": "basket",
+   "enUS": null,
+   "ko": "바구니",
+   "reason": "중복 파일(바이트 동일) — basket.png 하나만 사용",
+   "shop": "decoration",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/bear",
+   "sourceFile": "bear.png",
+   "asset": "bear",
+   "status": "MATCH",
+   "shown": "곰 인형",
+   "en": "teddy bear",
+   "enUS": null,
+   "ko": "곰 인형",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/bicycle1",
+   "sourceFile": "bicycle1.png",
+   "asset": "bicycle1",
+   "status": "MATCH",
+   "shown": "자전거",
+   "en": "bicycle",
+   "enUS": null,
+   "ko": "자전거",
+   "reason": "파일명 철자·번호 교정(bicycle)",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/board",
+   "sourceFile": "board.png",
+   "asset": "board",
+   "status": "UNCERTAIN",
+   "shown": "A자형 세움 칠판",
+   "en": "blackboard",
+   "enUS": null,
+   "ko": "칠판",
+   "reason": "교실 칠판이 아니라 가게 앞 세움 간판 모양",
+   "shop": "school",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/boat",
+   "sourceFile": "boat.png",
+   "asset": "boat",
+   "status": "MATCH",
+   "shown": "배",
+   "en": "boat",
+   "enUS": null,
+   "ko": "배",
+   "reason": "장난감·소형 모형 그림",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long o",
+    "pattern": "oa",
+    "ipa": "/bəʊt/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/book",
+   "sourceFile": "book.png",
+   "asset": "book",
+   "status": "MATCH",
+   "shown": "책",
+   "en": "book",
+   "enUS": null,
+   "ko": "책",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "oo (short)",
+    "pattern": "oo",
+    "ipa": "/bʊk/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/brauni",
+   "sourceFile": "brauni.png",
+   "asset": "brauni",
+   "status": "MATCH",
+   "shown": "브라우니",
+   "en": "brownie",
+   "enUS": null,
+   "ko": "브라우니",
+   "reason": "파일명 철자·번호 교정(brownie)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/bread",
+   "sourceFile": "bread.png",
+   "asset": "bread",
+   "status": "MULTIPLE",
+   "shown": "바구니에 바게트·크루아상·둥근 빵",
+   "en": "bread",
+   "enUS": null,
+   "ko": "빵 바구니",
+   "reason": "빵 종류 여러 개와 바구니 — 식빵은 bread11.png",
+   "shop": "food",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/bread11",
+   "sourceFile": "bread11.png",
+   "asset": "bread11",
+   "status": "MATCH",
+   "shown": "빵",
+   "en": "bread",
+   "enUS": null,
+   "ko": "빵",
+   "reason": "파일명 철자·번호 교정(bread)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "review: irregular",
+    "pattern": "ea as short e",
+    "ipa": "/bred/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/brocolli",
+   "sourceFile": "brocolli.png",
+   "asset": "brocolli",
+   "status": "MATCH",
+   "shown": "브로콜리",
+   "en": "broccoli",
+   "enUS": null,
+   "ko": "브로콜리",
+   "reason": "파일명 철자·번호 교정(broccoli)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/brush",
+   "sourceFile": "brush.png",
+   "asset": "brush",
+   "status": "MATCH",
+   "shown": "붓",
+   "en": "paintbrush",
+   "enUS": null,
+   "ko": "붓",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/bun",
+   "sourceFile": "bun.png",
+   "asset": "bun",
+   "status": "UNCERTAIN",
+   "shown": "둥근 빵 한 덩이",
+   "en": "bread roll",
+   "enUS": "bun",
+   "ko": "둥근 빵",
+   "reason": "bun/roll/bread 중 결정 필요",
+   "shop": "food",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/butter",
+   "sourceFile": "butter.png",
+   "asset": "butter",
+   "status": "MATCH",
+   "shown": "버터",
+   "en": "butter",
+   "enUS": null,
+   "ko": "버터",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cake",
+   "sourceFile": "cake.png",
+   "asset": "cake",
+   "status": "MATCH",
+   "shown": "케이크",
+   "en": "cake",
+   "enUS": null,
+   "ko": "케이크",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long a",
+    "pattern": "a_e",
+    "ipa": "/keɪk/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/candy",
+   "sourceFile": "candy.png",
+   "asset": "candy",
+   "status": "MATCH",
+   "shown": "사탕",
+   "en": "sweet",
+   "enUS": "candy",
+   "ko": "사탕",
+   "reason": "영국식 우선",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long e",
+    "pattern": "ee",
+    "ipa": "/swiːt/",
+    "phonicsOrder": null
+   },
+   "existingWord": "sweet",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/car",
+   "sourceFile": "car.png",
+   "asset": "car",
+   "status": "MATCH",
+   "shown": "자동차",
+   "en": "car",
+   "enUS": null,
+   "ko": "자동차",
+   "reason": "장난감·소형 모형 그림",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "r-controlled",
+    "pattern": "ar",
+    "ipa": "/kɑː/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cattail",
+   "sourceFile": "cattail.png",
+   "asset": "cattail",
+   "status": "UNCERTAIN",
+   "shown": "물가 풀(부들·갈대) 한 포기",
+   "en": "reeds",
+   "enUS": "cattail",
+   "ko": "갈대",
+   "reason": "bulrush/cattail/reeds 중 무엇으로 가르칠지 불명확, 저레벨 단어 아님",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cereal",
+   "sourceFile": "cereal.png",
+   "asset": "cereal",
+   "status": "MATCH",
+   "shown": "시리얼",
+   "en": "cereal",
+   "enUS": null,
+   "ko": "시리얼",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/chaor",
+   "sourceFile": "chaor.png",
+   "asset": "chaor",
+   "status": "MATCH",
+   "shown": "의자",
+   "en": "chair",
+   "enUS": null,
+   "ko": "의자",
+   "reason": "파일명 철자·번호 교정(chair)",
+   "shop": "furniture",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "r-controlled",
+    "pattern": "air",
+    "ipa": "/tʃeə/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cheese",
+   "sourceFile": "cheese.png",
+   "asset": "cheese",
+   "status": "MATCH",
+   "shown": "치즈",
+   "en": "cheese",
+   "enUS": null,
+   "ko": "치즈",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long e",
+    "pattern": "ee",
+    "ipa": "/tʃiːz/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cherry",
+   "sourceFile": "cherry.png",
+   "asset": "cherry",
+   "status": "MATCH",
+   "shown": "체리",
+   "en": "cherries",
+   "enUS": null,
+   "ko": "체리",
+   "reason": "그림은 체리 두 알",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/chocholate",
+   "sourceFile": "chocholate.png",
+   "asset": "chocholate",
+   "status": "MATCH",
+   "shown": "초콜릿",
+   "en": "chocolate",
+   "enUS": null,
+   "ko": "초콜릿",
+   "reason": "파일명 철자·번호 교정(chocolate)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/chocholate cake",
+   "sourceFile": "chocholate cake.png",
+   "asset": "chocholate-cake",
+   "status": "MISMATCH",
+   "shown": "종이컵에 든 초콜릿 머핀",
+   "en": "muffin",
+   "enUS": null,
+   "ko": "머핀",
+   "reason": "케이크가 아니라 머핀 1개",
+   "shop": "food",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/climb",
+   "sourceFile": "climb.png",
+   "asset": "climb",
+   "status": "MISMATCH",
+   "shown": "암벽·그물이 있는 놀이터 정글짐",
+   "en": "climbing frame",
+   "enUS": "jungle gym",
+   "ko": "정글짐",
+   "reason": "climb은 동작 — 그림은 놀이 기구",
+   "shop": "decoration",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/coconut",
+   "sourceFile": "coconut.png",
+   "asset": "coconut",
+   "status": "MATCH",
+   "shown": "코코넛",
+   "en": "coconut",
+   "enUS": null,
+   "ko": "코코넛",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cookie",
+   "sourceFile": "cookie.png",
+   "asset": "cookie",
+   "status": "MATCH",
+   "shown": "쿠키",
+   "en": "biscuit",
+   "enUS": "cookie",
+   "ko": "쿠키",
+   "reason": "영국식 우선",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/corn",
+   "sourceFile": "corn.png",
+   "asset": "corn",
+   "status": "MATCH",
+   "shown": "옥수수",
+   "en": "sweetcorn",
+   "enUS": "corn",
+   "ko": "옥수수",
+   "reason": "영국식 우선",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/crayon",
+   "sourceFile": "crayon.png",
+   "asset": "crayon",
+   "status": "MATCH",
+   "shown": "크레용",
+   "en": "crayon",
+   "enUS": null,
+   "ko": "크레용",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/croissant",
+   "sourceFile": "croissant.png",
+   "asset": "croissant",
+   "status": "MATCH",
+   "shown": "크루아상",
+   "en": "croissant",
+   "enUS": null,
+   "ko": "크루아상",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cucumber",
+   "sourceFile": "cucumber.png",
+   "asset": "cucumber",
+   "status": "MATCH",
+   "shown": "오이",
+   "en": "cucumber",
+   "enUS": null,
+   "ko": "오이",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/cup",
+   "sourceFile": "cup.png",
+   "asset": "cup",
+   "status": "MATCH",
+   "shown": "컵",
+   "en": "cup",
+   "enUS": null,
+   "ko": "컵",
+   "reason": "파일명과 그림 일치",
+   "shop": "furniture",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short u",
+    "pattern": "u (CVC)",
+    "ipa": "/kʌp/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/desk",
+   "sourceFile": "desk.png",
+   "asset": "desk",
+   "status": "MATCH",
+   "shown": "책상",
+   "en": "desk",
+   "enUS": null,
+   "ko": "책상",
+   "reason": "파일명과 그림 일치",
+   "shop": "furniture",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short e",
+    "pattern": "e + sk",
+    "ipa": "/desk/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/dock",
+   "sourceFile": "dock.png",
+   "asset": "dock",
+   "status": "UNCERTAIN",
+   "shown": "밧줄 기둥이 있는 나무 선착장",
+   "en": "jetty",
+   "enUS": "dock",
+   "ko": "선착장",
+   "reason": "dock/jetty/pier 중 결정 필요",
+   "shop": "decoration",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/dog bowl",
+   "sourceFile": "dog bowl.png",
+   "asset": "dog-bowl",
+   "status": "MATCH",
+   "shown": "강아지 밥그릇",
+   "en": "dog bowl",
+   "enUS": null,
+   "ko": "강아지 밥그릇",
+   "reason": "파일명과 그림 일치",
+   "shop": "pet",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/donut",
+   "sourceFile": "donut.png",
+   "asset": "donut",
+   "status": "MATCH",
+   "shown": "도넛",
+   "en": "doughnut",
+   "enUS": "donut",
+   "ko": "도넛",
+   "reason": "영국식 우선",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/dress",
+   "sourceFile": "dress.png",
+   "asset": "dress",
+   "status": "MATCH",
+   "shown": "원피스",
+   "en": "dress",
+   "enUS": null,
+   "ko": "원피스",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short e",
+    "pattern": "dr + e + ss",
+    "ipa": "/dres/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/duck",
+   "sourceFile": "duck.png",
+   "asset": "duck",
+   "status": "UNCERTAIN",
+   "shown": "노란 고무 오리 장난감",
+   "en": "rubber duck",
+   "enUS": null,
+   "ko": "고무 오리",
+   "reason": "duck(동물)으로 가르칠지 장난감으로 가르칠지 결정 필요",
+   "shop": "toy",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/egg",
+   "sourceFile": "egg.png",
+   "asset": "egg",
+   "status": "MATCH",
+   "shown": "달걀",
+   "en": "egg",
+   "enUS": null,
+   "ko": "달걀",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short e",
+    "pattern": "e + gg",
+    "ipa": "/eɡ/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/eraser",
+   "sourceFile": "eraser.png",
+   "asset": "eraser",
+   "status": "MATCH",
+   "shown": "지우개",
+   "en": "rubber",
+   "enUS": "eraser",
+   "ko": "지우개",
+   "reason": "영국식 우선",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/firefighter",
+   "sourceFile": "firefighter.png",
+   "asset": "firefighter",
+   "status": "MISMATCH",
+   "shown": "사다리가 달린 빨간 소방차",
+   "en": "fire engine",
+   "enUS": "fire truck",
+   "ko": "소방차",
+   "reason": "사람(소방관)이 아니라 차량",
+   "shop": "toy",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/fishing pole",
+   "sourceFile": "fishing pole.png",
+   "asset": "fishing-pole",
+   "status": "MATCH",
+   "shown": "낚싯대",
+   "en": "fishing rod",
+   "enUS": "fishing pole",
+   "ko": "낚싯대",
+   "reason": "영국식 우선",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/flower",
+   "sourceFile": "flower.png",
+   "asset": "flower",
+   "status": "MULTIPLE",
+   "shown": "화분 상자에 심긴 분홍 튤립",
+   "en": "tulips",
+   "enUS": null,
+   "ko": "튤립 화단",
+   "reason": "꽃과 화분 상자",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/flower111",
+   "sourceFile": "flower111.png",
+   "asset": "flower111",
+   "status": "UNCERTAIN",
+   "shown": "분홍 장미 한 송이",
+   "en": "rose",
+   "enUS": null,
+   "ko": "장미",
+   "reason": "flower로 가르칠지 rose로 가르칠지 결정 필요",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/flower2",
+   "sourceFile": "flower2.png",
+   "asset": "flower2",
+   "status": "MULTIPLE",
+   "shown": "화분 상자에 심긴 노란 수선화",
+   "en": "daffodils",
+   "enUS": null,
+   "ko": "수선화 화단",
+   "reason": "꽃과 화분 상자",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/flower3",
+   "sourceFile": "flower3.png",
+   "asset": "flower3",
+   "status": "MULTIPLE",
+   "shown": "화분 상자에 심긴 파란 수국",
+   "en": "hydrangeas",
+   "enUS": null,
+   "ko": "수국 화단",
+   "reason": "꽃과 화분 상자, 저레벨 단어 아님",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/flower4",
+   "sourceFile": "flower4.png",
+   "asset": "flower4",
+   "status": "UNCERTAIN",
+   "shown": "분홍 장미 덤불",
+   "en": "rose bush",
+   "enUS": null,
+   "ko": "장미 덤불",
+   "reason": "roses/rose bush/flowers 중 결정 필요",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/flower6",
+   "sourceFile": "flower6.png",
+   "asset": "flower6",
+   "status": "MISMATCH",
+   "shown": "허브(바질·로즈메리·차이브)가 심긴 화단",
+   "en": "herbs",
+   "enUS": null,
+   "ko": "허브 화단",
+   "reason": "꽃보다 허브가 중심",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/flwoer5",
+   "sourceFile": "flwoer5.png",
+   "asset": "flwoer5",
+   "status": "MISMATCH",
+   "shown": "호박이 열린 텃밭 화단",
+   "en": "pumpkin patch",
+   "enUS": null,
+   "ko": "호박 텃밭",
+   "reason": "꽃이 아니라 호박",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/glass",
+   "sourceFile": "glass.png",
+   "asset": "glass",
+   "status": "MATCH",
+   "shown": "유리컵",
+   "en": "glass",
+   "enUS": null,
+   "ko": "유리컵",
+   "reason": "파일명과 그림 일치",
+   "shop": "furniture",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "review: irregular",
+    "pattern": "a as /ɑː/ in British",
+    "ipa": "/ɡlɑːs/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/glasses",
+   "sourceFile": "glasses.png",
+   "asset": "glasses",
+   "status": "MISMATCH",
+   "shown": "청록색 테 선글라스(검은 렌즈)",
+   "en": "sunglasses",
+   "enUS": null,
+   "ko": "선글라스",
+   "reason": "렌즈가 검은 선글라스",
+   "shop": "clothes",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/global",
+   "sourceFile": "global.png",
+   "asset": "global",
+   "status": "MISMATCH",
+   "shown": "받침대 있는 지구본",
+   "en": "globe",
+   "enUS": null,
+   "ko": "지구본",
+   "reason": "global은 형용사 — 물건은 globe",
+   "shop": "school",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/glove",
+   "sourceFile": "glove.png",
+   "asset": "glove",
+   "status": "MATCH",
+   "shown": "장갑",
+   "en": "glove",
+   "enUS": null,
+   "ko": "장갑",
+   "reason": "그림은 한 짝",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "review: irregular",
+    "pattern": "o_e as /ʌ/",
+    "ipa": "/ɡlʌv/",
+    "phonicsOrder": null
+   },
+   "existingWord": "glove",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/glue",
+   "sourceFile": "glue.png",
+   "asset": "glue",
+   "status": "MATCH",
+   "shown": "풀",
+   "en": "glue stick",
+   "enUS": null,
+   "ko": "풀",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/grapefruit",
+   "sourceFile": "grapefruit.png",
+   "asset": "grapefruit",
+   "status": "MISMATCH",
+   "shown": "망고 한 개(잎 달린 붉은·노란 과일)",
+   "en": "mango",
+   "enUS": null,
+   "ko": "망고",
+   "reason": "자몽이 아니라 망고 모양과 색",
+   "shop": "food",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/grapes",
+   "sourceFile": "grapes.png",
+   "asset": "grapes",
+   "status": "MATCH",
+   "shown": "포도",
+   "en": "grapes",
+   "enUS": null,
+   "ko": "포도",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/guitar",
+   "sourceFile": "guitar.png",
+   "asset": "guitar",
+   "status": "MATCH",
+   "shown": "기타",
+   "en": "guitar",
+   "enUS": null,
+   "ko": "기타",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/hamburger",
+   "sourceFile": "hamburger.png",
+   "asset": "hamburger",
+   "status": "MATCH",
+   "shown": "햄버거",
+   "en": "hamburger",
+   "enUS": null,
+   "ko": "햄버거",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/helmet",
+   "sourceFile": "helmet.png",
+   "asset": "helmet",
+   "status": "MATCH",
+   "shown": "헬멧",
+   "en": "helmet",
+   "enUS": null,
+   "ko": "헬멧",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/honey",
+   "sourceFile": "honey.png",
+   "asset": "honey",
+   "status": "MATCH",
+   "shown": "꿀",
+   "en": "honey",
+   "enUS": null,
+   "ko": "꿀",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "honey",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/horse",
+   "sourceFile": "horse.png",
+   "asset": "horse",
+   "status": "MISMATCH",
+   "shown": "나무 흔들 목마",
+   "en": "rocking horse",
+   "enUS": null,
+   "ko": "흔들 목마",
+   "reason": "살아 있는 말이 아니라 장난감",
+   "shop": "toy",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/hotdog",
+   "sourceFile": "hotdog.png",
+   "asset": "hotdog",
+   "status": "MATCH",
+   "shown": "핫도그",
+   "en": "hot dog",
+   "enUS": null,
+   "ko": "핫도그",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/ice crema",
+   "sourceFile": "ice crema.png",
+   "asset": "ice-crema",
+   "status": "MATCH",
+   "shown": "아이스크림",
+   "en": "ice cream",
+   "enUS": null,
+   "ko": "아이스크림",
+   "reason": "파일명 철자·번호 교정(ice cream)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/ink",
+   "sourceFile": "ink.png",
+   "asset": "ink",
+   "status": "MATCH",
+   "shown": "잉크",
+   "en": "ink",
+   "enUS": null,
+   "ko": "잉크",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short i",
+    "pattern": "i + nk",
+    "ipa": "/ɪŋk/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/jacket",
+   "sourceFile": "jacket.png",
+   "asset": "jacket",
+   "status": "MATCH",
+   "shown": "재킷",
+   "en": "jacket",
+   "enUS": null,
+   "ko": "재킷",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/jam",
+   "sourceFile": "jam.png",
+   "asset": "jam",
+   "status": "MATCH",
+   "shown": "잼",
+   "en": "jam",
+   "enUS": null,
+   "ko": "잼",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short a",
+    "pattern": "a (CVC)",
+    "ipa": "/dʒæm/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/jump rope",
+   "sourceFile": "jump rope.png",
+   "asset": "jump-rope",
+   "status": "MATCH",
+   "shown": "줄넘기",
+   "en": "skipping rope",
+   "enUS": "jump rope",
+   "ko": "줄넘기",
+   "reason": "영국식 우선",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/key",
+   "sourceFile": "key.png",
+   "asset": "key",
+   "status": "MATCH",
+   "shown": "열쇠",
+   "en": "key",
+   "enUS": null,
+   "ko": "열쇠",
+   "reason": "파일명과 그림 일치",
+   "shop": "decoration",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics",
+    "townObject"
+   ],
+   "phonics": {
+    "group": "long e",
+    "pattern": "ey",
+    "ipa": "/kiː/",
+    "phonicsOrder": null
+   },
+   "existingWord": "key",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/kite",
+   "sourceFile": "kite.png",
+   "asset": "kite",
+   "status": "MATCH",
+   "shown": "연",
+   "en": "kite",
+   "enUS": null,
+   "ko": "연",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long i",
+    "pattern": "i_e",
+    "ipa": "/kaɪt/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/kiwi",
+   "sourceFile": "kiwi.png",
+   "asset": "kiwi",
+   "status": "MATCH",
+   "shown": "키위",
+   "en": "kiwi",
+   "enUS": null,
+   "ko": "키위",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/le,om",
+   "sourceFile": "le,om.png",
+   "asset": "le-om",
+   "status": "MATCH",
+   "shown": "레몬",
+   "en": "lemon",
+   "enUS": null,
+   "ko": "레몬",
+   "reason": "파일명 철자·번호 교정(lemon)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/letter",
+   "sourceFile": "letter.png",
+   "asset": "letter",
+   "status": "MISMATCH",
+   "shown": "닫힌 흰 편지 봉투",
+   "en": "envelope",
+   "enUS": null,
+   "ko": "봉투",
+   "reason": "편지지·글씨가 보이지 않고 봉투만 있음",
+   "shop": "school",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/lettuceaa",
+   "sourceFile": "lettuceaa.png",
+   "asset": "lettuceaa",
+   "status": "MATCH",
+   "shown": "상추",
+   "en": "lettuce",
+   "enUS": null,
+   "ko": "상추",
+   "reason": "파일명 철자·번호 교정(lettuce)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/lunchbox'",
+   "sourceFile": "lunchbox'.png",
+   "asset": "lunchbox",
+   "status": "MATCH",
+   "shown": "도시락",
+   "en": "lunchbox",
+   "enUS": null,
+   "ko": "도시락",
+   "reason": "파일명 철자·번호 교정(lunchbox)",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/melon",
+   "sourceFile": "melon.png",
+   "asset": "melon",
+   "status": "MATCH",
+   "shown": "멜론",
+   "en": "melon",
+   "enUS": null,
+   "ko": "멜론",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/micro",
+   "sourceFile": "micro.png",
+   "asset": "micro",
+   "status": "MISMATCH",
+   "shown": "손잡이 달린 돋보기",
+   "en": "magnifying glass",
+   "enUS": null,
+   "ko": "돋보기",
+   "reason": "현미경(현미경.png)이 아님",
+   "shop": "school",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/milk",
+   "sourceFile": "milk.png",
+   "asset": "milk",
+   "status": "MATCH",
+   "shown": "우유",
+   "en": "milk",
+   "enUS": null,
+   "ko": "우유",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short i",
+    "pattern": "i + lk",
+    "ipa": "/mɪlk/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/mushroom",
+   "sourceFile": "mushroom.png",
+   "asset": "mushroom",
+   "status": "UNCERTAIN",
+   "shown": "무늬가 있는 장식용 버섯 3개",
+   "en": "mushrooms",
+   "enUS": null,
+   "ko": "버섯 장식",
+   "reason": "먹는 버섯(mushroom2323.png)과 다름, 여러 개",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/mushroom2323",
+   "sourceFile": "mushroom2323.png",
+   "asset": "mushroom2323",
+   "status": "MATCH",
+   "shown": "버섯",
+   "en": "mushroom",
+   "enUS": null,
+   "ko": "버섯",
+   "reason": "파일명 철자·번호 교정(mushroom)",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "mushroom",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/notebook",
+   "sourceFile": "notebook.png",
+   "asset": "notebook",
+   "status": "MATCH",
+   "shown": "공책",
+   "en": "notebook",
+   "enUS": null,
+   "ko": "공책",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/onion",
+   "sourceFile": "onion.png",
+   "asset": "onion",
+   "status": "MATCH",
+   "shown": "양파",
+   "en": "onion",
+   "enUS": null,
+   "ko": "양파",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/orange",
+   "sourceFile": "orange.png",
+   "asset": "orange",
+   "status": "MATCH",
+   "shown": "오렌지",
+   "en": "orange",
+   "enUS": null,
+   "ko": "오렌지",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/palette",
+   "sourceFile": "palette.png",
+   "asset": "palette",
+   "status": "MATCH",
+   "shown": "팔레트",
+   "en": "palette",
+   "enUS": null,
+   "ko": "팔레트",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pancake",
+   "sourceFile": "pancake.png",
+   "asset": "pancake",
+   "status": "MATCH",
+   "shown": "팬케이크",
+   "en": "pancake",
+   "enUS": null,
+   "ko": "팬케이크",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pants",
+   "sourceFile": "pants.png",
+   "asset": "pants",
+   "status": "MISMATCH",
+   "shown": "끈 달린 청록색 반바지",
+   "en": "shorts",
+   "enUS": null,
+   "ko": "반바지",
+   "reason": "길이가 무릎 위 — 긴 바지(trousers.png)와 다름",
+   "shop": "clothes",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/peach",
+   "sourceFile": "peach.png",
+   "asset": "peach",
+   "status": "MATCH",
+   "shown": "복숭아",
+   "en": "peach",
+   "enUS": null,
+   "ko": "복숭아",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long e",
+    "pattern": "ea",
+    "ipa": "/piːtʃ/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pear",
+   "sourceFile": "pear.png",
+   "asset": "pear",
+   "status": "MATCH",
+   "shown": "배",
+   "en": "pear",
+   "enUS": null,
+   "ko": "배",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "r-controlled",
+    "pattern": "ear (/eə/)",
+    "ipa": "/peə/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pen",
+   "sourceFile": "pen.png",
+   "asset": "pen",
+   "status": "MATCH",
+   "shown": "펜",
+   "en": "pen",
+   "enUS": null,
+   "ko": "펜",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short e",
+    "pattern": "e (CVC)",
+    "ipa": "/pen/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pencil",
+   "sourceFile": "pencil.png",
+   "asset": "pencil",
+   "status": "MATCH",
+   "shown": "연필",
+   "en": "pencil",
+   "enUS": null,
+   "ko": "연필",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pencil sharper",
+   "sourceFile": "pencil sharper.png",
+   "asset": "pencil-sharper",
+   "status": "MATCH",
+   "shown": "연필깎이",
+   "en": "pencil sharpener",
+   "enUS": null,
+   "ko": "연필깎이",
+   "reason": "파일명 철자·번호 교정(pencil sharpener)",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pepper",
+   "sourceFile": "pepper.png",
+   "asset": "pepper",
+   "status": "MATCH",
+   "shown": "피망",
+   "en": "pepper",
+   "enUS": "bell pepper",
+   "ko": "피망",
+   "reason": "영국식 우선",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pineapple",
+   "sourceFile": "pineapple.png",
+   "asset": "pineapple",
+   "status": "MATCH",
+   "shown": "파인애플",
+   "en": "pineapple",
+   "enUS": null,
+   "ko": "파인애플",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pink book",
+   "sourceFile": "pink book.png",
+   "asset": "pink-book",
+   "status": "UNCERTAIN",
+   "shown": "장미 무늬 분홍 책",
+   "en": "book",
+   "enUS": null,
+   "ko": "책",
+   "reason": "일기장인지 알 수 없음 — book.png와 단어가 겹침",
+   "shop": "school",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pizza",
+   "sourceFile": "pizza.png",
+   "asset": "pizza",
+   "status": "MATCH",
+   "shown": "피자",
+   "en": "pizza",
+   "enUS": null,
+   "ko": "피자",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pnecilcase",
+   "sourceFile": "pnecilcase.png",
+   "asset": "pnecilcase",
+   "status": "MATCH",
+   "shown": "필통",
+   "en": "pencil case",
+   "enUS": null,
+   "ko": "필통",
+   "reason": "파일명 철자·번호 교정(pencil case)",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/potato",
+   "sourceFile": "potato.png",
+   "asset": "potato",
+   "status": "MATCH",
+   "shown": "감자",
+   "en": "potato",
+   "enUS": null,
+   "ko": "감자",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/pumpkin",
+   "sourceFile": "pumpkin.png",
+   "asset": "pumpkin",
+   "status": "MATCH",
+   "shown": "호박",
+   "en": "pumpkin",
+   "enUS": null,
+   "ko": "호박",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/racket",
+   "sourceFile": "racket.png",
+   "asset": "racket",
+   "status": "MATCH",
+   "shown": "라켓",
+   "en": "racket",
+   "enUS": null,
+   "ko": "라켓",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "racket",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/radish",
+   "sourceFile": "radish.png",
+   "asset": "radish",
+   "status": "MATCH",
+   "shown": "무",
+   "en": "radish",
+   "enUS": null,
+   "ko": "무",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "radish",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/rainboot",
+   "sourceFile": "rainboot.png",
+   "asset": "rainboot",
+   "status": "MATCH",
+   "shown": "장화",
+   "en": "wellington boot",
+   "enUS": "rain boot",
+   "ko": "장화",
+   "reason": "영국식 우선 · 그림은 한 짝",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/rice",
+   "sourceFile": "rice.png",
+   "asset": "rice",
+   "status": "MATCH",
+   "shown": "밥",
+   "en": "rice",
+   "enUS": null,
+   "ko": "밥",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long i",
+    "pattern": "i_e + soft c",
+    "ipa": "/raɪs/",
+    "phonicsOrder": null
+   },
+   "existingWord": "rice",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/robot",
+   "sourceFile": "robot.png",
+   "asset": "robot",
+   "status": "MATCH",
+   "shown": "로봇",
+   "en": "robot",
+   "enUS": null,
+   "ko": "로봇",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/ruler",
+   "sourceFile": "ruler.png",
+   "asset": "ruler",
+   "status": "MATCH",
+   "shown": "자",
+   "en": "ruler",
+   "enUS": null,
+   "ko": "자",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sandbox",
+   "sourceFile": "sandbox.png",
+   "asset": "sandbox",
+   "status": "MATCH",
+   "shown": "모래 놀이터",
+   "en": "sandpit",
+   "enUS": "sandbox",
+   "ko": "모래 놀이터",
+   "reason": "영국식 우선",
+   "shop": "decoration",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "townObject"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sandwich",
+   "sourceFile": "sandwich.png",
+   "asset": "sandwich",
+   "status": "MATCH",
+   "shown": "샌드위치",
+   "en": "sandwich",
+   "enUS": null,
+   "ko": "샌드위치",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "sandwich",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/scarf",
+   "sourceFile": "scarf.png",
+   "asset": "scarf",
+   "status": "MATCH",
+   "shown": "목도리",
+   "en": "scarf",
+   "enUS": null,
+   "ko": "목도리",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "r-controlled",
+    "pattern": "ar",
+    "ipa": "/skɑːf/",
+    "phonicsOrder": null
+   },
+   "existingWord": "scarf",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sccoter",
+   "sourceFile": "sccoter.png",
+   "asset": "sccoter",
+   "status": "MATCH",
+   "shown": "킥보드",
+   "en": "scooter",
+   "enUS": null,
+   "ko": "킥보드",
+   "reason": "파일명 철자·번호 교정(scooter)",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/scissors",
+   "sourceFile": "scissors.png",
+   "asset": "scissors",
+   "status": "MATCH",
+   "shown": "가위",
+   "en": "scissors",
+   "enUS": null,
+   "ko": "가위",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "scissors",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/seasaw",
+   "sourceFile": "seasaw.png",
+   "asset": "seasaw",
+   "status": "MATCH",
+   "shown": "시소",
+   "en": "seesaw",
+   "enUS": null,
+   "ko": "시소",
+   "reason": "파일명 철자·번호 교정(seesaw)",
+   "shop": "decoration",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "townObject"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/shirt",
+   "sourceFile": "shirt.png",
+   "asset": "shirt",
+   "status": "MATCH",
+   "shown": "셔츠",
+   "en": "shirt",
+   "enUS": null,
+   "ko": "셔츠",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "r-controlled",
+    "pattern": "ir",
+    "ipa": "/ʃɜːt/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/skateboard",
+   "sourceFile": "skateboard.png",
+   "asset": "skateboard",
+   "status": "MATCH",
+   "shown": "스케이트보드",
+   "en": "skateboard",
+   "enUS": null,
+   "ko": "스케이트보드",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/skirt",
+   "sourceFile": "skirt.png",
+   "asset": "skirt",
+   "status": "MATCH",
+   "shown": "치마",
+   "en": "skirt",
+   "enUS": null,
+   "ko": "치마",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "r-controlled",
+    "pattern": "ir",
+    "ipa": "/skɜːt/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/slide",
+   "sourceFile": "slide.png",
+   "asset": "slide",
+   "status": "MATCH",
+   "shown": "미끄럼틀",
+   "en": "slide",
+   "enUS": null,
+   "ko": "미끄럼틀",
+   "reason": "파일명과 그림 일치",
+   "shop": "decoration",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics",
+    "townObject"
+   ],
+   "phonics": {
+    "group": "long i",
+    "pattern": "i_e",
+    "ipa": "/slaɪd/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sneaker",
+   "sourceFile": "sneaker.png",
+   "asset": "sneaker",
+   "status": "MATCH",
+   "shown": "운동화",
+   "en": "trainer",
+   "enUS": "sneaker",
+   "ko": "운동화",
+   "reason": "영국식 우선 · 그림은 한 짝",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/soccerball",
+   "sourceFile": "soccerball.png",
+   "asset": "soccerball",
+   "status": "MATCH",
+   "shown": "축구공",
+   "en": "football",
+   "enUS": "soccer ball",
+   "ko": "축구공",
+   "reason": "영국식 우선",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sock",
+   "sourceFile": "sock.png",
+   "asset": "sock",
+   "status": "MATCH",
+   "shown": "양말",
+   "en": "sock",
+   "enUS": null,
+   "ko": "양말",
+   "reason": "그림은 한 짝",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "short o",
+    "pattern": "o + ck",
+    "ipa": "/sɒk/",
+    "phonicsOrder": null
+   },
+   "existingWord": "sock",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/soup",
+   "sourceFile": "soup.png",
+   "asset": "soup",
+   "status": "MATCH",
+   "shown": "수프",
+   "en": "soup",
+   "enUS": null,
+   "ko": "수프",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long u / oo",
+    "pattern": "ou",
+    "ipa": "/suːp/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/spiral",
+   "sourceFile": "spiral.png",
+   "asset": "spiral",
+   "status": "MISMATCH",
+   "shown": "아이싱 올린 시나몬 롤",
+   "en": "cinnamon roll",
+   "enUS": null,
+   "ko": "시나몬 롤",
+   "reason": "spiral은 모양 설명일 뿐 물건 이름이 아님",
+   "shop": "food",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/stapler",
+   "sourceFile": "stapler.png",
+   "asset": "stapler",
+   "status": "MATCH",
+   "shown": "스테이플러",
+   "en": "stapler",
+   "enUS": null,
+   "ko": "스테이플러",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/stone",
+   "sourceFile": "stone.png",
+   "asset": "stone",
+   "status": "UNCERTAIN",
+   "shown": "이끼와 꽃이 낀 바위 여러 개",
+   "en": "rocks",
+   "enUS": null,
+   "ko": "바위",
+   "reason": "stone/rock/rocks 중 결정 필요(여러 개)",
+   "shop": "garden",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/strawberries",
+   "sourceFile": "strawberries.png",
+   "asset": "strawberries",
+   "status": "MATCH",
+   "shown": "딸기",
+   "en": "strawberry",
+   "enUS": null,
+   "ko": "딸기",
+   "reason": "그림은 딸기 한 개",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": "strawberry",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sunflower",
+   "sourceFile": "sunflower.png",
+   "asset": "sunflower",
+   "status": "MATCH",
+   "shown": "해바라기",
+   "en": "sunflower",
+   "enUS": null,
+   "ko": "해바라기",
+   "reason": "파일명과 그림 일치",
+   "shop": "garden",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "townObject"
+   ],
+   "phonics": null,
+   "existingWord": "sunflower",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sweater",
+   "sourceFile": "sweater.png",
+   "asset": "sweater",
+   "status": "MATCH",
+   "shown": "스웨터",
+   "en": "jumper",
+   "enUS": "sweater",
+   "ko": "스웨터",
+   "reason": "영국식 우선",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/sweet potato",
+   "sourceFile": "sweet potato.png",
+   "asset": "sweet-potato",
+   "status": "MATCH",
+   "shown": "고구마",
+   "en": "sweet potato",
+   "enUS": null,
+   "ko": "고구마",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/t-shirt",
+   "sourceFile": "t-shirt.png",
+   "asset": "t-shirt",
+   "status": "MATCH",
+   "shown": "티셔츠",
+   "en": "T-shirt",
+   "enUS": null,
+   "ko": "티셔츠",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/tape",
+   "sourceFile": "tape.png",
+   "asset": "tape",
+   "status": "MATCH",
+   "shown": "테이프",
+   "en": "tape",
+   "enUS": null,
+   "ko": "테이프",
+   "reason": "파일명과 그림 일치",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long a",
+    "pattern": "a_e",
+    "ipa": "/teɪp/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/teapot",
+   "sourceFile": "teapot.png",
+   "asset": "teapot",
+   "status": "MISMATCH",
+   "shown": "받침 접시 위 차가 담긴 찻잔",
+   "en": "teacup",
+   "enUS": null,
+   "ko": "찻잔",
+   "reason": "주전자가 아님 — 찻주전자는 teapot1.png",
+   "shop": "furniture",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/teapot1",
+   "sourceFile": "teapot1.png",
+   "asset": "teapot1",
+   "status": "MATCH",
+   "shown": "찻주전자",
+   "en": "teapot",
+   "enUS": null,
+   "ko": "찻주전자",
+   "reason": "파일명 철자·번호 교정(teapot)",
+   "shop": "furniture",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/tellescope",
+   "sourceFile": "tellescope.png",
+   "asset": "tellescope",
+   "status": "MATCH",
+   "shown": "망원경",
+   "en": "telescope",
+   "enUS": null,
+   "ko": "망원경",
+   "reason": "파일명 철자·번호 교정(telescope)",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/tomato",
+   "sourceFile": "tomato.png",
+   "asset": "tomato",
+   "status": "MATCH",
+   "shown": "토마토",
+   "en": "tomato",
+   "enUS": null,
+   "ko": "토마토",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/top",
+   "sourceFile": "top.png",
+   "asset": "top",
+   "status": "MATCH",
+   "shown": "팽이",
+   "en": "spinning top",
+   "enUS": null,
+   "ko": "팽이",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/train",
+   "sourceFile": "train.png",
+   "asset": "train",
+   "status": "MATCH",
+   "shown": "기차",
+   "en": "train",
+   "enUS": null,
+   "ko": "기차",
+   "reason": "장난감·소형 모형 그림",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "long a",
+    "pattern": "ai",
+    "ipa": "/treɪn/",
+    "phonicsOrder": null
+   },
+   "existingWord": "train",
+   "newCandidate": false,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/trousers",
+   "sourceFile": "trousers.png",
+   "asset": "trousers",
+   "status": "MATCH",
+   "shown": "바지",
+   "en": "trousers",
+   "enUS": "pants",
+   "ko": "바지",
+   "reason": "영국식 우선",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/tube",
+   "sourceFile": "tube.png",
+   "asset": "tube",
+   "status": "MISMATCH",
+   "shown": "빨강·흰색 구명 튜브(밧줄 달림)",
+   "en": "lifebuoy",
+   "enUS": "life ring",
+   "ko": "구명 튜브",
+   "reason": "물놀이 튜브가 아니라 구명 부표",
+   "shop": "decoration",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/umbrella",
+   "sourceFile": "umbrella.png",
+   "asset": "umbrella",
+   "status": "MATCH",
+   "shown": "우산",
+   "en": "umbrella",
+   "enUS": null,
+   "ko": "우산",
+   "reason": "파일명과 그림 일치",
+   "shop": "clothes",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/vase",
+   "sourceFile": "vase.png",
+   "asset": "vase",
+   "status": "MATCH",
+   "shown": "꽃병",
+   "en": "vase",
+   "enUS": null,
+   "ko": "꽃병",
+   "reason": "파일명과 그림 일치",
+   "shop": "furniture",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary",
+    "phonics"
+   ],
+   "phonics": {
+    "group": "review: irregular",
+    "pattern": "a_e but British /vɑːz/",
+    "ipa": "/vɑːz/",
+    "phonicsOrder": null
+   },
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/watermelon",
+   "sourceFile": "watermelon.png",
+   "asset": "watermelon",
+   "status": "MATCH",
+   "shown": "수박",
+   "en": "watermelon",
+   "enUS": null,
+   "ko": "수박",
+   "reason": "파일명과 그림 일치",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/white brocolli",
+   "sourceFile": "white brocolli.png",
+   "asset": "white-brocolli",
+   "status": "MISMATCH",
+   "shown": "잎에 싸인 콜리플라워",
+   "en": "cauliflower",
+   "enUS": null,
+   "ko": "콜리플라워",
+   "reason": "\"white broccoli\"는 단어가 아님",
+   "shop": "food",
+   "tracks": [],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": false,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/yoyo",
+   "sourceFile": "yoyo.png",
+   "asset": "yoyo",
+   "status": "MATCH",
+   "shown": "요요",
+   "en": "yo-yo",
+   "enUS": null,
+   "ko": "요요",
+   "reason": "파일명과 그림 일치",
+   "shop": "toy",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/zucini",
+   "sourceFile": "zucini.png",
+   "asset": "zucini",
+   "status": "MATCH",
+   "shown": "애호박",
+   "en": "courgette",
+   "enUS": "zucchini",
+   "ko": "애호박",
+   "reason": "파일명 철자·번호 교정(zucchini) · 영국식 우선",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/양배추",
+   "sourceFile": "양배추.png",
+   "asset": "kr-cabbage",
+   "status": "MATCH",
+   "shown": "양배추",
+   "en": "cabbage",
+   "enUS": null,
+   "ko": "양배추",
+   "reason": "파일명 철자·번호 교정((한글 파일명))",
+   "shop": "food",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  },
+  {
+   "id": "pics2/현미경",
+   "sourceFile": "현미경.png",
+   "asset": "kr-microscope",
+   "status": "MATCH",
+   "shown": "현미경",
+   "en": "microscope",
+   "enUS": null,
+   "ko": "현미경",
+   "reason": "파일명 철자·번호 교정((한글 파일명))",
+   "shop": "school",
+   "tracks": [
+    "pictureVocabulary",
+    "shopVocabulary"
+   ],
+   "phonics": null,
+   "existingWord": null,
+   "newCandidate": true,
+   "autoLink": true,
+   "provenance": {
+    "picture": "viewed",
+    "en": "from-picture",
+    "ko": "inferred",
+    "shop": "inferred",
+    "enUS": "inferred",
+    "phonics": "inferred-from-spelling",
+    "existingWord": "string-match"
+   }
+  }
+ ]
+}
