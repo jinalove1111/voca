@@ -533,6 +533,13 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
       )}
 
       <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
+        {/* 새 걷는 마을 테스트 진입(245차, 246차: 맨 위로 이동 — 접힌 화면 아래라 못 찾음) — 허용목록 계정에만 onGoWorld가 온다. */}
+        {onGoWorld && (
+          <button type="button" data-testid="dash-town-world" onClick={onGoWorld}
+            className="w-full min-h-[44px] bg-purple-600 hover:bg-purple-700 rounded-2xl card-shadow px-4 py-3 text-white font-black text-base btn-press">
+            🏘 새 마을 걷기 (테스트)
+          </button>
+        )}
         {/* Profile */}
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
           {/* 애착 시스템 — 장착한 모자가 아바타가 된다(미장착이면 기존 👑) */}
@@ -838,14 +845,6 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             )}
           </div>
         </details>
-
-        {/* 새 걷는 마을 테스트 진입(245차) — 허용목록 계정에만 onGoWorld가 오며, 홈 밴드 조건과 무관하게 보인다. */}
-        {onGoWorld && (
-          <button type="button" data-testid="dash-town-world" onClick={onGoWorld}
-            className="w-full min-h-[44px] bg-white rounded-3xl card-shadow px-4 py-3 text-purple-600 font-black text-sm btn-press">
-            🏘 새 마을 걷기 (테스트)
-          </button>
-        )}
 
         {/* Paul Town 홈 밴드(v2.0, paulTownHomeBand 플래그) — 정원 한 줄
             요약 + 별→씨앗. 스티커 띠 위의 작은 흰 카드 하나(추가만 —

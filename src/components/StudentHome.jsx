@@ -58,8 +58,8 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
   return (
     // 카드 탭은 capture 단계에서 먼저 안내를 지운 뒤 자기 핸들러가 새로 띄운다.
     <div data-testid="student-home" className="min-h-screen p-4 pb-24" onClickCapture={clearNotice}>
-      <div className="max-w-lg mx-auto space-y-4">
-        <div className="flex items-center justify-between gap-2 pt-2">
+      <div className="max-w-lg mx-auto flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-2 pt-2" style={{ order: -2 }}>
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-3xl shrink-0 inline-flex items-center" aria-hidden="true">
               {hat ? (hatImageFor(hat.id)
@@ -140,11 +140,11 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
             {townEligible ? '🏘️ 내 마을' : '🏘️ Paul Town 구경가기'}
           </button>
         )}
-        {/* 새 걷는 마을 테스트 진입(245차) — 기존 내 마을 버튼과 별개. 허용목록 계정에만 onGoWorld가 온다 */}
+        {/* 새 걷는 마을 테스트 진입(245차, 246차: 화면 맨 위로 이동). DOM은 기존 자리(내 마을 뒤)에 두고 flex order로 위에 보여 Tab 순서는 불변 */}
         {onGoWorld && (
-          <button type="button" data-testid="student-home-town-world" onClick={onGoWorld}
-            className="w-full min-h-[44px] text-base font-black bg-white text-green-700 border-2 border-green-200 rounded-2xl btn-press">
-            🚶 새 마을 걷기 (테스트)
+          <button type="button" data-testid="student-home-town-world" onClick={onGoWorld} style={{ order: -1 }}
+            className="w-full min-h-[44px] text-base font-black bg-purple-600 text-white rounded-2xl btn-press">
+            🏘 새 마을 걷기 (테스트)
           </button>
         )}
         {/* 2026-10-08(224차) 통합 과정 시범 Unit(QA 전용) — 기존 Tab 순서(로그아웃→시작→카드4→그림 시험→내 마을) 뒤에 둔다 */}
