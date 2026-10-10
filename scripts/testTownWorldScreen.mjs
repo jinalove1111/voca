@@ -88,5 +88,17 @@ check('PlaceSheet: 발표 과정 라벨', hp.includes('발표 과정 열기') &&
 const hm = renderToStaticMarkup(React.createElement(WorldMap, { currentZone: 'plaza' }))
 check('WorldMap: 구역 7개(ready 3, soon 4 비활성) + 여기 표시 + 장소 3개', count(hm, /data-testid="tw-map-zone-[a-z]+"/g) === 7 && count(hm, /data-status="ready"/g) === 3 && count(hm, /data-status="soon"/g) === 4 && count(hm, /disabled=""/g) === 4 && hm.includes('tw-map-here') && count(hm, /data-testid="tw-map-place-/g) === 3)
 
+// ---- 247차 클릭/탭 이동 핀 ----
+{
+  const tw = code(files['TownWorld.jsx'])
+  check('탭 판정 상수: 10px / 500ms / 정지 400ms', /TAP_MAX_PX = 10/.test(tw) && /TAP_MAX_MS = 500/.test(tw) && /STUCK_MS = 400/.test(tw))
+  check('왼쪽 버튼만 + HUD/조이스틱/미션/시트/지도/dialog 제외', /e\.button !== 0/.test(tw) && /NO_TAP = '[^\n]*button[^\n]*tw-joystick[^\n]*role="dialog"[^\n]*tw-map[^\n]*tw-mission-enter[^\n]*tw-place-sheet/.test(tw))
+  check('키보드/조이스틱이 경로를 취소(틱 + keydown)', /if \(active \|\| lockRef\.current\) clearPath\(\)/.test(tw) && /clearPath\(\) \/\/ 키보드가/.test(tw))
+  check('stepMove 호출은 1곳뿐(경로도 같은 이동기 + 충돌)', (tw.match(/stepMove\(/g) || []).length === 1)
+  check('화면 -> 월드 좌표는 월드 레이어 rect + sRef', /worldRef\.current\?\.getBoundingClientRect\(\)/.test(tw) && /\(e\.clientX - rect\.left\) \/ sc/.test(tw) && /const sc = sRef\.current/.test(tw))
+  check('목적지 마커: tw-dest aria-hidden + pointerEvents none', /data-testid="tw-dest" aria-hidden="true"[\s\S]{0,400}pointerEvents: 'none'/.test(tw))
+  check('data-dest 루트 속성 + 시트/지도/travel/blur에서 경로 취소', /data-dest=\{dest/.test(tw) && (tw.match(/clearPath\(\)/g) || []).length >= 6)
+}
+
 console.log(fail ? `\n${fail} FAIL` : '\nALL PASS')
 process.exit(fail ? 1 : 0)

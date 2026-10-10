@@ -9,8 +9,9 @@ import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
 import { UNITS } from '../../src/utils/curriculum/units.js'
 import { grammarUnitById } from '../../src/utils/grammar/grammarUnits.js'
 import { buildDeck } from '../../src/utils/grammar/grammarDeck.js'
-import { solids, ZONES, PLACES, SPAWN } from '../../src/utils/town/proto2_5d/world/worldMap.js'
+import { solids, ZONES, PLACES, SPAWN, pxPerUnit } from '../../src/utils/town/proto2_5d/world/worldMap.js'
 import { stepMove } from '../../src/utils/town/proto2_5d/world/freeMove.js'
+import { isStandable } from '../../src/utils/town/proto2_5d/world/clickMove.js'
 
 const SHOTS_DIR = process.env.GRAMMAR_SHOTS_DIR || 'C:\\Users\\jinal\\AppData\\Local\\Temp\\claude\\C--voca\\4dd777a3-9f93-4c78-a984-4f4ee328e279\\scratchpad\\shots'
 const UNIT_ID = 'g-easy-05'
@@ -514,6 +515,136 @@ export async function run(browser, baseURL) {
     const chunk = reqUrls.filter((u) => /TownWorld/i.test(u))
     r.check(`${name} TownWorld 청크 요청 0건`, chunk.length === 0, chunk.slice(0, 2).join(','))
   }, { studentId: 'e2e00000-0000-4000-8000-00000000b001', defaultFlags: true })
+
+
+  // ---- 247차 클릭/탭 이동 (l)~(q) ----
+  const WORLD_LAYER = '[data-testid="town-world"] > div:first-child'
+  const worldRect = (page) => page.locator(WORLD_LAYER).first().boundingBox()
+  // 월드 좌표 -> 화면 좌표(월드 레이어의 실제 rect + px-per-unit; 카메라 위치와 무관)
+  const toScreen = async (page, wp, vp) => { const b = await worldRect(page); const sc = pxPerUnit(vp.width, vp.height); return { x: b.x + wp.x * sc, y: b.y + wp.y * sc } }
+  const fromScreen = async (page, sp, vp) => { const b = await worldRect(page); const sc = pxPerUnit(vp.width, vp.height); return { x: (sp.x - b.x) / sc, y: (sp.y - b.y) / sc } }
+  const destAttr = (page) => T(page, 'town-world').getAttribute('data-dest')
+  const firstStandable = (cands) => cands.find((c) => isStandable(c))
+  // 목적지가 비워질 때까지(도착/취소) 위치를 표본 추출한다.
+  async function sampleUntilArrived(page, timeout = 25000) {
+    const samples = []; const t0 = Date.now()
+    for (;;) {
+      samples.push(await pos(page))
+      if ((await destAttr(page)) === '') break
+      if (Date.now() - t0 > timeout) return { samples, timedOut: true }
+      await sleep(25)
+    }
+    await sleep(80); samples.push(await pos(page))
+    return { samples, timedOut: false }
+  }
+  const pathLen = (ss) => ss.reduce((a, q, i) => (i ? a + Math.hypot(q.x - ss[i - 1].x, q.y - ss[i - 1].y) : 0), 0)
+
+  const VP_D = { width: 1280, height: 800 }
+  await scenario('(l) 클릭 이동: 빈 땅', VP_D, async ({ page, name }) => {
+    await enterWorld(page)
+    const t = firstStandable([{ x: 178, y: 118 }, { x: 150, y: 132 }, { x: 176, y: 132 }, { x: 146, y: 116 }])
+    const sp = await toScreen(page, t, VP_D)
+    await page.mouse.click(sp.x, sp.y)
+    await T(page, 'tw-dest').waitFor({ state: 'visible', timeout: 3000 })
+    const d0 = await destAttr(page)
+    r.check(`${name} 클릭하면 data-dest가 설정되고 tw-dest 마커가 보임(aria-hidden)`, /^-?\d+(\.\d)?,-?\d+(\.\d)?$/.test(d0) && (await T(page, 'tw-dest').getAttribute('aria-hidden')) === 'true', d0)
+    const { samples, timedOut } = await sampleUntilArrived(page)
+    const end = await pos(page)
+    r.check(`${name} 도착: 목표에서 1.5 이내, 도착 후 data-dest 비워지고 마커 사라짐`, !timedOut && Math.hypot(end.x - t.x, end.y - t.y) <= 1.5 && (await T(page, 'tw-dest').count()) === 0, JSON.stringify({ end, t }))
+    r.check(`${name} 걷는 동안 충돌 박스 침범 없음(${samples.length}샘플)`, samples.every((q) => !hitsAnySolid(q)), JSON.stringify(samples.find(hitsAnySolid)))
+  })
+
+  await scenario('(m) 클릭 이동: 건물 반대편', VP_D, async ({ page, name }) => {
+    await enterWorld(page)
+    const crosses = (a, b, s) => { for (let k = 0; k <= 80; k++) { const x = a.x + (b.x - a.x) * k / 80, y = a.y + (b.y - a.y) * k / 80; if (x > s.x0 && x < s.x1 && y > s.y0 && y < s.y1) return true } return false }
+    let pick = null
+    for (const sd of SOLIDS.filter((q) => !q.id.startsWith('zone-') && !q.id.startsWith('gate-'))) {
+      const c = { x: (sd.x0 + sd.x1) / 2, y: (sd.y0 + sd.y1) / 2 }
+      const t = { x: 2 * c.x - SPAWN.x, y: 2 * c.y - SPAWN.y }
+      if (Math.hypot(c.x - SPAWN.x, c.y - SPAWN.y) < 8 || Math.hypot(c.x - SPAWN.x, c.y - SPAWN.y) > 24) continue
+      if (isStandable(t) && crosses(SPAWN, t, sd)) { pick = { sd, t }; break }
+    }
+    r.check(`${name} (준비) 직선이 건물을 가로지르는 목표를 찾음`, !!pick)
+    if (!pick) return
+    const sp = await toScreen(page, pick.t, VP_D)
+    await page.mouse.click(sp.x, sp.y)
+    const { samples, timedOut } = await sampleUntilArrived(page)
+    const end = await pos(page)
+    const straight = Math.hypot(pick.t.x - SPAWN.x, pick.t.y - SPAWN.y)
+    r.check(`${name} 건물(${pick.sd.id}) 반대편에 도착(1.5 이내), 침범 0, 경로가 직선보다 김`, !timedOut && Math.hypot(end.x - pick.t.x, end.y - pick.t.y) <= 1.5 && samples.every((q) => !hitsAnySolid(q)) && pathLen(samples) > straight + 0.5, JSON.stringify({ end, t: pick.t, len: pathLen(samples), straight }))
+  })
+
+  await scenario('(n) 클릭 이동: 건물 클릭 -> 입구 앞', VP_D, async ({ page, name }) => {
+    await enterWorld(page)
+    const sp = await toScreen(page, { x: 142, y: 82 }, VP_D)
+    await page.mouse.click(sp.x, sp.y)
+    const { timedOut } = await sampleUntilArrived(page)
+    const end = await pos(page)
+    await T(page, 'tw-mission-enter').waitFor({ state: 'visible', timeout: 3000 })
+    r.check(`${name} 마을회관 클릭 -> 입구 근처에서 멈추고 tw-mission-enter(plaza-hall) 표시`, !timedOut && (await T(page, 'tw-mission-enter').getAttribute('data-place')) === 'plaza-hall' && !hitsAnySolid(end), JSON.stringify(end))
+  })
+
+  await scenario('(o) 클릭 이동: 카메라가 움직인 뒤 좌표 일치', VP_D, async ({ page, name }) => {
+    await enterWorld(page)
+    await T(page, 'tw-map-open').click(); await T(page, 'tw-map-place-park-green').click()
+    await sleep(600) // 카메라 수렴
+    const t = firstStandable([{ x: 72, y: 126 }, { x: 100, y: 124 }, { x: 64, y: 120 }, { x: 76, y: 100 }])
+    const sp = await toScreen(page, t, VP_D)
+    const back = await fromScreen(page, sp, VP_D)
+    r.check(`${name} 화면<->월드 좌표 왕복이 일치(테스트 헬퍼 검증)`, Math.hypot(back.x - t.x, back.y - t.y) < 0.01)
+    await page.mouse.click(sp.x, sp.y)
+    const { timedOut } = await sampleUntilArrived(page)
+    const end = await pos(page)
+    r.check(`${name} 공원에서 클릭한 월드 좌표에 1.5 이내로 도착`, !timedOut && Math.hypot(end.x - t.x, end.y - t.y) <= 1.5, JSON.stringify({ end, t }))
+  })
+
+  await scenario('(p) 클릭 이동: 방향키가 취소', VP_D, async ({ page, name }) => {
+    await enterWorld(page)
+    const t = firstStandable([{ x: 184, y: 134 }, { x: 180, y: 138 }, { x: 186, y: 130 }])
+    const sp = await toScreen(page, t, VP_D)
+    await page.mouse.click(sp.x, sp.y)
+    await sleep(150)
+    r.check(`${name} 걷는 중 data-dest 설정됨`, (await destAttr(page)) !== '')
+    const p0 = await pos(page)
+    await page.keyboard.down('ArrowLeft')
+    await sleep(60)
+    const cleared = (await destAttr(page)) === ''
+    await sleep(350)
+    const p1 = await pos(page)
+    await page.keyboard.up('ArrowLeft')
+    r.check(`${name} ArrowLeft 누르자 data-dest 즉시 비워지고 왼쪽으로 이동`, cleared && p1.x < p0.x - 1.5, JSON.stringify({ cleared, p0, p1 }))
+    await sleep(300)
+    const p2 = await pos(page); await sleep(200); const p3 = await pos(page)
+    r.check(`${name} 키를 뗀 뒤 옛 경로를 이어 걷지 않음`, p2.x === p3.x && p2.y === p3.y, JSON.stringify({ p2, p3 }))
+  })
+
+  const VP_M = { width: 360, height: 640 }
+  await scenario('(q) 탭 이동: 모바일', VP_M, async ({ page, name }) => {
+    await enterWorld(page)
+    const t = firstStandable([{ x: 170, y: 128 }, { x: 150, y: 130 }, { x: 172, y: 116 }])
+    const sp = await toScreen(page, t, VP_M)
+    await page.touchscreen.tap(sp.x, sp.y)
+    await T(page, 'tw-dest').waitFor({ state: 'visible', timeout: 3000 })
+    const { samples, timedOut } = await sampleUntilArrived(page)
+    const end = await pos(page)
+    r.check(`${name} 땅을 탭하면 그곳까지 걸어감(1.5 이내, 침범 0)`, !timedOut && Math.hypot(end.x - t.x, end.y - t.y) <= 1.5 && samples.every((q) => !hitsAnySolid(q)), JSON.stringify({ end, t }))
+    const jb = await T(page, 'tw-joystick').boundingBox()
+    await page.touchscreen.tap(jb.x + jb.width / 2, jb.y + jb.height / 2)
+    await sleep(200)
+    r.check(`${name} 조이스틱 영역 탭은 이동 경로를 만들지 않음`, (await destAttr(page)) === '')
+    const mb = await T(page, 'tw-map-open').boundingBox()
+    await page.touchscreen.tap(mb.x + mb.width / 2, mb.y + mb.height / 2)
+    await T(page, 'tw-map').waitFor({ state: 'visible', timeout: 3000 })
+    r.check(`${name} HUD 버튼 탭은 지도만 열고 이동 경로 없음`, (await destAttr(page)) === '')
+    await page.keyboard.press('Escape')
+    const p0 = await pos(page)
+    const cx = jb.x + jb.width / 2, cy = jb.y + jb.height / 2
+    await page.mouse.move(cx, cy); await page.mouse.down(); await page.mouse.move(cx + 40, cy, { steps: 4 })
+    await sleep(500)
+    const p1 = await pos(page)
+    await page.mouse.up()
+    r.check(`${name} 조이스틱 드래그는 여전히 이동시키고 경로를 만들지 않음`, p1.x > p0.x + 3 && (await destAttr(page)) === '', JSON.stringify({ p0, p1 }))
+  }, { hasTouch: true })
 
   return { results: r.results, unmockedRequests, mockErrors }
 }
