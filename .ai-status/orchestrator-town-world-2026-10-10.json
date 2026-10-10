@@ -1,0 +1,28 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "docs-maintainer",
+  "task_id": "town-world-2026-10-10",
+  "task": "244차 문서 갱신: Paul Town 하이브리드 2.5D 마을(C 방식) 3구역 프로토타입",
+  "status": "in_progress",
+  "progress": 80,
+  "started_at": "2026-10-10T19:30:00+09:00",
+  "updated_at": "2026-10-10T19:50:00+09:00",
+  "files_owned": [
+    "docs/design/PAUL_TOWN_HYBRID_WORLD_2026-10-10.md",
+    "handoff.md",
+    "TESTING.md",
+    "ROADMAP.md",
+    ".ai-status/orchestrator-town-world-2026-10-10.json"
+  ],
+  "files_read": [
+    "src/utils/town/proto2_5d/world/worldMap.js",
+    "scripts/town/kit_map.tsv",
+    "handoff.md",
+    "ROADMAP.md",
+    "TESTING.md",
+    ".ai-status/orchestrator-grammar-village-2026-10-10.json"
+  ],
+  "summary": "하이브리드 마을: 새 화면 townWorld(플래그 paulTownWorld, QA 전용), 광장·공원·학교 3구역, 나머지 4구역 닫힌 문. 정적 168/58/wiring PASS, 브라우저 [town-world] 71/71과 회귀 12종 PASS. 문법 정답 미리 보임은 현황만 보고.",
+  "blocker": "기존 2.5D 회귀 스펙 결과 미확정(실행 중)",
+  "next_action": "town-proto2.5d 결과 확인 → 브랜치 push·Preview 확인 → 운영자 결정 후 시장 거리 구역"
+}
