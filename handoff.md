@@ -9,6 +9,7 @@ _233차 갱신: 2026-10-10 (233차 — **Grammar 커리큘럼 재구성: 5 과�
 _234차 갱신: 2026-10-10 (234차 — **Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙**. Easy 8/8 콘텐츠 구현 완료, 교사 검수 완료 0, Intermediate 1, 미제작 25(Intermediate 7·Advanced 6·Middle 6·High 6) — **커리큘럼 전체 완료 아님**. 코드 `d2842265`. 정적 PASS, 더미 env 빌드 경고 0, `[grammar]` 238/0, `[student-home]` 223/0/1 SKIP. 클릭 경로: 홈 [📘 문법 과정] → Easy (ready 8/8 · 검수 0) → 3. 나는 …이야 am·is·are …. PR #62 Draft·QA 전용. 아래 234차 섹션 참고.)_
 _235차 갱신: 2026-10-10 (235차 — **Paul 로고 모자 PNG 8장을 기존 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 대응으로 적용** + HatCollection 장착 버튼 44px 수정 + 모자 이름 2건 정정. 앱에 "8단계 모자"는 없고 세 축(XP 랭크 5·크기 5단계·수집 모자 8종)이 따로 있어 수집 모자 8종에 대응(리드 판단, **운영자 확인 필요: 남색/주황 대응, 승급 체인 아님**). 점수·승급 규칙·해금·XP 무변경. 커밋 `da4f2d66`·`e4e622d9`·`a97074ef`, 이름 커밋 `f5156fa8`. 신규 `[hats]` 67/0 + 회귀 PASS. Preview 실화면(SSO)·실기기 미확인. PR #62 Draft·QA 전용. 아래 235차 섹션 참고.)_
 _238차 갱신: 2026-10-10 (238차 — **문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드(5카드 그리드)**. 클릭 경로: 홈 [📘 문법 / Grammar] → Easy → 1. 부탁하기 → 카드 1/23 목표 → 다음 … → 선택 문제 → 답 확인 → 다음 … → 마무리. 콘텐츠 34/34 불변, 교사 검수 0, PR #62 QA 전용, DB·저장 0. 아래 238차 섹션 참고.)_
+_248차 갱신: 2026-10-11 (248차 — **그림 단어 151장 분류 + 관리자 전용 승인 검토 화면**: WebP 151개(합계 2,448,798B), 생성 데이터, 관리자 탭 🖼 그림단어. 학생 기능 없음, DB/SQL 없음, 결정은 localStorage만.)
 _247차 갱신: 2026-10-11 (247차 — **하이브리드 마을 클릭/탭 이동**: 바닥을 클릭/탭하면 Paul이 장애물을 돌아 걸어감, 건물 클릭은 입구 앞까지. WASD·방향키·조이스틱 불변(키 입력이 경로를 즉시 취소). 아래 247차 섹션 참고.)_
 _246차 갱신: 2026-10-11 (246차 — **새 마을 테스터 버튼을 화면 맨 위로 이동**: 대시보드 `dash-town-world`·홈 `student-home-town-world`가 첫 화면 아래라 운영자가 못 찾고 기존 마을 버튼을 눌렀음. 아래 246차 섹션 참고.)_
 _245차 갱신: 2026-10-10 (245차 — **새 걷는 마을 테스터 접근 분리 + 진입 경로**: 운영자가 미리보기에서 배경·건물만 보고 캐릭터/이동이 없다고 보고. 원인=새 마을(`townWorld`)이 QA 전용 홈 메뉴에서만 열리고 `paulTownWorld` 기본 꺼짐, 일반 대시보드의 마을 버튼은 옛 V1/V2 마을로 감. 아래 245차 섹션 참고.)_
@@ -57,6 +58,15 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-11 (248차) — 그림 단어 분류 + 관리자 승인 검토 화면
+
+- 입력: 운영자 그림 151장(Dropbox `pics2`), 리드가 전부 열어 판단한 `verdicts.json`(MATCH 119/MISMATCH 16/UNCERTAIN 10/MULTIPLE 5/UNUSABLE 1)·`phonics.json`(33). 이 라운드는 이 판단을 최종으로 취급.
+- 파이프라인 `scripts/pictureWords/buildPictureWords.py`(알파 트림·256px·WebP 40KB 이하, 멱등) -> `src/assets/pictureWords/*.webp` 151개 + `manifest.json`(합계 2,448,798B, 최대 33,708B). 데이터 생성 `buildPictureWordsData.mjs` -> `src/data/pictureWords/pictureWords.json`(손편집 금지) + 순수 헬퍼 `index.js`(`applyDecisions` 등).
+- 화면: 관리자 > `🖼 그림단어` 탭(`PictureWordReviewPanel`, AdminScreen에서 React.lazy). 승인 필요(31 + 사용 불가 1) / 분류 결과. 결정은 `localStorage['paulEasyVoca_pictureWordReview']`에만 저장, 내보내기 복사 제공. 학생 화면·단어 DB·상점·보상·마을은 무변경.
+- 번들 예산: 이미지 파일명을 manifest 기준으로 stray 허용, `PictureWordReviewPanel-*` 청크는 관리자 전용으로 raw 합계에서 제외(제외 안 하면 2.113MB로 2.1MB 한도 초과).
+- 신규 `scripts/testPictureWords.mjs`(registry 등록) + `tests/e2e/pictureWordReview.spec.mjs`(`testBrowserE2E`에 등록; 이 작업에서는 실행하지 않음 — 리드가 브라우저 실행).
+- 설계/한계: `docs/design/PICTURE_WORDS_2026-10-11.md`. 파닉스 학습 순서 미확정(`phonicsOrder: null`), 학습 흐름은 설계만, 상점 구매는 이후 SQL(`town_items`) 필요.
 
 ## 2026-10-11 (247차) — 하이브리드 마을 클릭/탭 이동
 

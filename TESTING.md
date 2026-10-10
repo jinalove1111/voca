@@ -2081,3 +2081,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 247차 추가 (2026-10-11): 클릭/탭 이동
 
 - 신규 `scripts/testTownWorldClickMove.mjs`(23단언, `verify` registry 등록): 보행 격자·결정론 240쌍 걷기 시뮬(솔리드 침범 0, 1.0 이내 도착), 건물 클릭 -> `nearestPlace` 일치, 도달 불가 null. `testTownWorldScreen`에 탭 임계값/키보드 취소/`stepMove` 단일 호출/`tw-dest` 핀 추가. `[town-world]` 브라우저 (l)~(q) 추가 — 작성 시점 미실행(리드 몫).
+
+### 248차 추가 (2026-10-11): 그림 단어
+
+- `scripts/testPictureWords.mjs`(666단언, registry 등록): 151 엔트리·상태 119/16/10/5/1·id=pics2/<stem>·에셋 파일 존재/고아 없음/40KB·autoLink==MATCH·비MATCH tracks 비어 있음·phonics 33(phonicsOrder null)·기존 단어 18·`applyDecisions` 단위·패널/데이터 소스 핀(fetch/supabase/api/grantReward/window.confirm 없음, lazy, 저장 키)·`assets/pictureWords` 참조 격리. 네트워크 0.
+- `tests/e2e/pictureWordReview.spec.mjs`: 관리자 패널 브라우저 시나리오(카드 32·이미지 naturalWidth·승인/수정/제외/보류·새로고침 유지·결과 탭·360px·쓰기/Supabase 요청 0·저장 키 1개). Playwright는 리드가 실행.
