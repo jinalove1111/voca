@@ -17,7 +17,7 @@ const CARD = 'relative min-h-[9rem] rounded-3xl p-4 flex flex-col items-center j
 const SOON = 'bg-gray-300 text-gray-600'
 const ACTIVE = 'text-white bg-gradient-to-br'
 
-export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, grammarEnabled, speakingEnabled, speakingExamEnabled }) {
+export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, grammarEnabled, speakingEnabled, speakingExamEnabled, onGoWorld }) {
   const [notice, setNotice] = useState('')
   const timerRef = useRef(null)
   const cardRefs = useRef({})
@@ -138,6 +138,13 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
             onClick={() => go('town', 'paulTown')}
             className="w-full h-14 text-base font-black bg-white text-purple-700 border-2 border-purple-200 rounded-2xl btn-press">
             {townEligible ? '🏘️ 내 마을' : '🏘️ Paul Town 구경가기'}
+          </button>
+        )}
+        {/* 새 걷는 마을 테스트 진입(245차) — 기존 내 마을 버튼과 별개. 허용목록 계정에만 onGoWorld가 온다 */}
+        {onGoWorld && (
+          <button type="button" data-testid="student-home-town-world" onClick={onGoWorld}
+            className="w-full min-h-[44px] text-base font-black bg-white text-green-700 border-2 border-green-200 rounded-2xl btn-press">
+            🚶 새 마을 걷기 (테스트)
           </button>
         )}
         {/* 2026-10-08(224차) 통합 과정 시범 Unit(QA 전용) — 기존 Tab 순서(로그아웃→시작→카드4→그림 시험→내 마을) 뒤에 둔다 */}

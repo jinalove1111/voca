@@ -890,8 +890,9 @@ function AppInner({ studentId, studentName, onLogout }) {
             const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach'
             if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
             if (t === 'grammar') { setVillageFocus(null); setGrammarEntry(null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
-            goFrom('home', t === 'grammar' ? 'grammarVillage' : viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (townWorldEnabled && t === 'paulTown') ? 'townWorld' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
-          canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled || townWorldEnabled}
+            goFrom('home', t === 'grammar' ? 'grammarVillage' : viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
+          onGoWorld={townWorldEnabled ? goTownWorld : null}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
           grammarEnabled={qaTestStudent}
