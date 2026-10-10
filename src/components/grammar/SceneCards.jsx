@@ -15,7 +15,7 @@ const NUMS_KO = ['', '한', '두', '세', '네', '다섯']
 const PRIMARY = `${BTN} text-base bg-sky-500 text-white disabled:opacity-40`
 const SECOND = `${BTN} text-base bg-white card-shadow text-gray-700 disabled:opacity-40`
 const TA = 'w-full min-h-[88px] px-4 py-3 rounded-2xl border-2 border-gray-200 focus:border-sky-400 outline-none text-lg font-bold text-gray-900 resize-y'
-const optCls = (on, checked, ok) => `${BTN} text-base ${on ? (checked ? (ok ? 'bg-emerald-500 text-white' : 'bg-amber-200 text-gray-800') : 'bg-sky-100 text-sky-800 ring-2 ring-sky-400') : 'bg-white card-shadow text-gray-700'}`
+const optCls = (on, checked, ok) => `${BTN} min-h-[44px] max-w-full break-words text-base ${on ? (checked ? (ok ? 'bg-emerald-500 text-white' : 'bg-amber-200 text-gray-800') : 'bg-sky-100 text-sky-800 ring-2 ring-sky-400') : 'bg-white card-shadow text-gray-700'}`
 
 // 장면 그림: step/item의 view·layout·panels·lines를 그대로 Stage에 넘긴다. 시범(full)만 Paul·Cookie 장식을 그리고, add는 scene.bg 배경만 쓴다.
 function Pic({ c, o, paul = true, ...rest }) {
@@ -91,7 +91,7 @@ function Choose({ c, a, set, clear }) {
       {it.promptKo && <Prompt>{it.promptKo}</Prompt>}
       <Pic c={c} o={it} />
       <p data-testid="scene-frame" className="text-lg font-black text-gray-900 break-words">{frame}</p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {ordFor(c, it.options.length).map((j) => [it.options[j], j]).map(([o, j]) => <button key={o} data-testid={`scene-opt-${j}`} disabled={a.checked} aria-pressed={picked === j} onClick={() => set({ picked: j })} className={optCls(picked === j, a.checked, a.ok)}>{o}</button>)}
       </div>
       {!a.checked ? <CheckBtn disabled={picked == null} onClick={() => set({ checked: true, ok: picked === it.correct })} />

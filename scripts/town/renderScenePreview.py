@@ -56,8 +56,9 @@ def render(p):
         d.rectangle([(s['x'] - sz / 2) * K, (s['y'] - sz + 4) * K, (s['x'] + sz / 2) * K, (s['y'] + 4) * K], fill=(255, 255, 255, 140), outline=(14, 165, 233, 255), width=3)
         d.text((s['x'] * K - 6, (s['y'] - sz * 0.6) * K), '+', fill=(2, 132, 199, 255), font=font)
     # Paul
-    pi, px, py = meet(paul, p['paul']['x'] + p['paul']['w'] / 2, p['paul']['y'] + p['paul']['h'], p['paul']['w'], p['paul']['h'])
-    canvas.alpha_composite(pi, (px, py))
+    if p['paul']:
+        pi, px, py = meet(paul, p['paul']['x'] + p['paul']['w'] / 2, p['paul']['y'] + p['paul']['h'], p['paul']['w'], p['paul']['h'])
+        canvas.alpha_composite(pi, (px, py))
     for it in p['items']:
         # shadow ellipse rx=w/2.2 ry=4 black 12%
         sh = Image.new('RGBA', canvas.size, (0, 0, 0, 0))
@@ -71,7 +72,11 @@ def render(p):
             canvas.alpha_composite(im, (ox, oy))
         if it.get('cookieTag'):
             ImageDraw.Draw(canvas).text((it['x'] * K, (it['y'] + 14) * K), 'Cookie', fill=(31, 41, 55, 255), font=font, anchor='mm')
-    return canvas.convert('RGB')
+    out = canvas.convert('RGB')
+    if p.get('crop'):  # miniCrop [x, y, w, h] (viewBox units): same window as Stage's svg viewBox
+        cx, cy, cw, ch = p['crop']
+        out = out.crop((round(cx * K), round(cy * K), round((cx + cw) * K), round((cy + ch) * K)))
+    return out
 
 # out-of-frame report (box edges vs 360x220)
 report = []
@@ -79,10 +84,13 @@ tiles = []
 for p in data['pictures']:
     img = render(p)
     img.save(os.path.join(OUT, p['name'] + '.png'))
-    small_img = img.resize((360, 220), Image.LANCZOS)
+    small_img = img.resize((340, round(340 * img.height / img.width)) if p.get('crop') else (360, 220), Image.LANCZOS)  # mini: ~2x of the real ~170px thumbnail
     small_img.save(os.path.join(OUT, p['name'] + '_360.png'))
     tiles.append((p['name'], small_img))
     for it in p['items']:
+        cr = p.get('crop')
+        if cr and (it['x'] - it['w'] / 2 < cr[0] - 1e-6 or it['x'] + it['w'] / 2 > cr[0] + cr[2] + 1e-6 or it['y'] - it['h'] < cr[1] - 1e-6):
+            report.append(f"{p['name']}: {it['obj']}{it['i']} box outside crop")
         if it['x'] - it['w'] / 2 < 0 or it['x'] + it['w'] / 2 > 360 or it['y'] - it['h'] < 0 or it['y'] > 220:
             report.append(f"{p['name']}: {it['obj']}{it['i']} box outside 360x220")
 cols = 3

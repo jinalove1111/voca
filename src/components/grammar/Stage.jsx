@@ -2,7 +2,7 @@ import { townAsset } from '../../assets/town'
 import { paulHappy } from '../../assets/paul'
 import { PARK_ART } from '../../utils/grammar/parkArt'
 import { PROPS, ACTIONS, CONTAINERS, dimsFor, parkArtKey, parkSrc, PARK_GROUND, PARK_PAUL, PARK_PLACED_MAX } from '../../utils/grammar/sceneProps'
-import { layoutItems, tally, viewOf } from '../../utils/grammar/sceneMission'
+import { layoutItems, tally, viewOf, miniCrop } from '../../utils/grammar/sceneMission'
 
 // 2026-10-10 Scene v2 범용 그림 무대(인라인 SVG, viewBox 360x220). 문장·정답은 그림에 넣지 않는다(aria-label도 한국어 설명만).
 // 물건은 sceneProps의 PROPS 키로만 그린다. 공원(bg 'park')은 art kit 실제 그림(utils/grammar/parkArt.js): 배경 park-backdrop,
@@ -164,9 +164,10 @@ function StageSvg({ layout = [], placed = [], spots = [], highlight, tapObj, onT
   const fronts = base.filter((b) => b.frontClip != null).map((b) => ({ ...b, front: true, z: b.frontZ ?? b.z + 0.6 }))
   const drawn = [...base, ...extra, ...fronts].map((it) => ({ ...it, zz: it.obj === tapObj && onTapObject ? it.z + 1000 : it.z })).sort((a, b) => a.zz - b.zz) // 누르는 대상은 맨 위에 그려 눌리는 영역이 가려지지 않게
   const counts = tally([...base, ...extra])
+  const crop = size === 'sm' && bg === 'park' && !extra.length ? miniCrop(base) : null // 작은 공원 그림은 물건 줄로 확대(전체 배경에 물건이 점처럼 보이지 않게)
   const desc = describe([...base, ...extra])
   return (
-    <svg {...(testId ? { 'data-testid': testId } : {})} data-counts={Object.entries(counts).map(([o, n]) => `${o}:${n}`).join(',')} data-size={size} data-bg={bg} viewBox="0 0 360 220" role="img" aria-label={`${BG_KO[bg] || '장면'} 그림${desc ? `: ${desc}` : ': 비어 있음'}`}
+    <svg {...(testId ? { 'data-testid': testId } : {})} data-counts={Object.entries(counts).map(([o, n]) => `${o}:${n}`).join(',')} data-size={size} data-bg={bg} {...(crop ? { 'data-crop': crop.map((n) => Math.round(n * 10) / 10).join(' ') } : {})} viewBox={crop ? crop.join(' ') : '0 0 360 220'} role="img" aria-label={`${BG_KO[bg] || '장면'} 그림${desc ? `: ${desc}` : ': 비어 있음'}`}
       className={className || `block w-full ${size === 'sm' ? 'max-w-[170px]' : 'max-w-[360px]'} h-auto mx-auto rounded-2xl select-none`}>
       <Bg bg={bg} mini={size === 'sm'} />
       {withPaul && (dims ? <image href={paulHappy} x={PARK_PAUL.x} y={PARK_GROUND - PARK_PAUL.h} width={PARK_PAUL.w} height={PARK_PAUL.h} preserveAspectRatio="xMidYMax meet" aria-hidden="true" data-testid="scene-paul" />

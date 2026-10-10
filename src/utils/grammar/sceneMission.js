@@ -155,6 +155,23 @@ export function layoutItems(layout, { center = false, enlarge = null, mini = fal
   return flat.map((f) => done.find((d) => d.obj === f.obj && d.i === f.i))
 }
 
+// 작은 공원 무대(mini)용 확대 창 [x, y, w, h](360x220 안, 가로:세로 = 2.2:1 고정). 물건 줄(그림자·이름표·동작 배지 포함) 상자 + 여백이 들어가는 가장 작은 창을 줄 가운데에 둔다.
+// 전체 배경에 작게 박히던 물건이 썸네일 높이의 대부분을 차지하게 하되, 모든 물건이 창 안에 있다(개수가 읽힘). 물건이 없으면 전체 360x220.
+export function miniCrop(items) {
+  if (!items?.length) return [0, 0, 360, 220]
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9
+  for (const t of items) {
+    x0 = Math.min(x0, t.x - t.w / 2); x1 = Math.max(x1, t.x + t.w / 2); y0 = Math.min(y0, t.y - t.h); y1 = Math.max(y1, t.y + 14) // 그림자·이름표
+    if (t.action) { const bx = t.x + t.w * 0.38, by = t.y - t.h * 0.82; x0 = Math.min(x0, bx - 24); x1 = Math.max(x1, bx + 24); y0 = Math.min(y0, by - 24) } // mini 동작 배지(r 22)
+  }
+  const R = 2.2
+  const w = Math.min(360, Math.max(x1 - x0 + 12, (y1 - y0 + 12) * R))
+  const h = w / R
+  const bottom = Math.min(220, Math.max(y1 + 6, h))
+  const x = Math.min(360 - w, Math.max(0, (x0 + x1) / 2 - w / 2))
+  return [x, Math.max(0, bottom - h), w, h]
+}
+
 // 보기 표시 순서: seed(문자열)로 정해지는 결정적 순열. n>=3이면 항등이 아님(n=2는 seed가 정함). 번호·정답은 계속 데이터 번호로 다룬다
 export function displayOrder(n, seed) {
   let h = 2166136261
