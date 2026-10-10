@@ -252,3 +252,161 @@ CURRICULUM_STAGES §10.1·§11 기준으로 사실만 적는다.
 |---|---|
 | 변경 파일 | 커밋 `bd62cc15`: `src/utils/grammar/sceneMission.js`(validateScene·layoutSentence·countsMatch·sceneCards·buildFrame), `src/components/grammar/ParkScene.jsx`, `src/components/grammar/SceneCards.jsx`, `grammarDeck` 장면 경로(g-easy-05 덱 15장 = 목표 + 장면 13 + 요약), `GrammarCourseScreen` 연결, `App` studentId 전달(마무리 분석 이벤트), g-easy-05 단어 +10, 정적 스위트 핀. `e4e8edc6`: 만들기 카드 실시간 심기 안내(1..n-1그루) + 스펙 d 재작성. `58767b3f`: `tests/e2e/grammarScene.spec.mjs`(a~l), `grammar.spec` h 장면 단원 건너뜀. `18afbb35`: 이 문서 + CURRICULUM §13 포인터 |
 | 남은 작업 | (1) RAM ≥3GB에서 브라우저 검증: `[grammar-scene]` a~l(360×640·1280 스크린샷 포함), `[grammar]` g 360×640 3건, 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]`. (2) 운영자 에셋: 공원 배경, Cookie 전용 그림 2포즈, 공, 꽃(PNG/WebP 투명, 100KB 이하, 2×). 지금은 임시 SVG·강아지 대역. (3) 다른 단원에 `scene` 데이터만 추가해 확장. (4) 구현 결정 기록: 마무리는 보상 요청 없이 분석 이벤트 하나, 시험 공개 버튼 문구는 "모범 답 보기". 문서 쪽 미해결 항목: 교사 검수, 쿠키·공·배경 실제 그림(§5.3), 학원 반 대응(§7), 기본 공원 값(§2.3), 보상 요청 여부(§6), Middle/High 장면, 다른 Easy 단원 `scene` |
+
+## 11. Scene v2 — 34단원 확장 (240차, 2026-10-10 13:10~14:00, 기준 `03d40a05`)
+
+_§0~§10은 239차 시범(g-easy-05) 기록이고 그대로 둔다. 이 절부터는 기존 34단원 전부로 확장한 내용이다. 새 단원은 만들지 않았다._
+
+**운영자 요청 요약**: 그림·상황 활동을 There is/are 시범에서 기존 34단원 전체로 확장. 그림은 단원 문법 뜻에 맞을 것. 과정별 차등(Easy = 구체적·누르기·고르기·놓기 / Intermediate·Advanced = 여러 장면 비교·대화·문장 만들기 / Middle·High = 학교생활·메시지·뉴스·시간표 + 짧은 글 설명). 한 장씩 덱과 공통 장면·비교·배치·타임라인·대화 컴포넌트를 재사용. 정답·문장은 그림에 굽지 않고 UI로. 개수·위치·시간 관계는 코드가 제어. 기존 문항·정답·피드백·진행 유지. 정답 노출·다의 해석 문항 점검. 임시 대체 가능 그림 + 필요 파일 목록. 34행 표. 임시 이미지 / 실제 에셋 / 브라우저 검증 분리 표기. 현재 브랜치·Preview, merge·배포·DB 없음.
+
+### 11.1 데이터 스키마 v2 (동결본)
+
+- 단원 `scene` = `{ id, mode, titleKo, bgKo, bg, characters, objects, steps }`. `mode: 'full'`은 시범 g-easy-05뿐(9단계, 덱 15장, 변경 없음). 나머지 33단원은 `mode: 'add'`.
+- 배경 `bg`: park / home / school / street / plain. 등장 물건은 `scene.objects`에 선언하고 키는 `sceneProps.js`의 `PROPS`에서만 고른다.
+- 배치 항목 `{ obj, n, size, at, ref, dist, action, neg, labelKo }`: 위치(`in`·`on`·`under`·`next to`·`behind`·`in front of`)는 `at`+`ref`로 쓰고 좌표는 코드(`layoutItems`)가 정한다. `dist` near/far, `size` s/m/l(크기비 1.5배 이상으로 보이게), `action`은 동작 배지(36종 + `like`), `neg: true`는 동작 배지 위 빨간 가위표(못 해요·안 좋아해요). `labelKo`는 이름·역할 같은 한국어 꼬리표뿐이다.
+- 보기(view): `scene`(무대 1개) / `timeline`(2~4칸, 한국어 칸 이름, `focus`) / `dialogue`(말풍선 1~4줄, 실제 글자).
+- 단계(step): `discover`·`compare`(설명 카드), `choose`·`build`(위치 모드: 물건을 ref 주변 칸에 놓기)·`read`·`listen`(활동 카드). `speak`·`write`·`finish`는 full 모드(시범) 전용이다.
+- 과정별 영어 단어 상한: easy 7 / int·adv 9 / mid·high 12. 어휘 규칙: 장면 안 모든 영어는 FUNCTION_WORDS + NAME_WORDS + 단원 단어 + 장면 물건 이름으로만 구성. 부족한 단어는 단원별 `wordsAdd`로 추가한다.
+
+### 11.2 파일 구성
+
+| 파일 | 역할 |
+|---|---|
+| `src/utils/grammar/sceneProps.js` | 순수 데이터 레지스트리: 캐릭터·동물·물건(실제 Town 스프라이트 `asset` 또는 임시), 동작 배지 37종, `RELATIONS`, `BACKGROUNDS` |
+| `src/utils/grammar/sceneMission.js` | `validateScene` v2(full/add 모드, 과정별 단어 상한, 어휘 규칙, 대화 `en`이 정답이 아닐 것, 듣기 보기 그림 쌍별 상이), `layoutItems` 기하(전치사·near/far·크기·같은 자리 분산), `relationSpots`·`positionFrame`(위치 만들기), `displayOrder`(add 모드 보기 순서 결정적 섞기) |
+| `src/utils/grammar/scenes/{easy,int,adv,mid,high}.js` | 과정별 33단원 장면 데이터(`wordsAdd` 포함) |
+| `src/utils/grammar/grammarUnits.js` | 장면 부착 + `wordsAdd` 병합 |
+| `src/utils/grammar/grammarDeck.js` | add 모드 삽입 규칙(11.3) |
+| `src/components/grammar/Stage.jsx` | 범용 인라인 SVG 무대: Town 스프라이트가 있으면 사용, 없으면 임시 SVG 도형. 동작 배지, `neg` 가위표, `in`일 때 윗면이 열린 통, 타임라인 칸(강조), 대화 말풍선(실제 글자), 모든 미니 무대 아래 한국어 범례(실제 글자) |
+| `src/components/grammar/ParkScene.jsx` | `bg='park'` 얇은 래퍼(시범 testid 유지) |
+| `src/components/grammar/SceneCards.jsx` | view별 카드 + 위치 만들기 |
+| `scripts/testGrammarCourses.mjs` | 핀: 34/34 장면, `validateScene` 0 오류 ×34, `validateGrammarUnit` 0 오류 ×34, 기하, 덱 순서 |
+| `tests/e2e/grammarScenes.spec.mjs` | `[grammar-scenes]` 일반 순회 스펙(`scripts/testBrowserE2E.mjs`에 등록). `[grammar]`도 add 모드 장면 카드를 순회 |
+| `scripts/testBundleBudget.mjs` | 총 코드 예산 1.8 → 2.0 MB (11.4) |
+
+커밋: `3b3c409e`(33단원 장면 데이터) · `6a8a5bb8`(v2 프레임워크) · `2b7643d6`(테스트).
+
+### 11.3 덱 삽입 규칙 (add 모드)
+
+목표 → 예시 → 설명… → 구조 → **[그림 설명 카드: 발견·비교]** → 비교 → 오류… → **[그림 활동 카드: 선택·만들기·읽기·듣기]** → 선택 → 빈칸 → 순서 → 만들기 → 활용 → 요약.
+- 기존 카드·id·정답·피드백은 바뀌지 않는다. 장면 카드 id = `scene-<kind>-<i>`. `isPractice`는 장면 선택·듣기·만들기·읽기를 센다.
+- 시범 g-easy-05는 mode 'full' 그대로: 15장, id·testid 동일.
+- 다른 영역 연결: 읽기(그림 짝)·듣기(문장 듣기 버튼 또는 그림 고르기)는 장면 카드가 맡고, 말하기·쓰기는 기존 만들기·활용 카드가 같은 단원 단어를 쓴다(새 말하기·쓰기 장면 카드는 add 모드에 없다).
+
+### 11.4 번들
+
+`GrammarCourseScreen` lazy 청크 254.3 KB raw / 70.7 KB gzip(시범 시점 147.1 / 42.1 KB). 메인 청크 gzip 단언은 불변. 총 코드 예산은 장면 데이터 증가로 1.8 → 2.0 MB로 올렸다(`testBundleBudget` PASS).
+
+### 11.5 클릭 경로
+
+홈 [📘 문법 Grammar] → 과정 선택 → 단원 → 구조 카드 다음에 **그림 설명 카드**(발견·비교) → 오류 카드 다음에 **그림 활동 카드**(선택·배치·읽기·듣기) → 기존 연습 → 요약. 시범(Easy 5) 경로는 변경 없음.
+
+## 12. 34단원 상태 표 (240차, 생성표 그대로)
+
+_열 정의: 에셋 = 그 단원에서 쓰는 소품 수, 실제 = 폴타운 스프라이트·Paul PNG, 임시 = 임시 SVG 도형. "검증" 열은 정적 검증만이다. 브라우저 검증은 어느 단원도 하지 않았다._
+
+| 단원 | 제목 | 시각 설명 | 그림 활동 | 장면 형식 | 다른 영역 연결 | 에셋 | 검증 |
+|---|---|---|---|---|---|---|---|
+| g-easy-01 | 부탁하기 Can I …? | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-easy-02 | 어디 있어? Where's | 발견(누르기) + 비교 | 선택 4, 위치 배치 | dialogue·scene | 읽기·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 5 | 정적 PASS · 브라우저 미실행 |
+| g-easy-03 | 나는 …이야 am·is·are | 발견(누르기) + 비교 | 선택 4, 읽기 짝 4 | scene·dialogue | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 1 | 정적 PASS · 브라우저 미실행 |
+| g-easy-04 | 할 수 있어요 can | 발견(누르기) + 비교 | 선택 4, 듣기 3 | scene | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 1 | 정적 PASS · 브라우저 미실행 |
+| g-easy-05 | …이 있어요 There is | 발견(누르기) + 비교 | 선택 3, 개수 배치, 읽기 짝 3, 듣기 2 | scene | 읽기·듣기·말하기 연습/시험·쓰기 모두 장면 안 | 실제 3 / 임시 1 | 정적 PASS · 브라우저 미실행 |
+| g-easy-06 | 좋아해요 I like | 발견(누르기) + 비교 | 선택 3, 읽기 짝 4 | scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-easy-07 | …해요? Do you …? | 발견(누르기) + 비교 | 선택 4, 듣기 2 | dialogue | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 2 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-easy-08 | 이것·저것 This is | 발견(누르기) + 비교 | 선택 5, 읽기 짝 4 | scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 2 / 임시 3 | 정적 PASS · 브라우저 미실행 |
+| g-int-01 | Is it …? 대답·되묻기 | 비교 | 선택 3, 읽기 짝 3 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 3 | 정적 PASS · 브라우저 미실행 |
+| g-int-02 | 엄마는 …해요 | 발견(누르기) + 비교 | 선택 4, 읽기 짝 3 | scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 6 | 정적 PASS · 브라우저 미실행 |
+| g-int-03 | 무엇을 좋아해? | 발견(누르기) + 비교 | 선택 2, 읽기 짝 3 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-int-04 | Can you …? 묻기 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 3 | 정적 PASS · 브라우저 미실행 |
+| g-int-05 | 지금 …하고 있어요 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 4 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 6 | 정적 PASS · 브라우저 미실행 |
+| g-int-06 | 위치 말 늘리기 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 4 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 3 / 임시 2 | 정적 PASS · 브라우저 미실행 |
+| g-int-07 | 어제 있었던 일 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | timeline | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 3 / 임시 2 | 정적 PASS · 브라우저 미실행 |
+| g-int-08 | Would you like …? | 발견(누르기) + 비교 | 선택 4, 읽기 짝 3 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-adv-01 | 계획 말하기 going to | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | dialogue·timeline | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 1 | 정적 PASS · 브라우저 미실행 |
+| g-adv-02 | 비교하기 | 발견(누르기) + 비교 | 선택 3, 듣기 2 | scene | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 3 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-adv-03 | because·so 잇기 | 발견(누르기) + 비교 | 선택 4, 읽기 짝 3 | dialogue·timeline | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 3 | 정적 PASS · 브라우저 미실행 |
+| g-adv-04 | when·if 잇기 | 발견(누르기) + 비교 | 선택 3, 듣기 2 | dialogue·timeline·scene | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 2 / 임시 5 | 정적 PASS · 브라우저 미실행 |
+| g-adv-05 | should·have to | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-adv-06 | 해 본 적 있어요 | 발견(누르기) + 비교 | 선택 3, 듣기 2 | timeline·dialogue·scene | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 2 / 임시 2 | 정적 PASS · 브라우저 미실행 |
+| g-mid-01 | 시제 정리 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | timeline·scene·dialogue | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 2 | 정적 PASS · 브라우저 미실행 |
+| g-mid-02 | 조동사 can·may·must | 발견(누르기) + 비교 | 선택 3, 듣기 3 | dialogue·scene | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 0 / 임시 7 | 정적 PASS · 브라우저 미실행 |
+| g-mid-03 | 수동태 기초 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 5 | 정적 PASS · 브라우저 미실행 |
+| g-mid-04 | 관계대명사 who·which | 발견(누르기) + 비교 | 선택 4, 읽기 짝 3 | dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 1 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-mid-05 | 분사로 꾸미기 | 발견(누르기) + 비교 | 선택 4, 읽기 짝 3 | scene·dialogue | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 2 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-mid-06 | 조건문 if | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | timeline | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(말하기)가 같은 단원 단어 사용 | 실제 2 / 임시 4 | 정적 PASS · 브라우저 미실행 |
+| g-high-01 | 완료 시제 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | timeline·dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(쓰기)가 같은 단원 단어 사용 | 실제 2 / 임시 3 | 정적 PASS · 브라우저 미실행 |
+| g-high-02 | 수동태 심화 | 발견(누르기) + 비교 | 선택 3, 읽기 짝 3 | timeline·dialogue·scene | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(쓰기)가 같은 단원 단어 사용 | 실제 0 / 임시 6 | 정적 PASS · 브라우저 미실행 |
+| g-high-03 | 관계사 심화 | 발견(누르기) + 비교 | 선택 4, 듣기 2 | dialogue·scene | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(쓰기)가 같은 단원 단어 사용 | 실제 2 / 임시 3 | 정적 PASS · 브라우저 미실행 |
+| g-high-04 | 가정법 | 발견(누르기) + 비교 | 선택 3, 듣기 1 | dialogue·scene·timeline | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(쓰기)가 같은 단원 단어 사용 | 실제 2 / 임시 3 | 정적 PASS · 브라우저 미실행 |
+| g-high-05 | 간접화법 | 발견(누르기) + 비교 | 선택 4, 읽기 짝 3 | dialogue | 읽기(그림 짝)·듣기(문장 듣기 버튼) + 기존 만들기·활용 카드(쓰기)가 같은 단원 단어 사용 | 실제 1 / 임시 1 | 정적 PASS · 브라우저 미실행 |
+| g-high-06 | 분사구문 | 발견(누르기) + 비교 | 선택 3, 듣기 2 | timeline·scene | 읽기·듣기(그림 고르기) + 기존 만들기·활용 카드(쓰기)가 같은 단원 단어 사용 | 실제 2 / 임시 2 | 정적 PASS · 브라우저 미실행 |
+
+**임시 소품 31종(사용 중)**: apple, bag, ball, bed, bike, board, book, box, cake, car, chair, clock, dad, desk, door, homework, key, kid, medal, mia, milk, mom, money, pencil, phone, pizza, teacher, tom, tv, umbrella, window
+**실제 스프라이트 소품 7종**: bench, cat, dog, house, paul, school, tree
+
+**상태 3분리 (혼동 금지)**
+
+| 구분 | 현황 |
+|---|---|
+| 임시 이미지 적용 | 34/34 단원(일부는 실제 Town 스프라이트 포함) |
+| 실제(최종) 에셋 적용 | 0/34 단원. 소품 단위로는 7종(bench·cat·dog·house·paul·school·tree)만 실제, 사용 중인 31종은 임시 SVG |
+| 브라우저 검증 | 0/34 단원 (이번 라운드 e2e 전혀 미실행) |
+| 교사 검수 | 0/34 |
+
+## 13. 필요한 에셋 파일 목록 (240차)
+
+공통 규격: PNG 또는 WebP 투명 배경, 2×, 파일당 100 KB 이하, 글자를 굽지 않는다(영어·한글 모두). 교체 방법: `sceneProps.js`의 해당 `PROPS` 항목에 `asset`을 추가하거나(동작 배지는 글리프 맵 교체) 하면 되고 **단원 데이터는 바꾸지 않는다**. 아래 파일 이름 = PROPS 키 + 확장자(`Stage.jsx` 상단 `TODO assets` 주석과 같은 규칙).
+
+**A. 지금 쓰는 임시 소품 31종 (우선순위 높음)**
+- 캐릭터(7): mia, tom, mom, dad, teacher, kid, (Paul은 기존 PNG라 불필요)
+- 물건(24): apple, bag, ball, bed, bike, board, book, box, cake, car, chair, clock, desk, door, homework, key, medal, milk, money, pencil, phone, pizza, tv, umbrella, window
+
+**B. 레지스트리에 있으나 아직 단원에서 안 쓰는 임시 소품 20종 (필요해질 때)**
+- 캐릭터(2): grandma, driver
+- 동물(2): bird, fish
+- 물건(16): cup, bus, table, hat, letter, egg, map, guitar, kite, computer, ticket, gift, shoes, jacket, newspaper, trophy
+
+**C. 동작 배지 37종 (현재 이모지 임시)**: `ACTIONS` 전체 — run walk read eat drink sleep play sing swim cook study write draw clean sit jump dance talk ride wash open close watch listen cry laugh wait think buy call drive paint fix help carry wave like. 사용 중인 배지부터 교체하면 된다.
+
+**D. 배경 5장**: park(하늘·잔디·길), home(거실 벽·바닥·창문), school(칠판·교실 바닥), street(건물·인도·도로), plain(부드러운 그라데이션). 지금은 임시 SVG 도형.
+
+**E. Cookie 전용 그림**: 지금은 Town 강아지(puppy) 스프라이트가 Cookie 대역이다. 전용 강아지 그림 2포즈(239차 요청 그대로)를 받으면 교체한다.
+
+실제 스프라이트가 이미 있어 추가 에셋이 필요 없는 소품: tree, bench, flower, lamp, postbox, fountain, house, school, cafe, shop, bridge, tower, dog, cat, owl, paul.
+
+## 14. 검수에서 고친 것과 남은 한계 (240차)
+
+### 14.1 검수 방식
+
+데이터 작성(과정별 에이전트 5명 + 프레임워크 구현자 1명 병렬) 뒤, 엄격한 교사 관점의 독립 검수 3건(Easy / Intermediate·Advanced / Middle·High)이 실제 결함을 찾았고 데이터 또는 렌더러에서 고쳤다. 수정 뒤 검증기 34/34 재실행 통과. 이 검수는 AI 검수이며 **교사 검수가 아니다(0/34)**.
+
+### 14.2 고친 것
+
+| 유형 | 예 | 조치 |
+|---|---|---|
+| 답이 둘 이상으로 해석됨 | behind vs next to가 비슷하게 그려짐, "have played" 오답 보기가 여전히 참, easy-03 읽기 그림이 서로 구분 불가, easy-02 "in the chair"도 자연스러움, int-03 "What are you like?"도 문법적, high-05 보기 중 둘이 문법적 | 렌더러에서 behind·in·크기 겹침·같은 자리 기하 수정, 보기와 그림을 데이터에서 교체 |
+| 답이 질문 문구·꼬리표로 새어 나감 | int-01·04·08(promptKo가 사실을 말함), easy-04·06(can't·don't like가 라벨에만 있음), adv-05의 `to`가 `have`를 알려 줌 | promptKo를 사실 진술 없는 문구로, 사실은 대화 줄·칸 이름으로, 부정은 `neg` 빨간 가위표로 이동 |
+| 잘못된 규칙 진술 | easy-03 "한 명 = am/is, 여럿 = are", mid-01 "현재 = 지금 하는 중", high-04 "현실은 not" | 설명 문장 교체 |
+| 범위 밖 내용 | easy-08의 these/those | this/that만 남기고 제거 |
+| 읽기 어려운 라벨 | 미니 그림 안 작은 라벨 | 모든 미니 무대 아래 한국어 범례(실제 글자) 추가. 답을 정하는 사실은 칸 이름·대화 줄에 둠 |
+| 보기가 늘 같은 위치 | 정답이 0번에 몰림 | `displayOrder`로 결정적 섞기(선택 카드) |
+| 기타 | mid-01 읽기 그림 동일, mid-02 듣기가 명사 찾기, mid-03/05/06 그림 보강, high-06 두 사건이 동시로 보임 | 그림·대사 보강 |
+
+### 14.3 알려진 한계 (남김)
+
+- **adv-04**: 그림만으로는 when과 if를 가를 수 없다. 문항은 동사 형태를 묻는다.
+- **adv-05**: should와 have to의 구분은 한국어 줄의 '꼭'에 기댄다.
+- **mid·high 일부 틀**: 틀 안의 명사로도 풀 수 있다. 그림은 돕지만 결정하지는 않는다.
+- **반복 문장**: 설명 카드와 활동 카드에 같은 문장이 반복되는 곳이 있다.
+- **날씨·상태 소품 없음**: 비는 우산 + 한국어 라벨로 표시한다.
+- **Cookie**: 여전히 Town 강아지 대역.
+- **교사 검수**: 0/34.
+- **브라우저 검증**: 0/34. 레이아웃·탭·끌기·음성·360×640 동작은 확인하지 않았다.
+
+### 14.4 검증 (240차)
+
+- **정적 PASS**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS(장면 단원 34/34, `validateScene` 0 오류 ×34, `validateGrammarUnit` 0 오류 ×34). `testQaGate` 17/0. `testBundleBudget` PASS(2.0 MB 상한). `testLazyChunkGuards` 95/95. `testPilotUnit`·`testRegistryCoverage`·`testStudentPathContracts` ALL PASS. 3개 스펙 `node --check` 통과.
+- **서버 렌더 스모크(구현자)**: 34단원 장면 카드 232장이 throw 없이 렌더. 확인 전 듣기 영어 없음, NaN/undefined 없음, `neg` 가위표 7장, 통 앞벽 6장, 타임라인 카드에 범례 있음.
+- **브라우저: 미실행**. 사유: 여유 RAM 2.04 GB로 3 GB 규칙 미만(메모리는 운영자의 다른 앱이 점유, 남은 테스트 프로세스 아님).
+- **대기**: RAM ≥3GB에서 `[grammar-scenes]`(34단원 360×640 + 5단원 1280, 스크린샷 `scenes-<id>-explain/practice.png`), `[grammar-scene]`, `[grammar]`, 회귀. 이어서 스크린샷 전부를 눈으로 보고 그림 명확성 확인 → 34단원 교사 검수 → 운영자 에셋.

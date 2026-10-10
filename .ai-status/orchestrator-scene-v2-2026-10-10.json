@@ -1,0 +1,24 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "docs-maintainer",
+  "task_id": "scene-v2-2026-10-10",
+  "task": "240차 문서 갱신: 그림 미션 34단원 확장(Scene v2)",
+  "status": "in_progress",
+  "progress": 80,
+  "started_at": "2026-10-10T13:10:00+09:00",
+  "updated_at": "2026-10-10T14:00:00+09:00",
+  "files_owned": [
+    "docs/design/GRAMMAR_SCENE_MISSION_2026-10-10.md",
+    "handoff.md",
+    "TESTING.md",
+    "ROADMAP.md",
+    ".ai-status/orchestrator-scene-v2-2026-10-10.json"
+  ],
+  "files_read": [
+    "src/utils/grammar/sceneProps.js",
+    "src/components/grammar/Stage.jsx"
+  ],
+  "summary": "Scene v2: 34단원 장면 데이터(3b3c409e)·프레임워크(6a8a5bb8)·테스트(2b7643d6). 정적 PASS. 임시 이미지 34/34, 실제 에셋 0/34, 브라우저 검증 0/34, 교사 검수 0/34.",
+  "blocker": "RAM <3GB → 브라우저 e2e 미실행",
+  "next_action": "RAM ≥3GB에서 [grammar-scenes](34단원 360x640 + 5단원 1280)·[grammar-scene]·[grammar]·회귀 실행 → 스크린샷 전부 확인 → 34단원 교사 검수 → 운영자 에셋"
+}

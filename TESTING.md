@@ -2021,3 +2021,12 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - **브라우저 미실행 (RAM <3GB)**: `[grammar-scene]` a~l 전체, `[grammar]` g 360×640 3건(`c47b1e10` 보정), 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]`. 구현자의 서버 렌더 스모크(모든 장면 카드 렌더, 확인/공개 전 영어 없음)만 확인됨. 스펙 자체가 한 번도 돌지 않았으므로 첫 실행의 실패는 스펙 오류일 수도 제품 결함일 수도 있다. 분류 후 갱신할 것.
 - **재실행**: 워크트리 루트, RAM ≥3GB, 한 번에 1개.
   `VITE_SUPABASE_URL=https://dummy.supabase.co VITE_SUPABASE_ANON_KEY=dummy npm run build && npx vite preview --port 4193 --strictPort` 후 `node <scratchpad>/runOne.mjs grammarScene.spec.mjs` 등(또는 `npm run verify:e2e`).
+
+### 240차 추가 (2026-10-10): 그림 미션 34단원 확장(Scene v2) — `[grammar-scenes]` 신규, 정적 핀 확장
+
+- **신규 `tests/e2e/grammarScenes.spec.mjs` (`[grammar-scenes]`, 커밋 `2b7643d6`, `scripts/testBrowserE2E.mjs`에 등록)**: 34단원 일반 순회. 장면 무대 렌더, 듣기·발견에서 확인 전 영어 없음, 선택·듣기·읽기·만들기 정상 경로, 360×640 가로 넘침 없음, 단원별 스크린샷 `scenes-<id>-explain.png`·`scenes-<id>-practice.png`(34단원 360×640 + 5단원 1280). `[grammar]`은 add 모드 장면 카드도 순회한다. `[grammar-scene]`(시범 a~l)은 그대로.
+- **정적 핀 (`scripts/testGrammarCourses.mjs`, 커밋 `2b7643d6`)**: 장면 단원 34/34, `validateScene` 0 오류 ×34, `validateGrammarUnit` 0 오류 ×34, 기하(전치사 위치·near/far·s/m/l 크기비·같은 자리 분산), add 모드 덱 순서(설명 카드는 구조 뒤, 활동 카드는 오류 뒤·선택 앞), 시범 덱 15장 불변, 듣기 보기 그림 쌍별 상이, 대화 `en`이 정답이 아님. 검수 수정(커밋 `3b3c409e` 이후) 뒤 검증기 34/34 재실행 통과.
+- **번들 예산**: `scripts/testBundleBudget.mjs` 총 코드 1.8 → 2.0 MB. 근거: grammar lazy 청크 254.3 KB raw / 70.7 KB gzip, 메인 청크 gzip 단언은 불변.
+- **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. `testQaGate` 17/0. `testBundleBudget` PASS. `testLazyChunkGuards` 95/95. `testPilotUnit`·`testRegistryCoverage`·`testStudentPathContracts` ALL PASS. 3개 스펙 `node --check` 통과. 구현자 서버 렌더 스모크: 232 장면 카드가 throw 없이 렌더, 확인 전 듣기 영어 없음, NaN/undefined 없음, `neg` 가위표 7장, 통 앞벽 6장, 타임라인 범례 있음.
+- **브라우저 미실행 (RAM)**: 여유 RAM 2.04 GB(<3 GB 규칙, 점유는 운영자의 다른 앱). `[grammar-scenes]` 전체, `[grammar-scene]`, `[grammar]` 및 239차 대기분(`c47b1e10` 360×640 3건)과 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]` 모두 미실행. `[grammar-scenes]`는 한 번도 돈 적이 없어 첫 실행 실패는 스펙 오류일 수도 제품 결함일 수도 있다. 분류 후 갱신할 것. 레이아웃·탭·끌기·음성·360×640 동작은 확인된 바 없다.
+- **재실행**: 239차와 같은 방법(워크트리 루트, RAM ≥3GB, 한 번에 1개). 이후 스크린샷을 모두 열어 그림 명확성을 눈으로 확인한다.
