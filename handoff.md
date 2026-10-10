@@ -65,6 +65,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - **검증(정적만)**: 신규 `testTownWorldClickMove` 23/23(240쌍 걷기 시뮬: 침범 0·1.0 이내 도착·종료), `testTownWorld` 168/168, `testTownWorldScreen`(신규 핀 7), `testTownWorldWiring`, `testBundleBudget`, `testLazyChunkGuards`, `testRegistryCoverage`, `testTownKitAssets` 1419/1419 PASS, 더미 env 빌드 PASS. 브라우저 `[town-world]` 신규 (l)~(q)는 **리드 실행 예정**(작성자 미실행).
 - 이미지·학습 데이터·저장 키·보상 변경 0.
 
+- **리드 검증(247차, HEAD 빌드)**: (1) 더미 env + 전 네트워크 mock: `[town-world]` 146/0/0 — 신규 (l) 빈 바닥 클릭 도착, (m) 건물 반대편 우회(충돌 0), (n) 건물 클릭 → 앞에 멈춤 + `tw-mission-enter`, (o) 카메라 이동 뒤 클릭 좌표 일치, (p) 걷는 중 키 입력으로 취소, (q) 360×640 터치 탭 이동 + 조이스틱/HUD 탭 무시 포함. `testTownWorldClickMove` 23/23. (2) 실데이터 읽기 전용 로컬 실행(쓰기 전부 abort, 로그인만 가짜 응답): Kinney/Jinaa/Barry/Cookie 모두 바닥 클릭 → `data-dest` 설정·`tw-dest` 표시 → 목적지 0.5 단위 이내 도착, 키보드 이동·지도 이동도 그대로 동작, 페이지 오류 0. Paul은 버튼 없음. 클릭 상호작용 Event Timing 최대 64~72ms. **미검증**: 실제 Preview URL의 실제 PIN 로그인, 실기기(태블릿/휴대폰) 터치, Preview/운영 Supabase 동일 여부, `[town-proto2.5d]` S37 재실행, 이번 라운드에서 `studentHome`/`townMission` 스펙 재실행(변경 파일은 TownWorld.jsx·clickMove.js뿐).
 ## 2026-10-11 (246차) — 새 마을 테스터 버튼 위치를 첫 화면 안으로
 
 - **원인**: 대시보드 버튼은 메뉴 그리드 뒤(y 800 초과), 홈 버튼은 '나의 성장'·말하기 바로가기 뒤라 접힌 화면 아래. 운영자가 기존 마을 버튼(옛 V1/V2)을 누름.
