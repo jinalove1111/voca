@@ -1,24 +1,60 @@
-// tests/e2e/pictureWordPractice.spec.mjs — 그림 단어 연습(249차, 테스터 전용). 네트워크 전체 mock, 저장 0, 보상 0.
-// (a) 전 과정 정답 (b) 일부러 오답 → 복습 → 다시 하기 (c) 답하기 전 정답 누출 0 (d) 듣기 (e) 마이크 없이 따라 말하기
-// (f) 360x640 가로 넘침 0 / 다음 버튼 가림 0 (g) 일반 학생 진입 없음 + 홈 메뉴 진입.
+// tests/e2e/pictureWordPractice.spec.mjs — 그림 단어 연습(249차 → 251차 카드 한 장 흐름, 테스터 전용). 네트워크 전체 mock, 저장 0, 보상 0.
+// r1~r5: 카드 한 장에서 듣기 → 따라 말하기 → 내 목소리 듣기 → 다시 말하기 → 다음(진짜 MediaRecorder + 합성 마이크 스트림, speaking.spec과 같은 방식)
+// t1: 시험(그림만) → 오답 복습(연습 카드 + 녹음기) → 요약. f1: 연습 → 게임 → 시험 → 복습 → 요약. s1: 묶음 선택. g: 진입 제한.
 // 정답 옵션은 root의 data-seed로 buildSession/buildQuiz를 그대로 재계산해 구한다(DOM에는 정답 정보가 없다).
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
 import { buildSession, buildQuiz } from '../../src/utils/pictureWords/practice.js'
-import { learnableWords, shopSets } from '../../src/data/pictureWords/index.js'
+import { learnableWords, shopSets, wordsForLevel } from '../../src/data/pictureWords/index.js'
+import { SPEAKING_MESSAGES } from '../../src/utils/speaking/speakingSession.js'
 
 const T = (page, id) => page.locator(`[data-testid="${id}"]`)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const LOGIN_WRITES = ['/rest/v1/product_events', '/rest/v1/student_progress', '/rest/v1/student_daily_progress']
+// the app's own dashboard-load call, present for every student (also the general student who never opens this feature)
+const APP_POSTS = [...LOGIN_WRITES, '/api/grant-xp']
 const badWrites = (log) => log.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(c.method)).filter((c) => { try { return !LOGIN_WRITES.includes(new URL(c.url).pathname) } catch { return true } }).map((c) => c.method + ' ' + c.url)
 const storageSnap = (page) => page.evaluate(() => ({ local: Object.keys(localStorage).sort(), session: Object.keys(sessionStorage).sort() }))
 const APP_KEY = /^(paul_easy_|paulEasyVoca_)/
 const keyDiff = (a, b) => ['local', 'session'].flatMap((w) => [...b[w].filter((k) => !a[w].includes(k)).map((k) => `+${w}:${k}`), ...a[w].filter((k) => !b[w].includes(k)).map((k) => `-${w}:${k}`)]).filter((d) => !APP_KEY.test(d.slice(d.indexOf(':') + 1)))
 const POOL = learnableWords()
 const SETS = shopSets()
+const SET_WORDS = { ...Object.fromEntries(SETS.map((s) => [s.shop, s.words])), 'level-phonics': wordsForLevel('phonics'), 'level-conversation': wordsForLevel('conversation') }
 const TESTER_ONLY = 'e2e00000-0000-4000-8000-00000000a002'
 const GENERAL = 'e2e00000-0000-4000-8000-00000000b001'
+const lc = (s) => String(s).toLowerCase()
+const isLetter = (c) => /^[a-z]$/i.test(c)
+
+async function waitUntil(fn, { timeout = 5000, interval = 60 } = {}) {
+  const start = Date.now()
+  for (;;) {
+    const v = await fn().catch(() => false)
+    if (v) return v
+    if (Date.now() - start >= timeout) return false
+    await sleep(interval)
+  }
+}
+
+// speaking.spec.mjs와 같은 마이크: getUserMedia를 합성 스트림(AudioContext 오실레이터)으로 대체 — MediaRecorder는 진짜 브라우저 것
+async function installMic(page, mode) {
+  await page.addInitScript((m) => {
+    window.__micTracks = []
+    const md = navigator.mediaDevices
+    if (!md) return
+    md.getUserMedia = async () => {
+      if (m === 'denied') throw Object.assign(new Error('e2e-denied'), { name: 'NotAllowedError' })
+      const ctx = new AudioContext()
+      await ctx.resume().catch(() => {})
+      const osc = ctx.createOscillator()
+      const dest = ctx.createMediaStreamDestination()
+      osc.connect(dest)
+      osc.start()
+      dest.stream.getTracks().forEach((t) => window.__micTracks.push(t))
+      return dest.stream
+    }
+  }, mode)
+}
 
 async function loginToDashboard(page) {
   const input = page.getByPlaceholder('이름 입력...')
@@ -40,41 +76,68 @@ async function loginToHome(page) {
 }
 
 const attr = (page, a) => T(page, 'pwp-root').getAttribute(a)
-const stepOf = (page) => attr(page, 'data-step')
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
 async function waitStep(page, step) { await page.waitForFunction((s) => document.querySelector('[data-testid="pwp-root"]')?.getAttribute('data-step') === s, step, { timeout: 10000 }) }
-async function openFood(page) {
+async function openScreen(page) {
   await T(page, 'dash-picture-words').waitFor({ state: 'visible', timeout: 20000 })
   await T(page, 'dash-picture-words').click()
   await T(page, 'pwp-root').waitFor({ state: 'visible', timeout: 20000 })
 }
-async function pickSet(page, shop) {
-  await T(page, `pwp-set-${shop}`).click()
-  await waitStep(page, 'look')
+// 묶음을 시작하고 세션 단어/시험 문제를 root의 data-seed로 다시 계산한다
+async function startSet(page, id, mode, firstStep) {
+  await T(page, `pwp-start-${mode}-${id}`).click()
+  await waitStep(page, firstStep)
   const seed = Number(await attr(page, 'data-seed'))
-  const set = SETS.find((s) => s.shop === shop)
-  const words = buildSession(set.words, { size: 6, seed })
+  const words = buildSession(SET_WORDS[id], { size: 6, seed })
   return { seed, words, quiz: buildQuiz(words, POOL, seed) }
-}
-// 한 단계의 모든 단어를 다음으로 넘겨 다음 단계로 간다.
-async function passStep(page, step, n, next) {
-  for (let i = 0; i < n; i++) {
-    if ((await stepOf(page)) !== step) throw new Error(`expected step ${step}, got ${await stepOf(page)} at ${i}`)
-    if ((await attr(page, 'data-index')) !== String(i)) throw new Error(`index mismatch ${step} ${i}`)
-    await T(page, 'pwp-next').click()
-  }
-  await waitStep(page, next)
-}
-async function toQuiz(page) {
-  await passStep(page, 'look', 6, 'listen')
-  await passStep(page, 'listen', 6, 'repeat')
-  await passStep(page, 'repeat', 6, 'quiz')
 }
 const correctIdx = (q) => q.options.findIndex((o) => o.id === q.correctId)
 const wrongIdx = (q) => (correctIdx(q) + 1) % 4
 async function answer(page, idx) {
   await T(page, `pwp-opt-${idx}`).click()
   await T(page, 'pwp-feedback').waitFor({ state: 'visible', timeout: 5000 })
+}
+const tap = async (page, loc) => { await loc.scrollIntoViewIfNeeded(); const b = await loc.boundingBox(); await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2) }
+const recStatus = async (page) => ((await T(page, 'pwp-rec-status').textContent().catch(() => '')) || '').trim()
+const audioSrc = (page) => T(page, 'pwp-rec-audio').evaluate((a) => a.getAttribute('src') || '')
+const blobInfo = (page) => page.evaluate(async () => { const a = document.querySelector('[data-testid="pwp-rec-audio"]'); const b = await (await fetch(a.src)).blob(); return { src: a.src, size: b.size } })
+// 녹음 시작 → ms 뒤 끝내기 → 녹음 완료(재생 버튼)까지
+async function recordOnce(page, ms = 1100, touch = false) {
+  const click = (id) => (touch ? tap(page, T(page, id)) : T(page, id).click())
+  await click('pwp-rec-record')
+  await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
+  await sleep(ms)
+  await click('pwp-rec-stop')
+  await T(page, 'pwp-rec-play').waitFor({ state: 'visible', timeout: 8000 })
+}
+// 마이크 없는 상태 모의 선택지 대신, 게임 한 판을 정답으로 끝낸다(알파벳 망치). 본 단어를 돌려준다.
+async function shownWord(page, picId) {
+  await T(page, picId).waitFor({ state: 'visible', timeout: 10000 })
+  const src = await T(page, picId).getAttribute('src')
+  const base = decodeURIComponent((src || '').split('?')[0].split('/').pop())
+  const w = POOL.find((x) => base.startsWith(x.asset + '-') && base.length === x.asset.length + 1 + 8 + 5)
+  if (!w) throw new Error(`cannot map picture src ${src}`)
+  return w
+}
+async function playHammerAll(page) {
+  const seen = []
+  for (let g = 0; g < 8; g++) {
+    await page.locator('[data-testid="pwh-root"], [data-testid="pwg-summary"]').first().waitFor({ state: 'visible', timeout: 10000 })
+    if ((await T(page, 'pwg-summary').count()) > 0) break
+    const w = await shownWord(page, 'pwh-picture')
+    seen.push(w)
+    const cells = [...w.en]
+    for (let i = 0; i < cells.length; i++) {
+      if (!isLetter(cells[i])) continue
+      const ts = await page.locator('[data-testid^="pwh-tile-"]').evaluateAll((l) => l.map((e) => ({ id: e.getAttribute('data-testid'), t: e.textContent, used: e.getAttribute('data-used') === 'true' })))
+      const t = ts.find((x) => !x.used && lc(x.t) === lc(cells[i]))
+      await T(page, t.id).click()
+      await page.waitForFunction((i2) => document.querySelector(`[data-testid="pwh-slot-${i2}"]`)?.getAttribute('data-filled') === 'true', i, { timeout: 3000 })
+    }
+    await T(page, 'pwh-word').waitFor({ state: 'visible', timeout: 5000 })
+    await T(page, 'pwh-next').click()
+  }
+  return seen
 }
 
 export async function run(browser, baseURL) {
@@ -83,35 +146,44 @@ export async function run(browser, baseURL) {
   const mockErrors = []
   const ttsAll = []
 
-  async function scenario(label, vp, body, { studentId = null, defaultFlags = true, login = loginToDashboard } = {}) {
-    const context = await browser.newContext({ viewport: vp })
+  async function scenario(label, vp, body, { studentId = null, defaultFlags = true, login = loginToDashboard, mic = 'synth', hasTouch = false } = {}) {
+    const context = await browser.newContext({ viewport: vp, hasTouch })
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`) })
     const reqUrls = []
-    page.on('request', (q) => reqUrls.push(q.url()))
+    const reqs = []
+    page.on('request', (q) => { reqUrls.push(q.url()); reqs.push({ method: q.method(), url: q.url(), post: q.postData(), ct: q.headers()['content-type'] || '' }) })
     if (!defaultFlags) {
       await page.addInitScript(() => { try { localStorage.setItem('paulEasyVoca_features', JSON.stringify({ studentHomeMenu: true })) } catch { /* 무시 */ } })
     }
     const { unmockedRequests: u, apiCallLog, ttsFallbackRequests } = await installMocks(page, studentId ? { studentId } : {})
+    await installMic(page, mic)
     // mockRoutes의 speechSynthesis 스텁 "뒤"에 등록해야 speak 호출을 센다(speaking.spec.mjs와 같은 방식)
     await page.addInitScript(() => {
       window.__speak = []
+      window.__speakLang = []
       const s = window.speechSynthesis
       if (!s) return
       const orig = s.speak.bind(s)
-      s.speak = (u) => { if ((u.text || '').trim()) window.__speak.push(u.text); return orig(u) }
+      s.speak = (u) => { if ((u.text || '').trim()) { window.__speak.push(u.text); window.__speakLang.push(u.lang || '') } return orig(u) }
     })
     const name = `${label} [${vp.width}x${vp.height}]`
     try {
       await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
       await login(page)
       const base = await storageSnap(page)
+      const reqBase = reqs.length
       await body({ page, name, reqUrls })
       r.check(`${name} 콘솔/페이지 오류 0건`, errors.length === 0, errors.slice(0, 3).join(' | '))
       const bad = badWrites(apiCallLog)
       r.check(`${name} 로그인/분석 외 REST 쓰기 0건(업로드/STT 포함)`, bad.length === 0, bad.slice(0, 3).join(' | '))
+      // (r4) 녹음이 기기를 떠나지 않는다: 로그인 이후 GET 아닌 요청 0, 오디오/멀티파트/blob 페이로드 0
+      const after1 = reqs.slice(reqBase)
+      const nonGet = after1.filter((q) => q.method !== 'GET' && !APP_POSTS.some((p) => q.url.includes(p))).map((q) => `${q.method} ${q.url.slice(0, 80)}`)
+      const payload = after1.filter((q) => /multipart|audio\/|octet-stream/i.test(q.ct) || /^blob:/.test(q.url) || (q.post && /webm|ogg|RIFF|OggS/.test(q.post.slice(0, 64)))).map((q) => `${q.method} ${q.url.slice(0, 80)}`)
+      r.check(`${name} (r4) 로그인 이후 GET 아닌 요청 0건 + 오디오/멀티파트/blob 페이로드 요청 0건`, nonGet.length === 0 && payload.length === 0, JSON.stringify({ nonGet: nonGet.slice(0, 3), payload: payload.slice(0, 3) }))
       const after = await storageSnap(page)
       const d = keyDiff(base, after)
       const feat = [...after.local, ...after.session].filter((k) => /picture|pwp/i.test(k))
@@ -124,174 +196,263 @@ export async function run(browser, baseURL) {
     ttsAll.push(...ttsFallbackRequests)
   }
 
-  // ---- (a) 전 과정, 모두 정답 ----
-  await scenario('(a) 전 과정 정답', { width: 1280, height: 800 }, async ({ page, name }) => {
-    const vp = { width: 1280, height: 800 }
+  // ---- (s1) 묶음 선택: 연습/시험 버튼 ----
+  await scenario('(s1) 묶음 선택', { width: 1280, height: 800 }, async ({ page, name }) => {
     const bt = await T(page, 'dash-picture-words').boundingBox()
-    const tw = T(page, 'dash-town-world')
-    const bw = (await tw.count()) ? await tw.boundingBox() : null
-    r.check(`${name} 첫 화면에 그림 단어 버튼(44px 이상)`, !!bt && bt.y >= 0 && bt.y + bt.height <= vp.height && bt.height >= 43.9, JSON.stringify(bt))
-    r.check(`${name} 마을 버튼 바로 아래`, !bw || (bt.y > bw.y && bt.y - (bw.y + bw.height) < 40), JSON.stringify({ bt, bw }))
-    await openFood(page)
+    r.check(`${name} 첫 화면에 그림 단어 버튼(44px 이상)`, !!bt && bt.height >= 43.9, JSON.stringify(bt))
+    await openScreen(page)
     const ready = SETS.filter((s) => s.ready), notReady = SETS.filter((s) => !s.ready)
-    let okDisabled = true
-    for (const s of notReady) if (!(await T(page, `pwp-set-${s.shop}`).isDisabled())) okDisabled = false
-    for (const s of ready) if (await T(page, `pwp-set-${s.shop}`).isDisabled()) okDisabled = false
-    r.check(`${name} 묶음 선택: 준비된 ${ready.length}개 활성 / 준비 중 ${notReady.length}개 비활성`, okDisabled && notReady.length >= 1, notReady.map((s) => s.shop).join())
-    const S = await pickSet(page, 'food')
-    r.check(`${name} 6단어 세션 + 첫 단계 그림 보기 + 단어/뜻/그림 보임`, S.words.length === 6 && (await T(page, 'pwp-word').textContent()) === S.words[0].en && (await T(page, 'pwp-ko').textContent()) === S.words[0].ko && (await T(page, 'pwp-picture').isVisible()))
-    r.check(`${name} 그림이 실제로 로드됨(naturalWidth>0)`, (await T(page, 'pwp-picture').evaluate((i) => i.complete && i.naturalWidth > 0)))
-    await passStep(page, 'look', 6, 'listen')
-    await passStep(page, 'listen', 6, 'repeat')
-    await passStep(page, 'repeat', 6, 'quiz')
-    for (let q = 0; q < 6; q++) {
-      if ((await attr(page, 'data-index')) !== String(q)) throw new Error(`quiz index ${q}`)
-      await answer(page, correctIdx(S.quiz[q]))
-      const res = await T(page, 'pwp-feedback').getAttribute('data-result')
-      const shown = await T(page, 'pwp-word').textContent()
-      if (res !== 'right' || shown !== S.words[q].en) r.check(`${name} 문제 ${q + 1} 정답 처리/단어 공개`, false, `${res} ${shown} ${S.words[q].en}`)
-      const opts = await page.locator('[data-testid^="pwp-opt-"]').evaluateAll((l) => l.map((b) => b.disabled))
-      if (!opts.every(Boolean)) r.check(`${name} 답한 뒤 옵션 잠김`, false, JSON.stringify(opts))
-      await T(page, 'pwp-next').click()
+    let ok = ready.length === 6 && notReady.map((s) => s.shop).sort().join() === 'garden,pet'
+    for (const id of [...ready.map((s) => s.shop), 'level-phonics', 'level-conversation']) {
+      for (const m of ['practice', 'test']) if ((await T(page, `pwp-start-${m}-${id}`).count()) !== 1 || (await T(page, `pwp-start-${m}-${id}`).isDisabled())) ok = false
     }
-    r.check(`${name} 6문제 모두 정답으로 통과`, true)
-    await waitStep(page, 'review')
-    r.check(`${name} 오답이 없으면 "모두 맞혔어요" 카드`, ((await T(page, 'pwp-review-card').textContent()) || '').includes('모두 맞혔어요') && (await T(page, 'pwp-review-card').getAttribute('data-kind')) === 'clear')
-    await T(page, 'pwp-next').click()
-    await waitStep(page, 'summary')
-    r.check(`${name} 요약: 처음에 6 / 6`, ((await T(page, 'pwp-summary-first-try').textContent()) || '').replace(/\s/g, '') === '6/6')
-    r.check(`${name} 요약 버튼 3개(다시 하기/다른 묶음/나가기)`, (await T(page, 'pwp-again').count()) === 1 && (await T(page, 'pwp-other-set').count()) === 1 && (await T(page, 'pwp-exit').count()) === 1)
-    await T(page, 'pwp-other-set').click()
-    await waitStep(page, 'pick')
-    await T(page, 'pwp-exit').click()
-    await T(page, 'dash-picture-words').waitFor({ state: 'visible', timeout: 10000 })
-    r.check(`${name} 나가기 → 대시보드 복귀`, (await T(page, 'pwp-root').count()) === 0)
+    for (const s of notReady) for (const m of ['practice', 'test']) if (!(await T(page, `pwp-start-${m}-${s.shop}`).isDisabled())) ok = false
+    r.check(`${name} (s1) 준비된 가게 6곳 + Phonics + Conversation: 연습하기/시험 보기 활성, 정원·반려동물은 준비 중(비활성)`, ok, ready.map((s) => s.shop).join())
+    const txt = await T(page, 'pwp-root').innerText()
+    const phLabel = await T(page, 'pwp-set-level-phonics').innerText()
+    r.check(`${name} (s1) Phonics 묶음 이름은 소리 순서를 주장하지 않음("짧고 쉬운 단어") + 준비 중 표시`, phLabel.includes('Phonics — 짧고 쉬운 단어') && !/소리|순서/.test(phLabel) && txt.includes('준비 중'), phLabel)
+    for (const id of ['level-phonics', 'level-conversation']) {
+      const S = await startSet(page, id, 'practice', 'card')
+      r.check(`${name} (s1) ${id}: 6단어 세션이 해당 묶음 단어로만 구성`, S.words.length === 6 && S.words.every((w) => SET_WORDS[id].some((x) => x.id === w.id)) && (await T(page, 'pwp-word').textContent()) === S.words[0].en)
+      for (let i = 0; i < 6; i++) await T(page, 'pwp-next').click()
+      await waitStep(page, 'end')
+      await T(page, 'pwp-skip').click()
+      await waitStep(page, 'summary')
+      await T(page, 'pwp-other-set').click()
+      await waitStep(page, 'pick')
+    }
+    r.check(`${name} (s1) 연습만 하고 "건너뛰고 끝내기" → 요약(연습을 마쳤어요, 점수 없음)`, true)
   }, { studentId: TESTER_ONLY })
 
-  // ---- (b) 일부러 오답 → 복습 → 다시 하기 ----
-  await scenario('(b) 오답 복습', { width: 1280, height: 800 }, async ({ page, name }) => {
-    await openFood(page)
-    const S = await pickSet(page, 'food')
-    await toQuiz(page)
-    const wrongWords = []
-    for (let q = 0; q < 6; q++) {
-      const bad = q < 2
-      await answer(page, bad ? wrongIdx(S.quiz[q]) : correctIdx(S.quiz[q]))
-      const res = await T(page, 'pwp-feedback').getAttribute('data-result')
-      r.check(`${name} 문제 ${q + 1} ${bad ? '오답' : '정답'} → data-result=${bad ? 'wrong' : 'right'}`, res === (bad ? 'wrong' : 'right'), res)
-      if (bad) wrongWords.push(S.words[q])
-      await T(page, 'pwp-next').click()
-    }
-    await waitStep(page, 'review')
-    let round = 0
-    for (let k = 0; k < 2; k++) {
-      const w = wrongWords[k]
-      await T(page, 'pwp-review-card').waitFor({ state: 'visible', timeout: 5000 })
-      const cardText = (await T(page, 'pwp-review-card').textContent()) || ''
-      r.check(`${name} 복습 카드 ${k + 1}: 틀린 단어 ${w.en}를 먼저 보여줌`, (await T(page, 'pwp-word').textContent()) === w.en && cardText.includes(w.ko))
-      await T(page, 'pwp-next').click() // 문제 풀기
-      const rq = buildQuiz([w], POOL, S.seed + 7919 * (round + 1))[0]
-      await answer(page, correctIdx(rq))
-      r.check(`${name} 복습 문제 ${k + 1} 정답 처리`, (await T(page, 'pwp-feedback').getAttribute('data-result')) === 'right')
-      await T(page, 'pwp-next').click()
-      round++
-    }
-    // 마지막 복습 문제를 맞히면 "모두 맞혔어요" 카드가 한 번 나온다(앱 의도) → 결과 보기
-    await T(page, 'pwp-review-card').waitFor({ state: 'visible', timeout: 5000 })
-    r.check(`${name} 복습을 모두 마치면 완료 카드`, (await T(page, 'pwp-review-card').getAttribute('data-kind')) === 'clear')
-    await T(page, 'pwp-next').click()
-    await waitStep(page, 'summary')
-    r.check(`${name} 요약: 처음에 4 / 6`, ((await T(page, 'pwp-summary-first-try').textContent()) || '').replace(/\s/g, '') === '4/6')
-    const listed = await T(page, 'pwp-summary-review').allTextContents()
-    r.check(`${name} 요약에 복습한 단어 2개 나열`, listed.length === 2 && wrongWords.every((w) => listed.some((t) => t.includes(w.en))), JSON.stringify(listed))
-    const oldSeed = await attr(page, 'data-seed')
-    await T(page, 'pwp-again').click()
-    await waitStep(page, 'look')
-    r.check(`${name} 다시 하기 → 새 세션(그림 보기부터, 새 시드)`, (await attr(page, 'data-index')) === '0' && (await attr(page, 'data-seed')) !== oldSeed)
-  }, { studentId: TESTER_ONLY })
-
-  // ---- (c)(d)(e) 누출 / 듣기 / 마이크 없이 따라 말하기 ----
-  await scenario('(c)(d)(e) 누출·듣기·따라 말하기', { width: 1280, height: 800 }, async ({ page, name }) => {
-    await openFood(page)
-    const S = await pickSet(page, 'food')
-    await passStep(page, 'look', 6, 'listen')
-    // (d) 듣기
-    r.check(`${name} (d) 듣기 단계 진입만으로는 speak 0 (자동재생 없음)`, (await page.evaluate(() => window.__speak.length)) === 0)
+  // ---- (r1)(r2) PC: 카드 한 장에서 듣기 → 말하기 → 내 목소리 → 다시 말하기 → 다음 ----
+  await scenario('(r1)(r2) 카드 한 장 녹음', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    const S = await startSet(page, 'food', 'practice', 'card')
+    const card = T(page, 'pwp-card')
+    r.check(`${name} 카드: 그림·단어·뜻·듣기·녹음 버튼이 한 화면에 같이 보임 + 진행 "1 / 6"`, (await T(page, 'pwp-picture').isVisible()) && (await T(page, 'pwp-word').textContent()) === S.words[0].en && (await T(page, 'pwp-ko').textContent()) === S.words[0].ko && (await T(page, 'pwp-listen').isVisible()) && (await T(page, 'pwp-rec-record').isVisible()) && (await T(page, 'pwp-next').isVisible()) && ((await T(page, 'pwp-progress').textContent()) || '').replace(/\s/g, '') === '1/6' && (await card.getAttribute('data-word-index')) === '0')
+    r.check(`${name} 버튼 문구: 🔊 발음 듣기 / 🎤 따라 말하기 / ➡️ 다음 단어`, ((await T(page, 'pwp-listen').textContent()) || '').includes('🔊 발음 듣기') && ((await T(page, 'pwp-rec-record').textContent()) || '').includes('🎤 따라 말하기') && ((await T(page, 'pwp-next').textContent()) || '').includes('➡️ 다음 단어'))
+    r.check(`${name} 카드 진입만으로 speak 0(자동재생 없음) + 마이크 요청 0`, (await page.evaluate(() => window.__speak.length)) === 0 && (await page.evaluate(() => window.__micTracks.length)) === 0)
+    r.check(`${name} 그림이 실제로 로드됨(naturalWidth>0)`, await T(page, 'pwp-picture').evaluate((i) => i.complete && i.naturalWidth > 0))
+    // 듣기
     await T(page, 'pwp-listen').click()
     await page.waitForFunction(() => window.__speak.length >= 1, null, { timeout: 4000 }).catch(() => {})
-    const sp = await page.evaluate(() => window.__speak)
-    r.check(`${name} (d) 듣기 버튼 → speechSynthesis.speak(해당 단어)`, sp.length >= 1 && sp[sp.length - 1] === S.words[0].en, JSON.stringify(sp))
-    r.check(`${name} (d) 들었어요 표시`, ((await T(page, 'pwp-heard').textContent()) || '').includes('들었어요'))
-    await passStep(page, 'listen', 6, 'repeat')
-    // (e) 마이크 없이
-    r.check(`${name} (e) 녹음 영역(pwp-rec) + 다 말했어요 버튼 존재`, (await T(page, 'pwp-rec').count()) === 1 && (await T(page, 'pwp-said').count()) === 1)
-    await T(page, 'pwp-said').click()
-    r.check(`${name} (e) 다 말했어요 → 표시만 바뀜(판정 문구 없음)`, ((await T(page, 'pwp-said').textContent()) || '').includes('다 말했어요') && !/맞|틀|점수|잘했/.test((await T(page, 'pwp-rec').textContent()) || ''))
-    await passStep(page, 'repeat', 6, 'quiz')
-    // (c) 누출
-    for (const id of ['pwp-word', 'pwp-ko', 'pwp-listen', 'pwp-feedback', 'pwp-next']) {
-      if ((await T(page, id).count()) !== 0) r.check(`${name} (c) 답하기 전 ${id} 없음`, false, String(await T(page, id).count()))
-    }
-    r.check(`${name} (c) 답하기 전 pwp-word/ko/listen/feedback/next DOM 0개`, true)
-    r.check(`${name} (c) 그림 alt === "그림"`, (await T(page, 'pwp-picture').getAttribute('alt')) === '그림')
-    const leak = await page.evaluate((ans) => {
-      const root = document.querySelector('[data-testid="pwp-root"]')
-      const clone = root.cloneNode(true)
-      clone.querySelectorAll('[data-testid^="pwp-opt-"]').forEach((n) => n.remove())
-      const text = clone.textContent || ''
-      const attrs = [...root.querySelectorAll('*'), root].flatMap((el) => [...el.attributes].map((a) => a.name))
-      const optAttrs = [...document.querySelectorAll('[data-testid^="pwp-opt-"]')].flatMap((el) => [...el.attributes].map((a) => a.name))
-      return { hasEn: text.toLowerCase().includes(ans.en.toLowerCase()), hasKo: text.includes(ans.ko), badAttr: attrs.filter((n) => /correct|answer|right|result/i.test(n)), optAttrs }
-    }, S.words[0])
-    r.check(`${name} (c) 옵션을 뺀 화면 글에 정답 영어/뜻이 없음`, !leak.hasEn && !leak.hasKo, JSON.stringify(leak))
-    r.check(`${name} (c) correct/answer 계열 속성 0 + 옵션 속성은 testid/type/class뿐`, leak.badAttr.length === 0 && leak.optAttrs.every((n) => ['data-testid', 'type', 'class'].includes(n)), JSON.stringify(leak))
-    const optTexts = await page.locator('[data-testid^="pwp-opt-"]').allTextContents()
-    r.check(`${name} (c) 옵션 4개, 서로 다른 단어, 정답 1개 포함`, optTexts.length === 4 && new Set(optTexts.map((t) => t.toLowerCase())).size === 4 && optTexts.filter((t) => t === S.words[0].en).length === 1, JSON.stringify(optTexts))
-    const idxs = new Set(S.quiz.map(correctIdx))
-    r.check(`${name} (c) 정답 위치가 문제마다 고정이 아님`, idxs.size >= 2, [...idxs].join())
-    const sp2 = await page.evaluate(() => window.__speak.length)
-    r.check(`${name} (c) 답하기 전 퀴즈에서 소리 재생 없음`, sp2 === sp.length, `${sp2} vs ${sp.length}`)
+    const sp = await page.evaluate(() => ({ t: window.__speak, l: window.__speakLang }))
+    r.check(`${name} (r1) 듣기 → speechSynthesis.speak(해당 단어)`, sp.t.length >= 1 && sp.t[sp.t.length - 1] === S.words[0].en, JSON.stringify(sp))
+    r.check(`${name} (r1) 듣기 언어 en-GB(영국식)`, sp.l.length >= 1 && sp.l.every((l) => /en-GB/i.test(l)), JSON.stringify(sp.l))
+    // 녹음
+    r.check(`${name} (r1) 녹음 전: 재생/다시 말하기 버튼 없음`, (await T(page, 'pwp-rec-play').count()) === 0 && (await T(page, 'pwp-rec-retake').count()) === 0)
+    await T(page, 'pwp-rec-record').click()
+    await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} (r1) 녹음 중: "⏹ 녹음 끝내기" + 타이머 보임 + "녹음 중… n초" 표시`, ((await T(page, 'pwp-rec-stop').textContent()) || '').includes('⏹ 녹음 끝내기') && (await T(page, 'pwp-rec-timer').isVisible()) && /녹음 중… \d+초/.test((await T(page, 'pwp-rec-live').textContent()) || ''))
+    r.check(`${name} (r1) 녹음 중에도 듣기/다음은 눌림(막지 않음)`, (await T(page, 'pwp-next').isEnabled()) && (await T(page, 'pwp-listen').isEnabled()))
+    await sleep(1200)
+    await T(page, 'pwp-rec-stop').click()
+    await T(page, 'pwp-rec-play').waitFor({ state: 'visible', timeout: 8000 })
+    r.check(`${name} (r1) 끝내기 → "녹음 완료" 상태 + 타이머/끝내기 사라짐 + "말해 봤어요"`, (await recStatus(page)).includes('녹음 완료') && (await T(page, 'pwp-rec-stop').count()) === 0 && (await T(page, 'pwp-said-mark').count()) === 1, await recStatus(page))
+    const b1 = await blobInfo(page)
+    r.check(`${name} (r1) audio src가 blob: 이고 blob 크기 > 0`, b1.src.startsWith('blob:') && b1.size > 0, JSON.stringify(b1))
+    r.check(`${name} (r1) 문구: ▶️ 내 목소리 듣기 / 🔄 다시 말하기`, ((await T(page, 'pwp-rec-play').textContent()) || '').includes('▶️ 내 목소리 듣기') && ((await T(page, 'pwp-rec-retake').textContent()) || '').includes('🔄 다시 말하기'))
+    await T(page, 'pwp-rec-play').click()
+    const playing = await waitUntil(() => T(page, 'pwp-rec-audio').evaluate((a) => !a.paused), { timeout: 1500, interval: 40 })
+    const disabledWhile = playing ? await T(page, 'pwp-rec-play').isDisabled().catch(() => false) : false
+    r.check(`${name} (r1) 내 목소리 듣기 → 재생 중(audio.paused===false, 버튼 잠김)`, !!playing && disabledWhile, JSON.stringify({ playing, disabledWhile }))
+    const back = await waitUntil(async () => (await T(page, 'pwp-rec-play').isEnabled()) && (await recStatus(page)).includes('녹음 완료'), { timeout: 8000 })
+    r.check(`${name} (r1) 재생이 끝나면 다시 녹음 완료 상태로`, !!back, await recStatus(page))
+    await T(page, 'pwp-rec-retake').click()
+    r.check(`${name} (r1) 다시 말하기 → 이전 녹음 비워짐(src 없음, 재생 버튼 없음)`, (await audioSrc(page)) === '' && (await T(page, 'pwp-rec-play').count()) === 0)
+    await recordOnce(page)
+    const b2 = await blobInfo(page)
+    r.check(`${name} (r1) 다시 녹음 → 새 blob URL(이전과 다름) + 크기 > 0`, b2.src.startsWith('blob:') && b2.src !== b1.src && b2.size > 0, JSON.stringify({ b1: b1.src, b2: b2.src }))
+    r.check(`${name} 판정 문구 없음(점수·맞았어요·틀렸어요 등)`, !/점수|정확|맞았|틀렸|잘했/.test((await T(page, 'pwp-rec').textContent()) || ''))
+    // (r2) 다음 단어
+    await T(page, 'pwp-next').click()
+    r.check(`${name} (r2) 다음 단어 → 2번째 단어 + 진행 "2 / 6"`, (await T(page, 'pwp-word').textContent()) === S.words[1].en && (await T(page, 'pwp-card').getAttribute('data-word-index')) === '1' && ((await T(page, 'pwp-progress').textContent()) || '').replace(/\s/g, '') === '2/6')
+    r.check(`${name} (r2) 녹음기 초기화: 재생 버튼 없음 + src 없음 + 말해 봤어요 표시 없음 + 상태 비어 있음`, (await T(page, 'pwp-rec-play').count()) === 0 && (await audioSrc(page)) === '' && (await T(page, 'pwp-said-mark').count()) === 0 && (await recStatus(page)) === '')
+    await recordOnce(page)
+    const b3 = await blobInfo(page)
+    r.check(`${name} (r2) 2번째 단어에서도 녹음·재생 동작(새 blob)`, b3.src.startsWith('blob:') && b3.src !== b2.src && b3.size > 0)
+    await T(page, 'pwp-rec-play').click()
+    await waitUntil(async () => (await T(page, 'pwp-rec-play').isEnabled()) && (await recStatus(page)).includes('녹음 완료'), { timeout: 8000 })
+    await T(page, 'pwp-next').click()
+    r.check(`${name} (r2) 3번째 단어: 녹음기 초기화`, (await T(page, 'pwp-word').textContent()) === S.words[2].en && (await T(page, 'pwp-rec-play').count()) === 0 && (await audioSrc(page)) === '')
+    await recordOnce(page)
+    r.check(`${name} (r2) 3번째 단어에서도 녹음 완료`, (await recStatus(page)).includes('녹음 완료') && (await blobInfo(page)).size > 0)
+    // 녹음 중에 넘겨도 그 녹음이 다음 단어로 따라오거나 "말해 봤어요"로 세지지 않는다(아직 말한 적 없는 4번째 단어로 확인)
+    await T(page, 'pwp-next').click()
+    r.check(`${name} 4번째 단어: 깨끗한 카드`, (await T(page, 'pwp-card').getAttribute('data-word-index')) === '3' && (await T(page, 'pwp-said-mark').count()) === 0)
+    await T(page, 'pwp-rec-record').click()
+    await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
+    await sleep(700)
+    await T(page, 'pwp-next').click() // 녹음 중 넘기기
+    const settled = await waitUntil(async () => (await T(page, 'pwp-card').getAttribute('data-word-index')) === '4' && (await T(page, 'pwp-rec-stop').count()) === 0 && (await T(page, 'pwp-rec-play').count()) === 0 && (await audioSrc(page)) === '' && (await T(page, 'pwp-said-mark').count()) === 0, { timeout: 5000 })
+    await sleep(400)
+    r.check(`${name} 녹음 중 다음 단어 → 멈춘 뒤 버려져 다음 카드는 깨끗함(녹음/말해 봤어요 안 따라옴)`, !!settled && (await T(page, 'pwp-rec-play').count()) === 0 && (await T(page, 'pwp-said-mark').count()) === 0, JSON.stringify({ idx: await T(page, 'pwp-card').getAttribute('data-word-index'), src: await audioSrc(page) }))
+    await T(page, 'pwp-prev').click()
+    r.check(`${name} 버려진 단어로 돌아가도 녹음·"말해 봤어요" 없음`, (await T(page, 'pwp-card').getAttribute('data-word-index')) === '3' && (await T(page, 'pwp-rec-play').count()) === 0 && (await T(page, 'pwp-said-mark').count()) === 0)
+    for (let i = 3; i < 6; i++) await T(page, 'pwp-next').click()
+    await waitStep(page, 'end')
+    r.check(`${name} 6번째 단어 다음 → "다음은 게임!" 카드(알파벳 망치로/숨은 글자로/시험 보기/건너뛰고 끝내기)`, ((await T(page, 'pwp-end').textContent()) || '').includes('다음은 게임!') && ((await T(page, 'pwp-game-hammer').textContent()) || '').includes('알파벳 망치로') && ((await T(page, 'pwp-game-hidden').textContent()) || '').includes('숨은 글자로') && ((await T(page, 'pwp-go-test').textContent()) || '').includes('시험 보기') && ((await T(page, 'pwp-skip').textContent()) || '').includes('건너뛰고 끝내기'))
+    const tracksEnded = await waitUntil(() => page.evaluate(() => window.__micTracks.length > 0 && window.__micTracks.every((t) => t.readyState === 'ended')), { timeout: 5000 })
+    r.check(`${name} 카드 묶음을 떠나면 마이크 트랙 종료`, !!tracksEnded)
   }, { studentId: TESTER_ONLY })
 
-  // ---- (f) 360x640 ----
-  await scenario('(f) 모바일 레이아웃', { width: 360, height: 640 }, async ({ page, name }) => {
+  // ---- (r3) 마이크 거부 ----
+  await scenario('(r3) 마이크 거부', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    const S = await startSet(page, 'food', 'practice', 'card')
+    await T(page, 'pwp-rec-record').click()
+    const shown = await waitUntil(async () => (await recStatus(page)) === SPEAKING_MESSAGES.denied, { timeout: 8000 })
+    r.check(`${name} (r3) 거부 → 기존 한글 안내("${SPEAKING_MESSAGES.denied}")`, !!shown, await recStatus(page))
+    r.check(`${name} (r3) 다시 말하기 버튼 있음 + 카드 그대로(그림·단어)`, (await T(page, 'pwp-rec-retake').isVisible()) && (await T(page, 'pwp-word').textContent()) === S.words[0].en)
+    await T(page, 'pwp-listen').click()
+    await page.waitForFunction(() => window.__speak.length >= 1, null, { timeout: 4000 }).catch(() => {})
+    r.check(`${name} (r3) 오류 상태에서도 듣기 동작`, (await page.evaluate(() => window.__speak)).includes(S.words[0].en))
+    await T(page, 'pwp-rec-retake').click()
+    r.check(`${name} (r3) 다시 말하기 → 다시 시도 가능(녹음 버튼 복귀)`, await T(page, 'pwp-rec-record').isVisible())
+    await T(page, 'pwp-rec-record').click()
+    await waitUntil(async () => (await recStatus(page)) === SPEAKING_MESSAGES.denied, { timeout: 8000 })
+    await T(page, 'pwp-next').click()
+    r.check(`${name} (r3) 오류 상태에서도 다음 단어로 이동 + 깨끗한 카드`, (await T(page, 'pwp-word').textContent()) === S.words[1].en && (await recStatus(page)) === '' && (await T(page, 'pwp-rec-record').isVisible()))
+    await T(page, 'pwp-listen').click()
+    r.check(`${name} (r3) 다음 단어에서도 듣기 동작`, !!(await waitUntil(async () => (await page.evaluate(() => window.__speak)).includes(S.words[1].en), { timeout: 4000 })))
+    r.check(`${name} (r3) 마이크 스트림 0(거부)`, (await page.evaluate(() => window.__micTracks.length)) === 0)
+  }, { studentId: TESTER_ONLY, mic: 'denied' })
+
+  // ---- (r5) 모바일 터치: 카드 한 장 사용성 ----
+  await scenario('(r5) 모바일 터치 카드', { width: 360, height: 640 }, async ({ page, name }) => {
     const covered = async (id) => {
       const loc = T(page, id)
       await loc.scrollIntoViewIfNeeded()
       return loc.evaluate((el) => { const b = el.getBoundingClientRect(); const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return !(top === el || el.contains(top)) })
     }
-    const small = async () => page.locator('button:visible').evaluateAll((l) => l.filter((b) => b.getBoundingClientRect().height < 43.9).length)
+    const small = () => page.locator('button:visible').evaluateAll((l) => l.filter((b) => b.getBoundingClientRect().height < 43.9).length)
     await T(page, 'dash-picture-words').waitFor({ state: 'visible', timeout: 20000 })
     r.check(`${name} 대시보드 가로 넘침 0`, (await overflow(page)) <= 0, String(await overflow(page)))
     await T(page, 'dash-picture-words').click()
     await T(page, 'pwp-root').waitFor({ state: 'visible' })
     r.check(`${name} 묶음 선택 가로 넘침 0 / 작은 버튼 0`, (await overflow(page)) <= 0 && (await small()) === 0, `${await overflow(page)}/${await small()}`)
-    const S = await pickSet(page, 'food')
-    for (const step of ['look', 'listen', 'repeat']) {
-      for (let i = 0; i < 6; i++) {
-        const o = await overflow(page), c = await covered('pwp-next'), sm = await small()
-        if (o > 0 || c || sm) r.check(`${name} ${step} #${i} 넘침 ${o} / 다음 가림 ${c} / 작은 버튼 ${sm}`, false)
-        await T(page, 'pwp-next').click()
+    const S = await startSet(page, 'food', 'practice', 'card')
+    for (let i = 0; i < 6; i++) {
+      const o = await overflow(page), c = await covered('pwp-next'), sm = await small()
+      if (o > 0 || c || sm) r.check(`${name} 카드 #${i} 넘침 ${o} / 다음 가림 ${c} / 작은 버튼 ${sm}`, false)
+      if (i === 0) {
+        const ids = ['pwp-picture', 'pwp-word', 'pwp-ko', 'pwp-listen', 'pwp-rec-record', 'pwp-next']
+        let ok = true
+        for (const id of ids) if (!(await T(page, id).count())) ok = false
+        r.check(`${name} (r5) 그림·단어·뜻·듣기·녹음·다음이 한 카드에 모두 있음(스크롤로 도달 가능)`, ok)
+        await tap(page, T(page, 'pwp-listen'))
+        await page.waitForFunction((en) => window.__speak.includes(en), S.words[0].en, { timeout: 4000 }).catch(() => {})
+        r.check(`${name} (r5) 터치로 듣기`, (await page.evaluate(() => window.__speak)).includes(S.words[0].en))
+        await tap(page, T(page, 'pwp-rec-record'))
+        await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
+        r.check(`${name} (r5) 터치로 녹음 시작 → 녹음 중 표시, 넘침 0`, /녹음 중…/.test((await T(page, 'pwp-rec-live').textContent()) || '') && (await overflow(page)) <= 0)
+        await sleep(1100)
+        await tap(page, T(page, 'pwp-rec-stop'))
+        await T(page, 'pwp-rec-play').waitFor({ state: 'visible', timeout: 8000 })
+        r.check(`${name} (r5) 터치로 끝내기 → 녹음 완료, 버튼 3개(내 목소리 듣기/다시 말하기/따라 말하기)가 넘침 없이 보임`, (await recStatus(page)).includes('녹음 완료') && (await overflow(page)) <= 0 && (await small()) === 0, `${await overflow(page)}/${await small()}`)
+        await tap(page, T(page, 'pwp-rec-play'))
+        r.check(`${name} (r5) 터치로 내 목소리 듣기 → 재생 후 복귀`, !!(await waitUntil(async () => (await T(page, 'pwp-rec-play').isEnabled()) && (await recStatus(page)).includes('녹음 완료'), { timeout: 8000 })))
+        await tap(page, T(page, 'pwp-rec-retake'))
+        r.check(`${name} (r5) 터치로 다시 말하기 → 이전 녹음 비워짐`, (await audioSrc(page)) === '' && (await T(page, 'pwp-rec-play').count()) === 0)
       }
-      await waitStep(page, { look: 'listen', listen: 'repeat', repeat: 'quiz' }[step])
+      await tap(page, T(page, 'pwp-next'))
     }
-    r.check(`${name} 그림 보기/듣기/따라 말하기 6단어씩: 가로 넘침 0, 다음 버튼 가림 0, 작은 버튼 0`, true)
-    const o0 = await overflow(page)
+    await waitStep(page, 'end')
+    r.check(`${name} 6장 모두 가로 넘침 0, 다음 버튼 가림 0, 작은 버튼 0 → 끝 카드`, (await overflow(page)) <= 0 && (await small()) === 0)
+  }, { studentId: TESTER_ONLY, hasTouch: true })
+
+  // ---- (t1) 시험 모드: 그림만 → 오답 → 복습(연습 카드 + 녹음기) → 요약 ----
+  await scenario('(t1) 시험 모드', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    const S = await startSet(page, 'food', 'test', 'quiz')
+    r.check(`${name} (t1) 시험은 바로 문제부터(data-mode=test, 카드 없음)`, (await attr(page, 'data-mode')) === 'test' && (await T(page, 'pwp-card').count()) === 0)
+    const leakCheck = async (w, q) => {
+      for (const id of ['pwp-word', 'pwp-ko', 'pwp-listen', 'pwp-feedback', 'pwp-next', 'pwp-rec', 'pwp-rec-record', 'pwp-rec-audio', 'pwp-card']) if ((await T(page, id).count()) !== 0) return `${id} 있음`
+      if ((await T(page, 'pwp-picture').getAttribute('alt')) !== '그림') return 'alt'
+      const leak = await page.evaluate((ans) => {
+        const clone = document.querySelector('[data-testid="pwp-root"]').cloneNode(true)
+        clone.querySelectorAll('[data-testid^="pwp-opt-"]').forEach((n) => n.remove())
+        const t = clone.textContent || ''
+        const attrs = [...clone.querySelectorAll('*'), clone].flatMap((el) => [...el.attributes].map((a) => a.name))
+        return { en: t.toLowerCase().includes(ans.en.toLowerCase()), ko: t.includes(ans.ko), badAttr: attrs.filter((n) => /correct|answer|right|result/i.test(n)) }
+      }, w)
+      return leak.en || leak.ko || leak.badAttr.length ? JSON.stringify(leak) : ''
+    }
+    const rm = (await leakCheck(S.words[0], S.quiz[0]))
+    r.check(`${name} (t1) 답하기 전: 단어·뜻·듣기·녹음기 DOM 0개, alt="그림", 화면 글에 정답 없음`, rm === '', rm)
+    const optTexts = await page.locator('[data-testid^="pwp-opt-"]').allTextContents()
+    r.check(`${name} (t1) 보기 4개(서로 다른 단어, 정답 1개 포함) + 위치 속성에 정답 힌트 없음`, optTexts.length === 4 && new Set(optTexts.map(lc)).size === 4 && optTexts.filter((t) => t === S.words[0].en).length === 1)
     await answer(page, wrongIdx(S.quiz[0]))
-    const o1 = await overflow(page), c1 = await covered('pwp-next'), sm1 = await small()
-    r.check(`${name} 퀴즈(답한 뒤): 넘침 0 / 다음 가림 0 / 작은 버튼 0 (답 전 넘침 ${o0})`, o0 <= 0 && o1 <= 0 && !c1 && sm1 === 0, `${o1}/${c1}/${sm1}`)
+    r.check(`${name} (t1) 오답 후: 틀림 표시 + 단어·뜻·🔊 발음 듣기 보임`, (await T(page, 'pwp-feedback').getAttribute('data-result')) === 'wrong' && (await T(page, 'pwp-word').textContent()) === S.words[0].en && (await T(page, 'pwp-ko').textContent()) === S.words[0].ko && ((await T(page, 'pwp-listen').textContent()) || '').includes('🔊 발음 듣기') && (await T(page, 'pwp-rec-record').count()) === 0)
     await T(page, 'pwp-next').click()
-    for (let q = 1; q < 6; q++) { await answer(page, correctIdx(S.quiz[q])); await T(page, 'pwp-next').click() }
+    for (let q = 1; q < 6; q++) {
+      const lm = q === 1 ? await leakCheck(S.words[q], S.quiz[q]) : ''
+      if (lm) r.check(`${name} (t1) 문제 ${q + 1} 누출 없음`, false, lm)
+      await answer(page, correctIdx(S.quiz[q]))
+      await T(page, 'pwp-next').click()
+    }
     await waitStep(page, 'review')
-    const oc = await overflow(page), cc = await covered('pwp-next')
-    r.check(`${name} 복습 카드: 넘침 0 / 다음 가림 0`, oc <= 0 && !cc, `${oc}/${cc}`)
-    await T(page, 'pwp-next').click()
+    const rc = T(page, 'pwp-review-card')
+    r.check(`${name} (t1) 틀린 단어가 복습 목록에: 연습 카드(그림·단어·뜻·듣기·녹음기) 다시 나옴`, (await rc.getAttribute('data-kind')) === 'word' && (await T(page, 'pwp-card').count()) === 1 && (await T(page, 'pwp-word').textContent()) === S.words[0].en && (await T(page, 'pwp-listen').isVisible()) && (await T(page, 'pwp-rec-record').isVisible()))
+    await recordOnce(page, 900)
+    r.check(`${name} (t1) 복습 카드에서도 녹음·내 목소리 듣기 가능`, (await recStatus(page)).includes('녹음 완료') && (await blobInfo(page)).size > 0)
+    await T(page, 'pwp-next').click() // 문제 풀기
+    r.check(`${name} (t1) 복습 문제: 그림만(다시 단어/뜻/녹음기 숨김)`, (await T(page, 'pwp-word').count()) === 0 && (await T(page, 'pwp-rec-record').count()) === 0 && (await T(page, 'pwp-card').count()) === 0)
     await answer(page, correctIdx(buildQuiz([S.words[0]], POOL, S.seed + 7919)[0]))
+    r.check(`${name} (t1) 복습 문제 정답 처리`, (await T(page, 'pwp-feedback').getAttribute('data-result')) === 'right')
     await T(page, 'pwp-next').click()
     await T(page, 'pwp-review-card').waitFor({ state: 'visible', timeout: 5000 })
-    await T(page, 'pwp-next').click() // 결과 보기
+    r.check(`${name} (t1) 다 맞히면 "모두 맞혔어요" 카드`, (await T(page, 'pwp-review-card').getAttribute('data-kind')) === 'clear' && ((await T(page, 'pwp-review-card').textContent()) || '').includes('모두 맞혔어요'))
+    await T(page, 'pwp-next').click()
     await waitStep(page, 'summary')
-    r.check(`${name} 요약: 넘침 0 / 작은 버튼 0`, (await overflow(page)) <= 0 && (await small()) === 0)
+    r.check(`${name} (t1) 요약: 처음에 5 / 6, 복습한 단어 1개, 다시 하기/다른 묶음/나가기`, ((await T(page, 'pwp-summary-first-try').textContent()) || '').replace(/\s/g, '') === '5/6' && (await T(page, 'pwp-summary-review').count()) === 1 && ((await T(page, 'pwp-summary-review').textContent()) || '').includes(S.words[0].en) && (await T(page, 'pwp-again').count()) === 1 && (await T(page, 'pwp-other-set').count()) === 1 && (await T(page, 'pwp-exit').count()) === 1)
+    const oldSeed = await attr(page, 'data-seed')
+    await T(page, 'pwp-again').click()
+    await waitStep(page, 'quiz')
+    r.check(`${name} (t1) 다시 하기 → 새 시드의 새 시험`, (await attr(page, 'data-seed')) !== oldSeed && (await attr(page, 'data-mode')) === 'test')
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (f1) 한 번에 이어지는 흐름: 연습 6장 → 알파벳 망치 → 시험 → 복습 → 요약 ----
+  await scenario('(f1) 연습→게임→시험→복습', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    const S = await startSet(page, 'food', 'practice', 'card')
+    for (let i = 0; i < 6; i++) {
+      if ((await T(page, 'pwp-word').textContent()) !== S.words[i].en) r.check(`${name} (f1) 카드 ${i + 1} 단어`, false, `${await T(page, 'pwp-word').textContent()} vs ${S.words[i].en}`)
+      if (i === 2) await recordOnce(page, 900)
+      await T(page, 'pwp-next').click()
+    }
+    await waitStep(page, 'end')
+    r.check(`${name} (f1) 연습 6장 → "다음은 게임!"`, ((await T(page, 'pwp-end').textContent()) || '').includes('다음은 게임!'))
+    await T(page, 'pwp-game-hammer').click()
+    await T(page, 'pwh-root').waitFor({ state: 'visible', timeout: 20000 })
+    r.check(`${name} (f1) 게임에도 그만하기(pwg-quit)가 있음`, (await T(page, 'pwg-quit').count()) === 1)
+    const played = await playHammerAll(page)
+    const ids = new Set(S.words.map((w) => w.id))
+    r.check(`${name} (f1) 알파벳 망치가 같은 세션 단어로 진행(${played.length}개, 모두 세션 단어)`, played.length >= 1 && played.every((w) => ids.has(w.id)) && played.length === S.words.length, played.map((w) => w.en).join())
+    await T(page, 'pwg-summary').waitFor({ state: 'visible', timeout: 5000 })
+    r.check(`${name} (f1) 게임 끝 → "시험 보기" 버튼`, ((await T(page, 'pwg-to-test').textContent()) || '').includes('시험 보기'))
+    await T(page, 'pwg-to-test').click()
+    await waitStep(page, 'quiz')
+    const seed = Number(await attr(page, 'data-seed'))
+    const words = buildSession(S.words, { size: 6, seed }) // 시험은 연습 세션 단어(from)로 출제
+    const quiz = buildQuiz(words, POOL, seed)
+    r.check(`${name} (f1) 시험(data-mode=test): 게임에서 한 단어들로 출제, 그림만`, (await attr(page, 'data-mode')) === 'test' && (await T(page, 'pwp-word').count()) === 0 && words.length === S.words.length)
+    for (let q = 0; q < words.length; q++) {
+      await answer(page, q === 0 ? wrongIdx(quiz[q]) : correctIdx(quiz[q]))
+      await T(page, 'pwp-next').click()
+    }
+    await waitStep(page, 'review')
+    r.check(`${name} (f1) 복습: 틀린 단어의 연습 카드(녹음기 포함)`, (await T(page, 'pwp-card').count()) === 1 && (await T(page, 'pwp-word').textContent()) === words[0].en && (await T(page, 'pwp-rec-record').isVisible()))
+    await T(page, 'pwp-next').click()
+    await answer(page, correctIdx(buildQuiz([words[0]], POOL, seed + 7919)[0]))
+    await T(page, 'pwp-next').click()
+    await T(page, 'pwp-review-card').waitFor({ state: 'visible', timeout: 5000 })
+    await T(page, 'pwp-next').click()
+    await waitStep(page, 'summary')
+    r.check(`${name} (f1) 요약: 처음에 ${words.length - 1} / ${words.length}`, ((await T(page, 'pwp-summary-first-try').textContent()) || '').replace(/\s/g, '') === `${words.length - 1}/${words.length}`)
+    await T(page, 'pwp-exit').click()
+    await T(page, 'dash-picture-words').waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} (f1) 나가기 → 대시보드 복귀`, (await T(page, 'pwp-root').count()) === 0)
   }, { studentId: TESTER_ONLY })
 
   // ---- (g) 진입 제한 / 홈 메뉴 진입 ----

@@ -188,7 +188,7 @@ export async function run(browser, baseURL) {
       await T(page, 'pwh-next').click()
     }
     await T(page, 'pwg-summary').waitFor({ state: 'visible', timeout: 5000 })
-    r.check(`${name} 6단어 서로 다름 + 요약 표시(처음에 맞힌 단어 수) 버튼 4개`, new Set(seen.map((x) => x.id)).size === 6 && ((await T(page, 'pwg-first-try').textContent()) || '').replace(/\s/g, '') === '5/6' && (await T(page, 'pwg-again').count()) + (await T(page, 'pwg-other').count()) + (await T(page, 'pwg-to-practice').count()) + (await T(page, 'pwg-exit').count()) === 4, await T(page, 'pwg-summary').innerText())
+    r.check(`${name} 6단어 서로 다름 + 요약 표시(처음에 맞힌 단어 수) 버튼 5개(시험 보기 포함)`, new Set(seen.map((x) => x.id)).size === 6 && ((await T(page, 'pwg-first-try').textContent()) || '').replace(/\s/g, '') === '5/6' && (await T(page, 'pwg-again').count()) + (await T(page, 'pwg-other').count()) + (await T(page, 'pwg-to-practice').count()) + (await T(page, 'pwg-to-test').count()) + (await T(page, 'pwg-exit').count()) === 5, await T(page, 'pwg-summary').innerText())
     await T(page, 'pwg-exit').click()
     await T(page, 'dash-picture-words').waitFor({ state: 'visible', timeout: 10000 })
     r.check(`${name} 나가기 → 대시보드`, (await T(page, 'pwp-root').count()) === 0)
@@ -250,26 +250,15 @@ export async function run(browser, baseURL) {
   // ---- (c) 연결 진입: 연습 세션 → 이 단어로 알파벳 망치 ----
   await scenario('(c) 연결 진입', { width: 1280, height: 800 }, async ({ page, name }) => {
     await openScreen(page)
-    await T(page, 'pwp-set-food').click()
+    await T(page, 'pwp-start-practice-food').click()
     await T(page, 'pwp-root').waitFor({ state: 'visible' })
     const seed = Number(await T(page, 'pwp-root').getAttribute('data-seed'))
     const food = SETS.find((s) => s.shop === 'food')
     const words = buildSession(food.words, { size: 6, seed })
-    const quiz = buildQuiz(words, POOL, seed)
     const step = async (s) => page.waitForFunction((x) => document.querySelector('[data-testid="pwp-root"]')?.getAttribute('data-step') === x, s, { timeout: 10000 })
-    for (const [, nxt] of [['look', 'listen'], ['listen', 'repeat'], ['repeat', 'quiz']]) {
-      for (let i = 0; i < 6; i++) await T(page, 'pwp-next').click()
-      await step(nxt)
-    }
-    for (let q = 0; q < 6; q++) {
-      await T(page, `pwp-opt-${quiz[q].options.findIndex((o) => o.id === quiz[q].correctId)}`).click()
-      await T(page, 'pwp-feedback').waitFor({ state: 'visible', timeout: 5000 })
-      await T(page, 'pwp-next').click()
-    }
-    await step('review')
-    await T(page, 'pwp-next').click()
-    await step('summary')
-    r.check(`${name} 요약에 "이 단어로 알파벳 망치/숨은 글자" 버튼`, ((await T(page, 'pwp-game-hammer').textContent()) || '').includes('이 단어로 알파벳 망치') && ((await T(page, 'pwp-game-hidden').textContent()) || '').includes('이 단어로 숨은 글자'))
+    for (let i = 0; i < 6; i++) await T(page, 'pwp-next').click()
+    await step('end')
+    r.check(`${name} 연습 끝 카드에 "알파벳 망치로/숨은 글자로" 버튼`, ((await T(page, 'pwp-game-hammer').textContent()) || '').includes('알파벳 망치로') && ((await T(page, 'pwp-game-hidden').textContent()) || '').includes('숨은 글자로'))
     await T(page, 'pwp-game-hammer').click()
     await T(page, 'pwh-root').waitFor({ state: 'visible', timeout: 20000 })
     const ids = new Set(words.map((x) => x.id))

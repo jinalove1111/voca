@@ -4,7 +4,7 @@
   "task_id": "picture-words-voice-2026-10-11",
   "task": "251차 그림 단어: 카드 한 장 듣기→말하기→내 목소리 듣기, 연습/시험 분리, 게임 연결",
   "status": "working",
-  "progress": 55,
+  "progress": 85,
   "started_at": "2026-10-11T01:00:00+09:00",
   "updated_at": "2026-10-11T12:00:00+09:00",
   "files_owned": [
@@ -44,9 +44,9 @@
     "tests/e2e/pictureWordGames.spec.mjs",
     "src/components/pictureWords/recLabels.js"
   ],
-  "summary": "251 stage 3: game end offers test",
+  "summary": "251 stage 4: browser specs (practice 106/0, games 68/0)",
   "blocker": null,
-  "next_action": "specs, docs",
+  "next_action": "docs",
   "stages_done": [
     "1 levels+games.js+tests+registry",
     "2 AlphabetHammer",
@@ -57,6 +57,7 @@
     "7 docs",
     "fix round: hammer fly animation, bigger tiles (spec 68/0)",
     "251 stage 2: practice card + recorder, test mode, review, set picker",
-    "251 stage 3: game end offers test"
+    "251 stage 3: game end offers test",
+    "251 stage 4: browser specs (practice 106/0, games 68/0)"
   ]
 }
