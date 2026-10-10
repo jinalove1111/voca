@@ -2,12 +2,14 @@
 // 영어 단어는 완성하기 전에는 DOM에 없다(조건부 마운트). 그림 alt는 중립 "그림".
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { hammerRound, hammerStart, hammerTap } from '../../utils/pictureWords/games.js'
-import { GamePicture, playEn, useReducedMotion } from './pictureImg.jsx'
+import { playSfx } from '../../utils/pictureWords/sfx.js'
+import { GamePicture, PwProgress, playEn, useReducedMotion } from './pictureImg.jsx'
+import { Sparkles, useSuccessThenSpeak } from './gameFx.jsx'
 
 const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-xl btn-press disabled:opacity-40'
 
 // 맞은 글자가 타일 자리에서 칸으로 날아간다(FLIP: 타일/칸 rect를 재서 transform 전환). 순수 장식 — 상태는 이미 갱신돼 있다.
-const SWING_MS = 150, FLY_MS = 280
+const SWING_MS = 120, FLY_MS = 180 // the tile hops (CSS pw-hop) while the hammer swings, then travels: 300 ms in total
 function Fly({ ch, dx, dy, from, onEnd }) {
   const [go, setGo] = useState(false)
   useEffect(() => {
@@ -17,7 +19,7 @@ function Fly({ ch, dx, dy, from, onEnd }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <span data-testid="pwh-fly" style={{ position: 'fixed', left: from.x, top: from.y, width: from.w, height: from.h, zIndex: 50, pointerEvents: 'none', transition: `transform ${FLY_MS}ms ease-out`, transform: go ? `translate(${dx}px, ${dy}px)` : 'none' }}
-      className="flex items-center justify-center rounded-2xl border-2 border-green-400 bg-green-50 text-3xl font-black text-gray-900">{ch}</span>
+      className="flex items-center justify-center rounded-2xl border-2 border-green-400 bg-green-50 text-3xl font-black text-gray-900"><span className="pw-hop">{ch}</span></span>
   )
 }
 
@@ -26,36 +28,51 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
   const [st, setSt] = useState(() => hammerStart(round))
   const [fx, setFx] = useState(null) // { id, ok } — 방금 두드린 타일(효과용)
   const [flies, setFlies] = useState([]) // 날아가는 글자들 { key, ch, cell, from, dx, dy }
+  const [celebrate, setCelebrate] = useState(false) // 완성 직후 0.6초: 반짝이 + 카드 테두리 빛
+  const stRef = useRef(st) // 탭마다 한 번만 처리: 상태의 진실은 ref(동기) + state(그리기)
+  const { finish, cancel } = useSuccessThenSpeak()
   const slotRefs = useRef({})
   const flyKey = useRef(0)
   const reduced = useReducedMotion()
 
   useEffect(() => {
     if (!fx) return undefined
-    const t = setTimeout(() => setFx(null), 450)
+    const t = setTimeout(() => setFx(null), 300)
     return () => clearTimeout(t)
   }, [fx])
 
+  useEffect(() => {
+    if (!celebrate) return undefined
+    const t = setTimeout(() => setCelebrate(false), 600)
+    return () => clearTimeout(t)
+  }, [celebrate])
+
   const tap = (tile, el) => {
-    if (st.done || st.usedTileIds.includes(tile.id)) return
-    const next = hammerTap(st, tile.id)
+    const cur = stRef.current
+    if (cur.done || cur.usedTileIds.includes(tile.id)) return
+    const next = hammerTap(cur, tile.id)
+    stRef.current = next
     setSt(next)
+    if (next.done) { playSfx('tap'); if (!reduced) setCelebrate(true) } else playSfx(next.last === 'right' ? 'right' : 'wrong')
     if (!reduced) setFx({ id: tile.id, ok: next.last === 'right' })
     if (!reduced && next.last === 'right' && el) {
       // 이번에 채워질 칸 = 글자 칸 중 st.placed 번째
-      const cell = round.cells.map((c, i) => (c.playable ? i : -1)).filter((i) => i >= 0)[st.placed]
+      const cell = round.cells.map((c, i) => (c.playable ? i : -1)).filter((i) => i >= 0)[cur.placed]
       const to = slotRefs.current[cell]?.getBoundingClientRect()
       const b = el.getBoundingClientRect()
       if (to) setFlies((f) => [...f, { key: ++flyKey.current, ch: tile.ch, cell, from: { x: b.left, y: b.top, w: b.width, h: b.height }, dx: to.left + (to.width - b.width) / 2 - b.left, dy: to.top + (to.height - b.height) / 2 - b.top }])
     }
-    if (next.done) playEn(word.en) // 사용자 탭 직후라 자동재생 정책에 걸리지 않는다
+    if (next.done) finish(word.en) // 성공음 → 영국식 발음(겹치지 않게). 사용자 탭에서 시작된다
   }
 
   let k = 0 // 채워야 할 글자 칸의 순번
   return (
     <div data-testid="pwh-root" data-index={index} data-done={st.done ? 'true' : 'false'} className="space-y-3">
-      <p className="text-center text-sm font-black text-purple-700">알파벳 망치 · {index + 1} / {total}</p>
-      <GamePicture word={word} testid="pwh-picture" />
+      <PwProgress testid="pwh-progress" label="알파벳 망치 ·" n={index + 1} total={total} />
+      <div className="relative">
+        <GamePicture word={word} testid="pwh-picture" glow={celebrate && !reduced} />
+        {celebrate && !reduced && <Sparkles />}
+      </div>
       <p data-testid="pwh-ko" className="text-center text-lg font-bold text-gray-700 break-words">{word.ko}</p>
       <button type="button" data-testid="pwh-listen" onClick={() => playEn(word.en)} className={`${BTN} w-full bg-sky-100 text-sky-700`}>🔊 듣기</button>
       <div className={`flex flex-wrap justify-center gap-1.5 ${st.done && !reduced ? 'pw-bounce' : ''}`}>
@@ -63,7 +80,7 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
           const filled = !c.playable || k++ < st.placed
           return (
             <span key={i} ref={(e) => { slotRefs.current[i] = e }} data-testid={`pwh-slot-${i}`} data-filled={filled ? 'true' : 'false'}
-              className={`pw-cell flex items-center justify-center rounded-xl border-2 text-3xl font-black ${c.playable ? (filled ? 'border-green-400 bg-green-50 text-gray-900' : 'border-dashed border-purple-300 bg-white') : 'border-transparent text-gray-500'}`}>
+              className={`pw-cell flex items-center justify-center rounded-xl text-3xl font-black ${c.playable ? (filled ? 'pw-slot-on pw-click' : 'pw-slot') : 'border-2 border-transparent text-gray-500'}`}>
               {filled && c.playable ? <span style={flies.some((f) => f.cell === i) ? { visibility: 'hidden' } : undefined}>{c.ch}</span> : filled ? c.ch : ''}
             </span>
           )
@@ -76,7 +93,7 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
           return (
             <span key={t.id} className="relative inline-block">
               <button type="button" data-testid={`pwh-tile-${i}`} data-used={used ? 'true' : 'false'} disabled={used || st.done} onClick={(e) => tap(t, e.currentTarget)}
-                className={`pw-cell pw-tile rounded-2xl px-3 text-3xl font-black btn-press disabled:opacity-40 border-2 border-purple-300 bg-white text-purple-700 ${used ? 'scale-75 opacity-30' : ''} ${shake ? 'pw-shake' : ''}`}>{t.ch}</button>
+                className={`pw-cell pw-tile pw-letter pw-c${i % 4} rounded-2xl px-3 text-3xl font-black btn-press disabled:opacity-40 ${used ? 'scale-75 opacity-30' : ''} ${shake ? 'pw-shake' : ''}`}>{t.ch}</button>
               {fx && fx.id === t.id && (
                 <span className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-3"><span data-testid="pwh-hammer" className="pw-swing block text-6xl leading-none">🔨</span></span>
               )}
@@ -93,7 +110,7 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
       {st.done && (
         <div className="space-y-2 text-center">
           <p data-testid="pwh-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
-          <button type="button" data-testid="pwh-next" onClick={() => onNext(st.wrong)} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
+          <button type="button" data-testid="pwh-next" onClick={() => { cancel(); onNext(st.wrong) }} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
         </div>
       )}
     </div>

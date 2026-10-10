@@ -6,6 +6,7 @@ import { GameStyle } from './pictureImg.jsx'
 import AlphabetHammer from './AlphabetHammer.jsx'
 import HiddenLetters from './HiddenLetters.jsx'
 import ShopShelf from './ShopShelf.jsx'
+import SfxControl from './SfxControl.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 const newSeed = () => Date.now() % 2147483647
@@ -52,6 +53,7 @@ function GameSession({ mode: first, level, from, onPractice, onTest, onMenu, onE
     : <HiddenLetters key={`${w.id}-${i}-${seed}-${difficulty}`} word={w} seed={wordSeed} difficulty={difficulty} onDifficulty={setDifficulty} index={i} total={words.length} onNext={next} />
   return (
     <div className="space-y-3">
+      <SfxControl />
       {round}
       <button type="button" data-testid="pwg-quit" onClick={onMenu} className={`${BTN} w-full bg-gray-200 text-sm text-gray-700`}>그만하기</button>
     </div>
