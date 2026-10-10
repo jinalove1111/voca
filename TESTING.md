@@ -2011,3 +2011,13 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - **360x640 결함·보정**: 선택 카드에서 다음 버튼이 떠 있는 속도 위젯에 일부 가려짐. 1차 `ff82e531`(카드 56vh, 루트 pb-28, g 시나리오에 "다음 하단 <= innerHeight-76" 단언) 후 재실행 705/3(360x640 레이아웃 단언 3건 실패) → 2차 `c47b1e10`(컴팩트 헤더, 카드 52vh).
 - **미검증 변경: `c47b1e10` 레이아웃 보정 — 산술상 537px <= 564px, 브라우저 재실행은 메모리 부족으로 미실행; 운영자/다음 세션이 RAM >=3GB에서 `[grammar]` 재실행 필요.** 그 재실행에서 g 시나리오 360x640 3건이 통과해야 이 항목이 닫힌다.
 - 브라우저는 RAM 게이트로 한 번에 1개. 전부 mock 기반, Vercel Preview 실화면(SSO)·실기기·교사 검수 미확인.
+
+### 239차 추가 (2026-10-10): 그림 상황 미션 시범 단원 — `[grammar-scene]` 신규 스펙, `[grammar]` h 갱신
+
+- **신규 `tests/e2e/grammarScene.spec.mjs` (`[grammar-scene]`, 커밋 `58767b3f`)**: 시나리오 a~l. 발견(탭 전 캡션·영어 문장 없음, Enter 후 캡션 + speak +1), 비교(두 칸의 그림·캡션 = 데이터, 🔊 각 +1), 선택(그림 개수 = 데이터, 다시 풀기, 정답 후 다음 활성), 만들기(나무 1·2·3그루 판정, 다시 놓기, 칸 잠금), 읽기(부분 짝 시 확인 비활성), 듣기(확인 전 영어 문장 없음), 말하기 시험(공개 전 모범 답·다른 표현이 DOM에 없음, 공개 뒤 자동 재생 없음), 마무리(can-do = 데이터), 이전/다음 왕복 시 답 복원, 360×640·1280 스크린샷.
+- **시나리오 d 재작성 (커밋 `e4e8edc6`)**: 틀·보기를 `buildFrame(scene, 0/1/2)`에서 도출. 0그루 = 활성 보기 없음, 1그루 = a/one/two/three + 심기 힌트, 'two' 오답 → 다시 풀기, 'a' 정답, 2그루 = 선택 초기화·힌트 없음. 제품 쪽은 만들기 카드의 "{name}를 {n}그루 심어 보세요." 실시간 안내. 정적만 확인(빌드 경고 0, 스위트 4종 PASS), 브라우저 미실행.
+- **`[grammar]` h**: 장면 단원(`g-easy-05`)은 일반 덱 순회에서 건너뜀(장면 경로는 `[grammar-scene]`이 담당).
+- **정적**: `testGrammarCourses`에 장면 핀 +15(`validateScene`, `layoutSentence`, `buildFrame` 0/1/2/3, 덱 15장, 다른 33단원 불변). 그 밖에 `testPilotUnit`, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/32(GrammarCourseScreen lazy 청크 147.1 KB raw / 42.1 KB gzip), `testRegistryCoverage`, `testStudentPathContracts` ALL PASS. 더미 env 빌드 경고 0.
+- **브라우저 미실행 (RAM <3GB)**: `[grammar-scene]` a~l 전체, `[grammar]` g 360×640 3건(`c47b1e10` 보정), 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]`. 구현자의 서버 렌더 스모크(모든 장면 카드 렌더, 확인/공개 전 영어 없음)만 확인됨. 스펙 자체가 한 번도 돌지 않았으므로 첫 실행의 실패는 스펙 오류일 수도 제품 결함일 수도 있다. 분류 후 갱신할 것.
+- **재실행**: 워크트리 루트, RAM ≥3GB, 한 번에 1개.
+  `VITE_SUPABASE_URL=https://dummy.supabase.co VITE_SUPABASE_ANON_KEY=dummy npm run build && npx vite preview --port 4193 --strictPort` 후 `node <scratchpad>/runOne.mjs grammarScene.spec.mjs` 등(또는 `npm run verify:e2e`).

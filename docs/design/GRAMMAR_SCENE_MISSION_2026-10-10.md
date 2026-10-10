@@ -22,15 +22,15 @@
 
 | # | 단계 | 학생 행동 | 화면 요소 | 답 확인 전 숨김 규칙 | 다음 잠금 규칙 | testid prefix | 정확한 id |
 |---|---|---|---|---|---|---|---|
-| 1 | 발견 (`discover`) | 공원 그림의 강아지를 누른다 | 공원 장면(강아지 1), 안내문, 누른 뒤 말풍선 `There is a dog.` + 한국어 + 🔊 | 누르기 전에는 영어 문장 숨김. 누르면 문장 표시와 TTS 1회 | 강아지를 한 번 눌러야 열림 | `scene-discover*` | [리드 기입] |
-| 2 | 비교 (`compare`) | 왼쪽(1마리)과 오른쪽(3마리) 그림과 문장을 견준다 | 두 장면 나란히(360px 폭에서는 위아래), 문장 2개, 설명 2줄 | 없음(설명 단계) | 항상 열림 | `scene-compare*` | [리드 기입] |
-| 3 | 선택 (`choose`) ×3 | 그림을 보고 빈칸에 `is`/`are` 고른다 | 장면 1개, 빈칸 문장, 보기 2개 | 정답 번호·이유는 고르기 전 비노출 | 보기를 고르면 열림. 틀리면 [다시 풀기] | `scene-choose*` | [리드 기입] |
-| 4 | 만들기 (`build`) | 나무 2그루를 공원 칸(4칸)에 놓는다. 끌어다 놓기, 또는 나무를 누른 뒤 칸을 누르기 | 나무 도구, 칸 4개, 빈칸 문장 `There are ___ trees.`, [확인] | 정답 문장은 [확인] 전 비노출. 판정은 **놓인 나무 수**로 한다 | [확인]을 누르면 열림. 2그루가 아니면 틀림 표시와 [다시 하기] | `scene-build*` | [리드 기입] |
-| 5 | 읽기 (`read`) | 문장 3개를 알맞은 그림 3개와 잇는다(문장 고르고 그림 누르기) | 문장 버튼, 그림 버튼, 연결 상태 | 정답 연결은 [확인] 전 비노출 | [확인] 후 열림 | `scene-read*` | [리드 기입] |
-| 6 | 듣기 (`listen`) ×2 | 소리를 듣고 맞는 그림을 고른다 | 🔊 버튼, 그림 보기 3개 | **영어 문장은 확인 전 숨김**. 확인 뒤에 문장과 이유 표시 | 그림을 고르면 열림. 틀리면 다시 풀기 | `scene-listen*` | [리드 기입] |
-| 7 | 말하기 (`speak`) | 내가 꾸민 공원을 보고 폴에게 한 문장으로 알린다 | 내 공원 그림, 상황 문구, 연습/시험 전환, 녹음 버튼(선택) | 연습: 모범 문장·모범 음성·힌트 표시. **시험: 영어 모범·음성·힌트를 [정답 보기] 전까지 숨김** | 연습은 [말해 봤어요]. 시험은 [말했어요] 후 [정답 보기]. 녹음은 필수 아님 | `scene-speak*` | [리드 기입] |
-| 8 | 쓰기 (`write`) | 내 공원에 있는 것을 한 문장으로 쓴다 | 내 공원 그림, 입력칸, [내 공원과 비교] | 예시 문장은 비교 전 비노출 | 비교를 누르면 열림. 정답은 여러 개 허용 | `scene-write*` | [리드 기입] |
-| 9 | 마무리 (`finish`) | can-do 두 줄을 읽고 폴의 반응을 본다 | can-do 목록, 폴 이미지(`paulHappy` 등), 폴 한마디, 단원 목록 버튼 | 없음 | 마지막 화면이라 다음 없음 | `scene-finish*` | [리드 기입] |
+| 1 | 발견 (`discover`) | 공원 그림의 강아지를 누른다 | 공원 장면(강아지 1), 안내문, 누른 뒤 말풍선 `There is a dog.` + 한국어 + 🔊 | 누르기 전에는 영어 문장 숨김. 누르면 문장 표시와 TTS 1회 | 강아지를 한 번 눌러야 열림 | `scene-discover*` | 카드 `scene-card-discover`, 강아지 `scene-obj-dog-0`(누르기), 말풍선 `scene-caption`, 🔊 `scene-caption-listen`. 안내 문구는 `gd-next-hint` |
+| 2 | 비교 (`compare`) | 왼쪽(1마리)과 오른쪽(3마리) 그림과 문장을 견준다 | 두 장면 나란히(360px 폭에서는 위아래), 문장 2개, 설명 2줄 | 없음(설명 단계) | 항상 열림 | `scene-compare*` | 카드 `scene-card-compare`, 칸 `scene-compare-0/1`, 문장 `scene-caption-0/1`, 🔊 `scene-listen-0/1` |
+| 3 | 선택 (`choose`) ×3 | 그림을 보고 빈칸에 `is`/`are` 고른다 | 장면 1개, 빈칸 문장, 보기 2개 | 정답 번호·이유는 고르기 전 비노출 | 보기를 고르면 열림. 틀리면 [다시 풀기] | `scene-choose*` | 카드 `scene-card-choose`, 틀 `scene-frame`, 보기 `scene-opt-0/1`, 확인 `scene-check`, 결과 `scene-result`(`data-ok`), 이유 `scene-why`, 다시 풀기 `scene-retry` |
+| 4 | 만들기 (`build`) | 나무 2그루를 공원 칸(4칸)에 놓는다. 끌어다 놓기, 또는 나무를 누른 뒤 칸을 누르기 | 나무 도구, 칸 4개, 빈칸 문장 `There are ___ trees.`, [확인] | 정답 문장은 [확인] 전 비노출. 판정은 **놓인 나무 수**로 한다 | [확인]을 누르면 열림. 2그루가 아니면 틀림 표시와 [다시 하기] | `scene-build*` | 카드 `scene-card-build`, 도구 `scene-tray-tree`, 칸 `scene-spot-0~3`, 개수 `scene-placed-count`, 다시 놓기 `scene-clear`, 틀 `scene-frame`, 숫자 보기 `scene-opt-j`, `scene-check`/`scene-result`/`scene-why`/`scene-retry`. 그림 `park-scene`의 `data-counts` |
+| 5 | 읽기 (`read`) | 문장 3개를 알맞은 그림 3개와 잇는다(문장 고르고 그림 누르기) | 문장 버튼, 그림 버튼, 연결 상태 | 정답 연결은 [확인] 전 비노출 | [확인] 후 열림 | `scene-read*` | 카드 `scene-card-read`, 문장 `scene-sent-i`(정답 표시 `data-ok`), 그림 `scene-pic-j`, `scene-check`/`scene-result`/`scene-why`/`scene-retry` |
+| 6 | 듣기 (`listen`) ×2 | 소리를 듣고 맞는 그림을 고른다 | 🔊 버튼, 그림 보기 3개 | **영어 문장은 확인 전 숨김**. 확인 뒤에 문장과 이유 표시 | 그림을 고르면 열림. 틀리면 다시 풀기 | `scene-listen*` | 카드 `scene-card-listen`, 재생 `scene-listen-play`, 그림 `scene-pic-j`, 확인 뒤에만 `scene-sentence`, `scene-check`/`scene-result`/`scene-why`/`scene-retry` |
+| 7 | 말하기 (`speak`) | 내가 꾸민 공원을 보고 폴에게 한 문장으로 알린다 | 내 공원 그림, 상황 문구, 연습/시험 전환, 녹음 버튼(선택) | 연습: 모범 문장·모범 음성·힌트 표시. **시험: 영어 모범·음성·힌트를 [정답 보기] 전까지 숨김** | 연습은 [말해 봤어요]. 시험은 [말했어요] 후 [정답 보기]. 녹음은 필수 아님 | `scene-speak*` | 카드 `scene-card-speak`(연습·시험은 별개 카드, `mode`). 연습: `scene-model`, `scene-model-listen`, `scene-said`. 시험: `scene-reveal`(버튼 문구 "모범 답 보기"), 공개 뒤 `scene-model`, `scene-alternatives`. 녹음 `scene-record` 외 공용 녹음기 |
+| 8 | 쓰기 (`write`) | 내 공원에 있는 것을 한 문장으로 쓴다 | 내 공원 그림, 입력칸, [내 공원과 비교] | 예시 문장은 비교 전 비노출 | 비교를 누르면 열림. 정답은 여러 개 허용 | `scene-write*` | 카드 `scene-card-write`, 입력 `scene-write-input`, 비교 `scene-write-compare`, 비교 뒤에만 `scene-write-example` |
+| 9 | 마무리 (`finish`) | can-do 두 줄을 읽고 폴의 반응을 본다 | can-do 목록, 폴 이미지(`paulHappy` 등), 폴 한마디, 단원 목록 버튼 | 없음 | 마지막 화면이라 다음 없음 | `scene-finish*` | 카드 `scene-card-finish`, 본문 `scene-finish`, can-do `scene-cando-i`, 폴 말풍선 `scene-paul-bubble` |
 
 공통 규칙
 - 이전/다음 이동 시 학생의 답(선택, 놓은 나무, 입력문, 연결)을 그대로 복원한다. 상태는 덱과 같은 단원별 ref 맵에 두고 저장소에는 쓰지 않는다.
@@ -234,21 +234,21 @@ CURRICULUM_STAGES §10.1·§11 기준으로 사실만 적는다.
 
 | # | 항목 | 확인 방법 | 결과 |
 |---|---|---|---|
-| 1 | 360×640 레이아웃 | 9단계 모두 가로 스크롤 없음, 다음/이전 버튼이 하단 위젯에 가려지지 않음, 버튼 44px 이상 | [리드 기입] |
-| 2 | 데스크톱(1280) 레이아웃 | 장면 최대 폭 360px 유지, 카드 가운데 정렬 | [리드 기입] |
-| 3 | 답안 유지 | 선택·놓은 나무·연결·입력문이 이전/다음 왕복 뒤 그대로 | [리드 기입] |
-| 4 | 다시 풀기 | 틀린 화면에서 [다시 풀기] 후 답이 지워지고 자동 이동 없음 | [리드 기입] |
-| 5 | 정답 노출 시점 | 듣기 영어 문장, 말하기 시험의 영어·모범 음성·힌트, 만들기·쓰기 정답이 확인 전에는 DOM에 없거나 숨김 | [리드 기입] |
-| 6 | 그림 개수 = 문장 | 정적 스위트로 모든 `layoutSentence`와 화면 그림 수 일치. 나무 1·2·3그루 놓기 판정 | [리드 기입] |
-| 7 | 키보드 | Tab 순서, Enter/Space로 보기·칸·물건 조작, 끌기 없이 만들기 완료 | [리드 기입] |
-| 8 | 중복 보상 방지 | 마무리 반복 진입·새로고침에도 보상 요청이 기존 규칙으로 1회 | [리드 기입] |
-| 9 | 음성 중복 방지 | 물건 연속 클릭·단계 이동·다시 풀기 시 이전 음성 중단, 동시 재생 없음 | [리드 기입] |
-| 10 | `validateScene` | §2.4의 10개 규칙 정적 스위트 통과 | [리드 기입] |
-| 11 | 기존 덱 회귀 | `scene` 없는 33단원은 덱 그대로. `[grammar]`, `[unit]`, `[student-home]`, `[hats]` 재실행 | [리드 기입] |
+| 1 | 360×640 레이아웃 | 9단계 모두 가로 스크롤 없음, 다음/이전 버튼이 하단 위젯에 가려지지 않음, 버튼 44px 이상 | 서버 렌더 확인(모든 장면 카드 렌더)만. **브라우저 미실행(RAM <3GB)**. `[grammar-scene]` 스크린샷과 `[grammar]` g 360×640 3건(컴팩트 헤더 `c47b1e10` 포함) 대기 |
+| 2 | 데스크톱(1280) 레이아웃 | 장면 최대 폭 360px 유지, 카드 가운데 정렬 | 브라우저 미실행(RAM <3GB). 1280 스크린샷 대기 |
+| 3 | 답안 유지 | 선택·놓은 나무·연결·입력문이 이전/다음 왕복 뒤 그대로 | 정적: 답은 덱의 단원별 ref 맵(카드 id 키) 구조 확인. 동작은 브라우저 미실행(RAM). 시나리오는 `grammarScene.spec` 작성됨 |
+| 4 | 다시 풀기 | 틀린 화면에서 [다시 풀기] 후 답이 지워지고 자동 이동 없음 | 정적: 다음 열림 조건이 `sceneCanAdvance`(확인·공개·비교 뒤)뿐. 동작은 브라우저 미실행(RAM) |
+| 5 | 정답 노출 시점 | 듣기 영어 문장, 말하기 시험의 영어·모범 음성·힌트, 만들기·쓰기 정답이 확인 전에는 DOM에 없거나 숨김 | 서버 렌더 스모크: 확인·공개 전 영어 문장·모범 답 없음 확인(구현자). 코드상 `scene-sentence`·모범 답·`scene-write-example`은 조건부 렌더. 브라우저 DOM 단언은 미실행(RAM) |
+| 6 | 그림 개수 = 문장 | 정적 스위트로 모든 `layoutSentence`와 화면 그림 수 일치. 나무 1·2·3그루 놓기 판정 | **정적 PASS**: `testGrammarCourses`의 `layoutSentence` 핀과 `buildFrame` 0/1/2/3 핀. 화면에서 놓기 동작은 브라우저 미실행(RAM) |
+| 7 | 키보드 | Tab 순서, Enter/Space로 보기·칸·물건 조작, 끌기 없이 만들기 완료 | 정적: 물건 `role="button"`·`tabIndex`·`aria-label`, 칸도 같음. 키보드 동작은 브라우저 미실행(RAM) |
+| 8 | 중복 보상 방지 | 마무리 반복 진입·새로고침에도 보상 요청이 기존 규칙으로 1회 | 구현 결정: 보상 요청 없음. 마무리는 분석 `trackEvent` 하나만(날짜당 dedup, 보상 종류·XP 없음). 브라우저 미실행 |
+| 9 | 음성 중복 방지 | 물건 연속 클릭·단계 이동·다시 풀기 시 이전 음성 중단, 동시 재생 없음 | 브라우저 미실행(RAM). 스펙에 `speaksExactly`(발화 횟수·내용) 단언 작성됨 |
+| 10 | `validateScene` | §2.4의 10개 규칙 정적 스위트 통과 | **정적 PASS**: `testGrammarCourses`(+15 장면 핀 포함), `testPilotUnit`, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/32, `testRegistryCoverage`, `testStudentPathContracts` ALL PASS. 더미 env 빌드 경고 0 |
+| 11 | 기존 덱 회귀 | `scene` 없는 33단원은 덱 그대로. `[grammar]`, `[unit]`, `[student-home]`, `[hats]` 재실행 | 정적 PASS(다른 33단원 덱 불변 핀). `[grammar]` h는 장면 단원을 건너뛰도록 수정됨. 회귀 5종 브라우저 재실행은 미실행(RAM) |
 
 ## 10. 변경 파일 / 남은 작업
 
 | 항목 | 내용 |
 |---|---|
-| 변경 파일 | [리드 기입] |
-| 남은 작업 | [리드 기입]. 문서 쪽 미해결 항목: 교사 검수, 쿠키·공·배경 실제 그림(§5.3), 학원 반 대응(§7), 기본 공원 값(§2.3), 보상 요청 여부(§6), Middle/High 장면, 다른 Easy 단원 `scene` |
+| 변경 파일 | 커밋 `bd62cc15`: `src/utils/grammar/sceneMission.js`(validateScene·layoutSentence·countsMatch·sceneCards·buildFrame), `src/components/grammar/ParkScene.jsx`, `src/components/grammar/SceneCards.jsx`, `grammarDeck` 장면 경로(g-easy-05 덱 15장 = 목표 + 장면 13 + 요약), `GrammarCourseScreen` 연결, `App` studentId 전달(마무리 분석 이벤트), g-easy-05 단어 +10, 정적 스위트 핀. `e4e8edc6`: 만들기 카드 실시간 심기 안내(1..n-1그루) + 스펙 d 재작성. `58767b3f`: `tests/e2e/grammarScene.spec.mjs`(a~l), `grammar.spec` h 장면 단원 건너뜀. `18afbb35`: 이 문서 + CURRICULUM §13 포인터 |
+| 남은 작업 | (1) RAM ≥3GB에서 브라우저 검증: `[grammar-scene]` a~l(360×640·1280 스크린샷 포함), `[grammar]` g 360×640 3건, 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]`. (2) 운영자 에셋: 공원 배경, Cookie 전용 그림 2포즈, 공, 꽃(PNG/WebP 투명, 100KB 이하, 2×). 지금은 임시 SVG·강아지 대역. (3) 다른 단원에 `scene` 데이터만 추가해 확장. (4) 구현 결정 기록: 마무리는 보상 요청 없이 분석 이벤트 하나, 시험 공개 버튼 문구는 "모범 답 보기". 문서 쪽 미해결 항목: 교사 검수, 쿠키·공·배경 실제 그림(§5.3), 학원 반 대응(§7), 기본 공원 값(§2.3), 보상 요청 여부(§6), Middle/High 장면, 다른 Easy 단원 `scene` |

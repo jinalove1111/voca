@@ -1,0 +1,24 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "docs-maintainer",
+  "task_id": "scene-mission-2026-10-10",
+  "task": "239차 문서 갱신: 그림 상황 미션 시범 단원(There is/are 공원) + 공통 장면 컴포넌트",
+  "status": "in_progress",
+  "progress": 85,
+  "started_at": "2026-10-10T12:30:00+09:00",
+  "updated_at": "2026-10-10T12:55:00+09:00",
+  "files_owned": [
+    "docs/design/GRAMMAR_SCENE_MISSION_2026-10-10.md",
+    "handoff.md",
+    "TESTING.md",
+    "ROADMAP.md"
+  ],
+  "files_read": [
+    "src/components/grammar/SceneCards.jsx",
+    "src/components/grammar/ParkScene.jsx",
+    "tests/e2e/grammarScene.spec.mjs"
+  ],
+  "summary": "(e4e8edc6 반영: 만들기 실시간 안내 + 스펙 d 재작성, 정적만) 설계 문서 §1 testid·§9 결과·§10 변경 파일/남은 작업 채움, handoff 239차 섹션 + 상단 요약 줄, TESTING 239차, ROADMAP 239차 append. 시범 단원 브라우저 검증은 미실행.",
+  "blocker": "RAM <3GB → 브라우저 e2e 미실행",
+  "next_action": "RAM ≥3GB에서 [grammar-scene] a~l + [grammar] g + 회귀 5종 실행 → 스크린샷 확인 → 결과 반영"
+}

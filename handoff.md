@@ -9,6 +9,7 @@ _233차 갱신: 2026-10-10 (233차 — **Grammar 커리큘럼 재구성: 5 과�
 _234차 갱신: 2026-10-10 (234차 — **Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙**. Easy 8/8 콘텐츠 구현 완료, 교사 검수 완료 0, Intermediate 1, 미제작 25(Intermediate 7·Advanced 6·Middle 6·High 6) — **커리큘럼 전체 완료 아님**. 코드 `d2842265`. 정적 PASS, 더미 env 빌드 경고 0, `[grammar]` 238/0, `[student-home]` 223/0/1 SKIP. 클릭 경로: 홈 [📘 문법 과정] → Easy (ready 8/8 · 검수 0) → 3. 나는 …이야 am·is·are …. PR #62 Draft·QA 전용. 아래 234차 섹션 참고.)_
 _235차 갱신: 2026-10-10 (235차 — **Paul 로고 모자 PNG 8장을 기존 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 대응으로 적용** + HatCollection 장착 버튼 44px 수정 + 모자 이름 2건 정정. 앱에 "8단계 모자"는 없고 세 축(XP 랭크 5·크기 5단계·수집 모자 8종)이 따로 있어 수집 모자 8종에 대응(리드 판단, **운영자 확인 필요: 남색/주황 대응, 승급 체인 아님**). 점수·승급 규칙·해금·XP 무변경. 커밋 `da4f2d66`·`e4e622d9`·`a97074ef`, 이름 커밋 `f5156fa8`. 신규 `[hats]` 67/0 + 회귀 PASS. Preview 실화면(SSO)·실기기 미확인. PR #62 Draft·QA 전용. 아래 235차 섹션 참고.)_
 _238차 갱신: 2026-10-10 (238차 — **문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드(5카드 그리드)**. 클릭 경로: 홈 [📘 문법 / Grammar] → Easy → 1. 부탁하기 → 카드 1/23 목표 → 다음 … → 선택 문제 → 답 확인 → 다음 … → 마무리. 콘텐츠 34/34 불변, 교사 검수 0, PR #62 QA 전용, DB·저장 0. 아래 238차 섹션 참고.)_
+_239차 갱신: 2026-10-10 (239차 — **그림 상황 미션 시범 단원: Easy 5. There is/are 공원 + 공통 장면 컴포넌트**. 커밋 `bd62cc15`(구현)·`18afbb35`(설계 문서)·`58767b3f`(e2e). 클릭 경로: 홈 [📘 문법 Grammar] → Easy → 5. …이 있어요 There is → 카드 1/15 목표 → 다음 → 발견(강아지 누르기) → 비교 → 선택 ×3 → 만들기(나무 2) → 읽기 → 듣기 ×2 → 말하기 연습/시험 → 쓰기 → 마무리 → 요약. 정적 PASS·더미 빌드 경고 0. **브라우저 미검증**: 시범 단원과 `c47b1e10` 컴팩트 헤더 모두 e2e 미실행(RAM <3GB). 임시 SVG 배경·공, Cookie는 강아지 대역 — 운영자 에셋 필요. 콘텐츠 34/34 구현·교사 검수 0. 아래 239차 섹션 참고.)_
 _237차 갱신: 2026-10-10 (236~237차 야간 자율 세션 — **문법 전 과정 34단원 콘텐츠 구현(교사 검수 전) + 모자 헤더 1.25em + 8단계 승급 설계 문서 + e2e 일반화**. Easy 8·Intermediate 8·Advanced 6·Middle 6·High 6 전부 ready, 교사 검수 완료 0 — 구현은 끝났으나 **검수 전이라 "커리큘럼 완료"는 선언하지 않음**. 커밋 `8f82a313`·`ff069fdc`·`df206852`·`e1e799da`·학교 단원 `119e3b89`·번들 예산 `d5c2f1bd`(push 완료 `d5c2f1bd`). 정적 PASS, `[grammar]` 659/0/1 SKIP, `[hats]` 67/0. 아침 확인 클릭 경로: 홈 [📘 문법 과정] → 각 과정 → 단원 → 9섹션 / Middle School → 1. 시제 정리 → [기초 설명 보기 → 어제 있었던 일] → ← 돌아가기 / 홈 헤더 모자 크기. PR #62 Draft·QA 전용. 아래 236~237차 섹션 참고.)_
 _226차 갱신: 2026-10-08 (226차 — **A안**: 보류 결함 2건 수정(Unit에서 들어온 쓰기는 비교 뒤 '← 이 단원으로' 복귀, 독립 Writing 흐름 유지 / Unit 청크 로드 실패 시 빈 화면 대신 안내·🔄 새로고침·← 홈) + 두 Unit 교사용 콘텐츠 검수표(기본 "미검수") + ROADMAP 통합 과정 섹션(완료/다음/보류). 정적 PASS; 브라우저 e2e(RAM ≥3GB 재개) `[unit]` 99/0(1차 90/2는 환경·설계 순서 — 기존 stale-chunk 자동 새로고침이 먼저 동작·브라우저 모듈 캐시 — 로 분류, 안내 문구·새로고침 버튼 보완), `[writing]` 63/0, `[student-home]` 218/0/1 SKIP. PR #62 Draft·QA 전용. 아래 226차 섹션 참고.)_
 _225차 갱신: 2026-10-08 (225차 — **첫 Unit 독립 검수 → 결함 6건·콘텐츠 4건 수정 + 두 번째 통합 Unit "잃어버린 물건 위치 묻기"(정보 묻기, Where's my bag? / It's under the chair.) + Unit 간·계정 간 격리**. Unit 선택 목록, Unit 안 말하기 3단계(따라 하기 → 물건 바꾸기 → 모범 없이 묻고 답하기, 답 확인 전 영어·음성 미마운트), inline 쓰기 문항. 정적 핀 7종·빌드 PASS. 브라우저 e2e는 05~06시 RAM <3GB로 보류 → **12:52 재개(RAM 4.1GB) 5스펙 완료**: unit 88/0(1차 80/6 → 제품 결함 1건 = 목록에서 다른 Unit을 열면 복귀 기록이 새어 그 Unit 쓰기가 완료로 찍힘 → 수정; 스펙 2건; 흔들림 3건 재실행 미재현 → 대기 추가), student-home 218/0/1 SKIP, speaking 540/0, speaking-exam 216/0, writing 63/0(1차 1 FAIL = 주제 수 계약 드리프트). 참고문헌 7건 확인표(§9), 교사 가이드 2종, 파닉스 스펙(콘텐츠 없음). PR #62 Draft·QA 전용. 아래 225차 섹션 참고.)_
@@ -48,6 +49,37 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-10 (239차) — 그림 상황 미션 시범 단원(There is/are 공원) + 공통 장면 컴포넌트 (12:30~12:55)
+
+운영자 요청: ① 덱·홈 카드·답 유지·자동 이동 없음은 유지하고 작은 폰 레이아웃 잔여 수정, ② 폴타운/Paul/Cookie가 나오는 그림 기반 상황 미션(일관된 디자인, 클릭·캐릭터 반응, 화면당 과제 1개), ③ 단원 안 기능 연결 + 학원 과정 연결(문서 근거만), 시범 = Easy There is/are 공원 미션. 실제 에셋이 없으면 임시 SVG + 필요 파일 목록, 재사용 컴포넌트 + 단원 데이터, 검증 목록, 기존 보상만, 테스트 계정, 검증된 조사 문서, 보고. 기준 `e8b9c869`, PR #62 QA 전용, DB·저장 0, merge·배포 없음. 설계 문서: `docs/design/GRAMMAR_SCENE_MISSION_2026-10-10.md`.
+
+**구현 (커밋 `bd62cc15`)**
+- `src/utils/grammar/sceneMission.js`: `validateScene`·`layoutSentence`·`countsMatch`·`sceneCards`·`buildFrame`. 그림 개수 = 문장을 한 함수가 정한다. 만들기 빈칸 틀은 놓인 나무 수를 따른다: 0그루 힌트 '나무를 먼저 놓아 보세요', 1그루 `There is ___ tree.`(정답 a), 2그루 이상 `There are ___ trees.`(정답 = 놓은 수), 2가 아니면 힌트.
+- `ParkScene.jsx`(인라인 SVG): 폴타운 스프라이트 nature/tree·decorations/bench·animals/puppy(**Cookie 대역**, 이름표) + 기존 Paul PNG, 하늘·잔디·공은 **임시 SVG**.
+- `SceneCards.jsx`: 장면 카드 9종(발견·비교·선택·만들기·읽기·듣기·말하기·쓰기·마무리). 듣기 영어 문장, 말하기 시험의 영어·모범 음성·다른 표현은 확인/공개 전 DOM에 없음. 읽기 짝은 순서를 돌려 놓음. 녹음은 선택.
+- 덱: `scene`이 있는 단원만 장면 경로. `g-easy-05` 덱 = 목표 1 + 장면 13 + 요약 1 = 15장. 나머지 33단원 덱 불변(핀). `GrammarCourseScreen` 연결. `App`이 `studentId`를 넘겨 마무리 카드가 분석 `trackEvent` 하나만 남김(날짜당 dedup, 보상 종류·XP 없음).
+- `g-easy-05` 단어 +10(dog/dogs/ball/balls/tree/trees/bench/benches/park/three).
+- 수정 `e4e8edc6`: 만들기 카드가 나무 1..n-1그루를 놓은 동안 열린 카드에 "{name}를 {n}그루 심어 보세요." 안내를 실시간 표시(0그루는 '먼저 놓아' 유지, n그루면 숨김). `[grammar-scene]` 시나리오 d를 `buildFrame(scene, 0/1/2)`에서 틀·보기를 도출하도록 재작성: 0그루 활성 보기 없음, 1그루 a/one/two/three + 힌트, 'two' 오답 → 다시 풀기, 'a' 정답, 2그루면 선택 초기화·힌트 없음. 정적만 확인(빌드 경고 0, 스위트 4종 PASS), 브라우저 미실행.
+- e2e `58767b3f`: `tests/e2e/grammarScene.spec.mjs` 시나리오 a~l 신규, `grammar.spec` h는 장면 단원을 건너뜀. 설계 문서와 CURRICULUM §13 포인터 `18afbb35`. 같은 날 앞선 커밋: `c79d5df1`(홈 카드)·`9068800c`·`34712051`(덱)·`c769ab8a`·`ff82e531`/`c47b1e10`(레이아웃)·`e8b9c869`(문서).
+
+**검증**
+- 정적 PASS: 더미 env 빌드 경고 0(GrammarCourseScreen lazy 청크 147.1 KB raw / 42.1 KB gzip), `testGrammarCourses`(+15 장면 핀: validateScene·layoutSentence·buildFrame 0/1/2/3·덱 15장·나머지 33단원 불변), `testPilotUnit`, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/32, `testRegistryCoverage`, `testStudentPathContracts` ALL PASS. 구현자의 서버 렌더 스모크: 모든 장면 카드 렌더, 확인/공개 전 영어 문장 없음.
+
+**브라우저 미검증 (명시)**
+- 시범 단원 전체와 `c47b1e10` 컴팩트 헤더 보정 모두 **브라우저 e2e 미실행**. 사유: 앞선 실행 뒤 여유 RAM이 1.6~2.2 GB로 3 GB 규칙 미만이었고, 백그라운드 RAM 감시가 메모리 부족으로 하네스에 의해 중단됨(에이전트가 재시작하지 않음).
+- 대기 항목: `[grammar-scene]` a~l(360×640·1280 스크린샷 포함), `[grammar]` g 360×640 3건, 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]`(현재 빌드 기준).
+- 재실행(워크트리 루트, RAM ≥3GB): `VITE_SUPABASE_URL=https://dummy.supabase.co VITE_SUPABASE_ANON_KEY=dummy npm run build && npx vite preview --port 4193 --strictPort` 후 `node <scratchpad>/runOne.mjs grammarScene.spec.mjs` 등(또는 `npm run verify:e2e`).
+
+**운영자에게 필요한 에셋** (`ParkScene.jsx` TODO): 공원 배경(하늘·잔디·길), Cookie 전용 강아지 그림 2포즈, 공, 꽃(선택). PNG/WebP 투명, 100 KB 이하, 2×. 글자 굽지 않음. 받으면 에셋 매핑만 교체.
+
+**학원 과정 연결**: 변경 없음. 설계 문서 §7에 [미확인]으로 기록. Grammar 5과정은 앱 트랙이며 학원 반 이름이 아님.
+
+**상태 구분**: 콘텐츠 34/34 구현(시범 1단원은 그림 미션 구조) / 교사 검수 0 / 시범 단원 브라우저 검증 미실행.
+
+**클릭 경로**: 홈 [📘 문법 Grammar] → Easy → 5. …이 있어요 There is → 카드 1/15 목표 → 다음 → 발견(강아지 누르기) → 비교 → 선택 ×3 → 만들기(나무 2) → 읽기 → 듣기 ×2 → 말하기 연습/시험 → 쓰기 → 마무리 → 요약.
+
+**열린 항목**: 브라우저 검증 / 운영자 에셋(위) / 다른 단원에 `scene` 데이터만 추가해 확장 / 교사 검수 34단원 / 학원 반 대응 / Preview 실화면(SSO) / 238차 항목 그대로.
 
 ## 2026-10-10 (238차) — 문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드 (10:20~)
 
