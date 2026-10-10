@@ -344,8 +344,12 @@ function isPaulSpriteAsset(filename) {
 }
 // 학생 모자 8종 PNG(src/assets/hats, 256x256, 각 ~30KB) — scripts/testHatImages.mjs가 개수/크기를 검증한다.
 const HAT_IMAGE_FILE_RE = /^paul-hat-(pink|red|orange|green|blue|navy|purple|gold)-[\w-]+\.png$/
+// 2026-10-10 마을 미션 키트 아트(src/assets/town/kit/townMission.js, Proto25DScreen 청크 전용): signpost·cookie-stand 1x/@2x 4개.
+const TOWN_MISSION_KIT_FILE_RE = /^(signpost|cookie-stand)(@2x)?-[\w-]+\.webp$/
+// 2026-10-10 공원 미션 키트 아트(src/utils/grammar/parkArt.js, GrammarCourseScreen 청크 전용): backdrop·cookie-stand·cookie-sit·tree·bench·sunflower-pot 1x/@2x 12개.
+const PARK_KIT_FILE_RE = /^(park-backdrop|cookie-stand|cookie-sit|tree|bench|sunflower-pot)(@2x)?-[\w-]+\.webp$/
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f),
 )
 check(
   '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',

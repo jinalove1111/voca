@@ -6,7 +6,7 @@ import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { BTN, RecorderControls } from '../SpeakingPracticeItem'
 import ParkScene, { artUrl } from './ParkScene'
 import Stage from './Stage'
-import { PROPS } from '../../utils/grammar/sceneProps'
+import { PROPS, dimsFor } from '../../utils/grammar/sceneProps'
 import { sceneCards, spotPositions, layoutSentence, buildFrame, stageProps, displayOrder, positionFrame, relationSpots, layoutItems } from '../../utils/grammar/sceneMission'
 
 // 2026-10-10 그림 상황 미션 카드 — 단계(sceneKind)마다 컴포넌트 하나. 상태는 전부 덱의 answers[cardId]에 둔다(화면 상태일 뿐, 저장 없음).
@@ -105,7 +105,8 @@ function Build({ c, a, set, clear }) {
   const pos = place.ref !== undefined // 위치 놓기: 기준 물건(ref) 둘레의 관계 자리에 하나를 놓고 문장틀의 관계를 고른다
   const placed = a.placed || []
   const layout = step.layout || (pos ? [{ obj: place.ref }] : [])
-  const spots = pos ? relationSpots(layoutItems(layout, { center: true, enlarge: place.ref }).find((i) => i.obj === place.ref), PROPS[place.obj]).filter((s) => place.relations.includes(s.relation)) : spotPositions(slots)
+  const pd = dimsFor(c.unitScene.bg || 'park') // Stage와 같은 그림 상자 크기(공원 실제 그림)
+  const spots = pos ? relationSpots(layoutItems(layout, { center: true, enlarge: place.ref, dims: pd }).find((i) => i.obj === place.ref), pd?.[place.obj] || PROPS[place.obj]).filter((s) => place.relations.includes(s.relation)) : spotPositions(slots, pd)
   const free = spots.filter((s) => !placed.some((p) => (pos ? p.relation === s.relation : p.x === s.x)))
   const remaining = pos ? 1 : place.n - placed.length // 위치 놓기는 다시 놓으면 옮겨진다
   const locked = !!a.checked
@@ -134,7 +135,7 @@ function Build({ c, a, set, clear }) {
     const s = g && free[+g.getAttribute('data-testid').split('-').pop()]
     if (s) putAt(s)
   }
-  const art = artUrl(place.obj)
+  const art = artUrl(place.obj, c.unitScene.bg || 'park')
   // 판정은 실제로 놓은 것을 따른다. 개수: 놓은 수와 고른 숫자가 같으면 맞음(목표는 place.n이지만 일관된 문장이면 인정). 위치: 놓은 자리의 관계와 고른 관계가 같으면 맞음
   const ok = pos ? picked != null && placed.length > 0 && picked === correct : picked != null && placed.length > 0 && placed.every((x) => x.obj === place.obj) && picked === correct
   const mine = pos ? (picked != null ? frame.replace('___', nums[picked]) : '') : placed.length ? layoutSentence(c.unitScene, [{ obj: place.obj, n: placed.length }]) : ''

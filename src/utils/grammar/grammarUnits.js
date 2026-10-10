@@ -237,7 +237,7 @@ const READY_UNITS = [
         dog:   { en: 'dog',   enPlural: 'dogs',    ko: '강아지' },
         tree:  { en: 'tree',  enPlural: 'trees',   ko: '나무' },
         bench: { en: 'bench', enPlural: 'benches', ko: '벤치' },
-        ball:  { en: 'ball',  enPlural: 'balls',   ko: '공' },
+        flower: { en: 'flower', enPlural: 'flowers', ko: '꽃' },
       },
       steps: [
         { kind: 'discover', stepKo: '발견',
@@ -260,9 +260,9 @@ const READY_UNITS = [
             { layout: [{ obj: 'bench', n: 1 }], promptKo: '그림을 보고 빈칸에 알맞은 말을 고르세요.',
               frame: 'There ___ a bench.', options: ['is', 'are'], correct: 0,
               whyKo: '그림에 벤치가 하나만 있어요. 하나라서 is를 써요.' },
-            { layout: [{ obj: 'ball', n: 3 }], promptKo: '그림을 보고 빈칸에 알맞은 말을 고르세요.',
-              frame: 'There ___ three balls.', options: ['is', 'are'], correct: 1,
-              whyKo: '그림에 공이 세 개 있어요. 여러 개라서 are를 써요.' },
+            { layout: [{ obj: 'flower', n: 3 }], promptKo: '그림을 보고 빈칸에 알맞은 말을 고르세요.',
+              frame: 'There ___ three flowers.', options: ['is', 'are'], correct: 1,
+              whyKo: '그림에 꽃이 세 송이 있어요. 여러 송이라서 are를 써요.' },
           ] },
 
         { kind: 'build', stepKo: '만들기',
@@ -282,9 +282,9 @@ const READY_UNITS = [
 
         { kind: 'listen', stepKo: '듣기',
           items: [
-            { en: 'There is a ball.',
-              options: [{ layout: [{ obj: 'ball', n: 1 }] }, { layout: [{ obj: 'ball', n: 2 }] }, { layout: [{ obj: 'dog', n: 1 }] }],
-              correct: 0, whyKo: 'a ball은 공 하나예요. 하나라서 is예요.' },
+            { en: 'There is a flower.',
+              options: [{ layout: [{ obj: 'flower', n: 1 }] }, { layout: [{ obj: 'flower', n: 2 }] }, { layout: [{ obj: 'dog', n: 1 }] }],
+              correct: 0, whyKo: 'a flower는 꽃 한 송이예요. 하나라서 is예요.' },
             { en: 'There are two trees.',
               options: [{ layout: [{ obj: 'tree', n: 3 }] }, { layout: [{ obj: 'bench', n: 2 }] }, { layout: [{ obj: 'tree', n: 2 }] }],
               correct: 2, whyKo: 'two trees는 나무 두 그루예요. 벤치도, 세 그루도 아니에요.' },
@@ -294,17 +294,17 @@ const READY_UNITS = [
           practice: {
             situationKo: '내가 꾸민 공원을 보고 있어요. 폴에게 공원에 무엇이 있는지 한 문장으로 알려 주세요.',
             modelEn: 'There are two trees.', modelKo: '나무 두 그루가 있어.',
-            alternatives: ['There is a bench.', 'There is a dog.', 'There are two balls.', 'There are three dogs.'] },
+            alternatives: ['There is a bench.', 'There is a dog.', 'There are two flowers.', 'There are three dogs.'] },
           exam: {
             situationKo: '폴이 내가 꾸민 공원에 처음 왔어요. 폴에게 공원에 무엇이 있는지 알려 주세요.',
             modelEn: 'There are two trees.',
-            alternatives: ['There is a bench.', 'There is a dog.', 'There are two balls.', 'There are three dogs.'] },
+            alternatives: ['There is a bench.', 'There is a dog.', 'There are two flowers.', 'There are three dogs.'] },
           useMyPark: true },
 
         { kind: 'write', stepKo: '쓰기',
           promptKo: '내가 꾸민 공원에 무엇이 있는지 한 문장으로 써 보세요.',
           exampleEn: 'There are two trees.', exampleKo: '나무 두 그루가 있어.',
-          acceptNoteKo: '내 공원에 있는 것이면 모두 맞아요. 예: There is a dog. / There is a bench. / There are two balls. 하나면 is, 둘 이상이면 are와 s를 써요.',
+          acceptNoteKo: '내 공원에 있는 것이면 모두 맞아요. 예: There is a dog. / There is a bench. / There are two flowers. 하나면 is, 둘 이상이면 are와 s를 써요.',
           useMyPark: true },
 
         { kind: 'finish', stepKo: '마무리',
@@ -357,7 +357,7 @@ const READY_UNITS = [
       ],
     },
     use: { kind: 'speaking', promptKo: '교실을 둘러보고 "There is a …" 또는 "There are two …"로 보이는 것 세 가지를 말해요.', exampleEn: 'There is a ball in the box.', exampleKo: '상자 안에 공이 있어.' },
-    words: [{ en: 'book', ko: '책' }, { en: 'books', ko: '책들' }, { en: 'pen', ko: '펜' }, { en: 'pens', ko: '펜들' }, { en: 'cat', ko: '고양이' }, { en: 'two', ko: '둘, 두 개' }, { en: 'shelf', ko: '선반' }, { en: 'dog', ko: '강아지' }, { en: 'dogs', ko: '강아지들' }, { en: 'ball', ko: '공' }, { en: 'balls', ko: '공들' }, { en: 'tree', ko: '나무' }, { en: 'trees', ko: '나무들' }, { en: 'bench', ko: '벤치' }, { en: 'benches', ko: '벤치들' }, { en: 'park', ko: '공원' }, { en: 'three', ko: '셋' }],
+    words: [{ en: 'book', ko: '책' }, { en: 'books', ko: '책들' }, { en: 'pen', ko: '펜' }, { en: 'pens', ko: '펜들' }, { en: 'cat', ko: '고양이' }, { en: 'two', ko: '둘, 두 개' }, { en: 'shelf', ko: '선반' }, { en: 'dog', ko: '강아지' }, { en: 'dogs', ko: '강아지들' }, { en: 'flower', ko: '꽃' }, { en: 'flowers', ko: '꽃들' }, { en: 'tree', ko: '나무' }, { en: 'trees', ko: '나무들' }, { en: 'bench', ko: '벤치' }, { en: 'benches', ko: '벤치들' }, { en: 'park', ko: '공원' }, { en: 'three', ko: '셋' }],
     sources: ['own'],
   },
   {

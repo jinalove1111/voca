@@ -1,7 +1,7 @@
 // 2026-10-10 그림 상황 미션 — 순수 데이터 검증·문장 생성·배치 기하 도우미(React·PNG 없음).
 // 단원의 unit.scene 한 덩어리로 단계 카드를 만든다. 문장·정답·버튼은 항상 실제 UI이고 그림에 구워 넣지 않는다.
 // v2(2026-10-10): scene.mode 'full'(시범 g-easy-05: 9단계 고정) | 'add'(표준 덱에 설명·그림 활동 카드를 끼워 넣음).
-import { PROPS, ACTIONS, RELATIONS, CHARACTERS, BACKGROUNDS, CONTAINERS } from './sceneProps.js'
+import { PROPS, ACTIONS, RELATIONS, CHARACTERS, BACKGROUNDS, CONTAINERS, PARK_GROUND, PARK_FREE } from './sceneProps.js'
 import { FUNCTION_WORDS, NAME_WORDS } from './grammarUnits.js'
 
 export const SCENE_KINDS = ['discover', 'compare', 'choose', 'build', 'read', 'listen', 'speak', 'write', 'finish']
@@ -28,14 +28,19 @@ export function layoutSentence(scene, layout) {
 }
 
 // 만들기 단계의 빈 자리 위치(viewBox 360x220, x=가운데·y=바닥)
-export const spotPositions = (n) => Array.from({ length: n }, (_, i) => ({ x: n === 1 ? 210 : Math.round(96 + (i * 228) / (n - 1)), y: 186 }))
+// dims(공원)이면 Paul 오른쪽 빈 잔디(PARK_FREE)의 가운데에 같은 간격으로 놓고, 칸 폭(76)이 15% 넘게 겹치지 않게 간격을 잡는다
+export const spotPositions = (n, dims) => {
+  if (!dims) return Array.from({ length: n }, (_, i) => ({ x: n === 1 ? 210 : Math.round(96 + (i * 228) / (n - 1)), y: 186 }))
+  const c = (PARK_FREE.x0 + PARK_FREE.x1) / 2, d = n > 1 ? Math.min(100, (PARK_FREE.x1 - PARK_FREE.x0 - 76) / (n - 1)) : 0
+  return Array.from({ length: n }, (_, i) => ({ x: Math.round(c + (i - (n - 1) / 2) * d), y: PARK_GROUND - 2 }))
+}
 
 // ── v2: 그림 방식·배치 기하 ──
 // 한 단계/항목이 어떤 그림 방식인지: 명시 view > panels(timeline) > lines(dialogue) > scene
 export const viewOf = (o) => o?.view || (o?.panels ? 'timeline' : o?.lines ? 'dialogue' : 'scene')
 export const stageProps = (o) => ({ view: viewOf(o), layout: o?.layout, panels: o?.panels, lines: o?.lines, focus: o?.focus })
 
-const GROUND = 188
+export const GROUND = 188
 const SIZE_MUL = { s: 0.7, m: 1, l: 1.3 }
 // 한 그림 안에 크기(size)가 섞이면 물건마다 가장 긴 변을 이 값으로 맞춘다(큰 쪽이 작은 쪽의 1.5배 이상)
 const NORM = { s: 26, m: 40, l: 62 }
@@ -77,14 +82,15 @@ export function relationSpots(ref, item = { w: 24, h: 24 }) {
 // at/ref 없는 물건은 한 줄로 늘어놓고(center면 가운데 정렬; next to 물건 몫의 빈 칸을 ref 오른쪽에 남겨 다른 물건을 가리지 않음),
 // at/ref는 ref 물건 기준 자리(placeRel; 같은 at+ref 물건은 옆으로 나란히), far는 0.6배·22 위. enlarge: 이 물건은 최소 48 크기로 키움(위치 놓기용).
 // 크기: 같은 size끼리면 s 0.7·m 1·l 1.3배, size가 섞이면 가장 긴 변을 s 26·m 40·l 62로 맞춤. 사람은 같은 크기면 키가 같음.
-export function layoutItems(layout, { center = false, enlarge = null, mini = false } = {}) {
+export function layoutItems(layout, { center = false, enlarge = null, mini = false, dims = null } = {}) {
   const seen = {}
   const flat = []
   for (const it of layout || []) {
     const n = Math.max(1, it.n ?? 1)
-    const p = PROPS[it.obj] || { w: 16, h: 16 }
+    const p = dims?.[it.obj] ? { ...PROPS[it.obj], ...dims[it.obj] } : PROPS[it.obj] || { w: 16, h: 16 } // dims: 배경별 그림 상자 크기(공원 실제 그림)
     for (let k = 0; k < n; k++) flat.push({ ...it, n, k, p, bs: bsOf(it.obj), i: (seen[it.obj] = (seen[it.obj] ?? -1) + 1), grow: it.obj === enlarge ? clamp(48 / Math.min(p.w, p.h), 1, 2.2) : 1 })
   }
+  const G = dims ? PARK_GROUND : GROUND // 공원은 더 아래(큰 그림이 지평선에 닿지 않게)
   const mixed = new Set(flat.map((f) => f.size || 'm')).size > 1
   const far = (f) => (f.dist === 'far' ? 0.6 : 1)
   // 섞인 크기: 가장 긴 변(사람은 키)을 NORM으로 맞추고, 큰 단계는 아래 단계의 가로·세로 최댓값의 1.5배 이상이 되도록 단계 전체를 같은 비율로 키운다
@@ -120,13 +126,14 @@ export function layoutItems(layout, { center = false, enlarge = null, mini = fal
   // 한 줄 칸: next to 물건마다 ref 오른쪽에 빈 칸 하나
   const slots = []
   row.forEach((f) => { slots.push(f); if (f.i === 0) for (let c = anch.filter((a) => a.ref === f.obj && a.at === 'next to').length; c > 0; c--) slots.push(null) })
-  const slotW = Math.min(64, 284 / Math.max(slots.length, 1))
-  const start = center ? 180 - (slotW * slots.length) / 2 : 66
+  const areaW = dims ? (center ? 344 : PARK_FREE.x1 - PARK_FREE.x0) : 284 // 공원은 Paul 오른쪽 빈 잔디(또는 전체 폭) 안에 같은 간격
+  const slotW = Math.min(dims ? 92 : 64, areaW / Math.max(slots.length, 1))
+  const start = center ? 180 - (slotW * slots.length) / 2 : dims ? (PARK_FREE.x0 + PARK_FREE.x1) / 2 - (slotW * slots.length) / 2 : 66
   const done = []
   const fin = (f, x, y, scale, z, by = y) => { done.push({ obj: f.obj, i: f.i, x, y, by, z, scale, w: f.p.w * scale, h: f.p.h * scale, size: f.size || 'm', dist: f.dist || 'near', at: f.at, ref: f.ref, action: f.action, neg: f.neg, labelKo: f.labelKo }); return done[done.length - 1] }
   slots.forEach((f, k) => {
     if (!f) return
-    const y0 = f.dist === 'far' ? GROUND - 22 : GROUND
+    const y0 = f.dist === 'far' ? G - 22 : G
     const lift = f.i === 0 ? refLift[f.obj] || 0 : 0
     const grow = f.i === 0 ? refGrow[f.obj] || 1 : 1
     fin(f, Math.round(start + slotW * (k + 0.5)), y0 - lift, base(f, slotW - 4) * grow, y0 - lift, y0)
@@ -144,7 +151,7 @@ export function layoutItems(layout, { center = false, enlarge = null, mini = fal
       return false
     })
   }
-  pending.forEach((f) => fin(f, 180, GROUND, base(f, Infinity), GROUND)) // ref를 못 찾으면(검증에서 막힘) 가운데 바닥
+  pending.forEach((f) => fin(f, 180, G, base(f, Infinity), G)) // ref를 못 찾으면(검증에서 막힘) 가운데 바닥
   return flat.map((f) => done.find((d) => d.obj === f.obj && d.i === f.i))
 }
 

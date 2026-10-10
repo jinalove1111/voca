@@ -1,23 +1,20 @@
 import { townAsset } from '../../assets/town'
 import { paulHappy } from '../../assets/paul'
-// 공원 배경: 기존 프로젝트 이미지(마을 하늘·산울타리). Vite가 4KB 초과 파일을 해시 파일로 따로 내보내므로 lazy 청크엔 URL 문자열만 들어간다.
-import skyBackdrop from '../../assets/town/backgrounds/village-sky-backdrop.webp'
-import hedgeBorder from '../../assets/town/backgrounds/village-hedge-border.webp'
-import { PROPS, ACTIONS, CONTAINERS } from '../../utils/grammar/sceneProps'
+import { PARK_ART } from '../../utils/grammar/parkArt'
+import { PROPS, ACTIONS, CONTAINERS, dimsFor, parkArtKey, parkSrc, PARK_GROUND, PARK_PAUL, PARK_PLACED_MAX } from '../../utils/grammar/sceneProps'
 import { layoutItems, tally, viewOf } from '../../utils/grammar/sceneMission'
 
 // 2026-10-10 Scene v2 범용 그림 무대(인라인 SVG, viewBox 360x220). 문장·정답은 그림에 넣지 않는다(aria-label도 한국어 설명만).
-// 물건은 sceneProps의 PROPS 키로만 그린다: Town 스프라이트(asset)가 있으면 그것, paul은 Paul 이미지, 나머지는 아래 임시 SVG 도형.
-// TODO assets — 그림 파일 현황 (규칙: src/assets/town/<group>/<kebab-name>.webp + 같은 이름 @2x, 흰 배경 없는 투명 PNG→WebP)
-//  실제 파일 사용 중: 공원 하늘 backgrounds/village-sky-backdrop.webp, 산울타리 backgrounds/village-hedge-border.webp(공원 배경, 작은 그림 sm에선 생략),
-//   Paul paul/*, Town 스프라이트 tree·bench·flower(flower-garden)·lamp(street-lamp)·postbox·fountain·house·school·cafe·shop·bridge·tower·dog/cookie(puppy)·cat·owl.
-//  아직 임시 도형(SVG) — 필요한 파일과 제안 위치:
-//   배경: backgrounds/park-backdrop.webp(공원 하늘·잔디·길을 한 장으로; 지금은 하늘/산울타리 실파일 + 잔디·길 단색 도형), backgrounds/home-backdrop.webp, school-backdrop.webp, street-backdrop.webp, plain-backdrop.webp
-//   쿠키: character/cookie-idle.webp, character/cookie-sit.webp (지금은 Town puppy)
-//   사람: character/mia.webp, tom, mom, dad, teacher, kid, grandma, driver (각 character/<이름>.webp)
-//   동물: animals/bird.webp, animals/fish.webp
-//   물건(props/<키>.webp): ball, box, book, bag, pencil, cup, apple, bike, car, bus, phone, chair, table, bed, door, umbrella, hat, letter, cake, pizza, milk, egg, key, map, clock,
-//         guitar, kite, tv, computer, window, desk, board, money, ticket, gift, shoes, jacket, homework, newspaper, medal, trophy  (예: props/ball.webp)
+// 물건은 sceneProps의 PROPS 키로만 그린다. 공원(bg 'park')은 art kit 실제 그림(utils/grammar/parkArt.js): 배경 park-backdrop,
+//  강아지=Cookie(서 있는/앉은 번갈아), 나무, 벤치, 꽃=해바라기 화분. 그 밖의 물건은 Town 스프라이트(asset) / paul은 Paul 이미지 / 나머지는 아래 임시 SVG 도형.
+// 공원 배경 바닥선(PARK_GROUND=198, sceneProps.js; 다른 배경은 GROUND=188): park-backdrop(768x512)을 360x220에 xMidYMax slice로 채우면 배율 0.46875, 위 20이 잘리고
+//  잔디밭은 y≈60~220 → 발이 닿는 y 198은 잔디 아래쪽이고 가장 큰 물건(나무 90)도 꼭대기 y 108로 지평선(60)에 닿지 않는다(산울타리·마을 지평선은 y≈60 위).
+// TODO assets — 아직 임시인 것 (규칙: src/assets/town/kit/<group>/<kebab-name>.webp + 같은 이름 @2x, 투명 WebP):
+//   배경: home-backdrop, school-backdrop, street-backdrop, plain-backdrop (집·학교·거리·장면은 아직 단색 도형)
+//   사람: character/mia, tom, mom, dad, teacher, kid, grandma, driver (지금은 임시 SVG 사람)
+//   동물: bird, fish (cat·owl은 기존 Town 스프라이트; dog은 공원에서만 Cookie 실제 그림, 다른 배경은 Town puppy)
+//   물건: ball(그림 없음 — 공원 g-easy-05는 꽃으로 바꿈), box, book, bag, pencil, cup, apple, bike, car, bus, phone, chair, table, bed, door, umbrella, hat, letter, cake, pizza, milk, egg, key, map, clock,
+//         guitar, kite, tv, computer, window, desk, board, money, ticket, gift, shoes, jacket, homework, newspaper, medal, trophy (임시 SVG 도형)
 //   동작 배지: ACTIONS의 이모지(임시, 유지) → ui/action-<키>.webp
 //   (town 환경 이미지 폴더는 town/v2 전용 가드(testTownEnvAssets)가 있어 여기서 import하지 않는다)
 export const BG_KO = { park: '공원', home: '집', school: '학교', street: '거리', plain: '장면' }
@@ -40,11 +37,7 @@ function Bg({ bg, mini }) {
     case 'plain': return (<>
       <defs><linearGradient id="stage-plain-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#e0f2fe" /><stop offset="1" stopColor="#fef9c3" /></linearGradient></defs>
       <rect width="360" height="220" fill="url(#stage-plain-grad)" /><ellipse cx="180" cy="200" rx="160" ry="14" fill="#fff" opacity="0.6" /></>)
-    default: return (<>
-      <rect width="360" height="220" fill="#dbeaf5" /><image href={skyBackdrop} x="0" y="0" width="360" height="124" preserveAspectRatio="xMidYMid slice" />
-      <rect y="116" width="360" height="104" fill="#b9d3a2" />
-      {!mini && <><image href={hedgeBorder} x="0" y="70" width="360" height="54" preserveAspectRatio="xMidYMax slice" /><rect y="70" width="360" height="54" fill="#f5efdc" opacity="0.18" /></>}
-      <ellipse cx="190" cy="206" rx="170" ry="14" fill="#eadfbf" opacity="0.85" /></>)
+    default: return <image href={parkSrc(PARK_ART.backdrop)} x="0" y="0" width="360" height="220" preserveAspectRatio="xMidYMax slice" data-testid="park-backdrop" />
   }
 }
 
@@ -104,16 +97,21 @@ const GLYPH = {
   trophy: (w, h) => <><path d={`M3 0h${w - 6}v${h * 0.4}a${(w - 6) / 2} ${(w - 6) / 2} 0 0 1-${w - 6} 0z`} fill="#facc15" stroke="#ca8a04" strokeWidth="1.2" /><rect x={w / 2 - 1.5} y={h * 0.55} width="3" height={h * 0.25} fill="#ca8a04" /><rect x={w * 0.2} y={h * 0.8} width={w * 0.6} height={h * 0.2} rx="2" fill="#a16207" /></>,
 }
 
-const imgUrl = (obj) => (obj === 'paul' ? paulHappy : PROPS[obj]?.asset ? townAsset(PROPS[obj].asset) : null)
+// 공원이면 kit 그림(해당 물건이 무대에 있을 때만 이 함수가 불리므로 안 쓰는 그림은 받지 않는다), 아니면 기존 Town 스프라이트
+const imgUrl = (obj, i, bg) => {
+  if (obj === 'paul') return paulHappy
+  const k = bg === 'park' ? parkArtKey(obj, i) : null
+  return k ? parkSrc(PARK_ART[k]) : PROPS[obj]?.asset ? townAsset(PROPS[obj].asset) : null
+}
 
-function Obj({ it, hl, tap, reduced, cookie, mini }) {
+function Obj({ it, hl, tap, reduced, cookie, mini, bg }) {
   if (it.front) { // 통 앞벽: 같은 도형을 물건 아랫부분(frontClip 아래)만 다시 그려 안쪽 물건을 가린다
     const p0 = PROPS[it.obj], G0 = GLYPH[it.obj], cid = `fc-${it.obj}${it.i}-${Math.round(it.x)}-${Math.round(it.frontClip)}-${Math.round(it.w)}`
     return <g aria-hidden="true" data-front-of={it.obj}><clipPath id={cid}><rect x={it.x - it.w / 2 - 2} y={it.frontClip} width={it.w + 4} height={Math.max(0, it.y - it.frontClip + 4)} /></clipPath><g clipPath={`url(#${cid})`}><g transform={`translate(${it.x - it.w / 2} ${it.y - it.h}) scale(${it.scale})`}>{G0(p0.w, p0.h)}</g></g></g>
   }
   const { obj, i, x, y, scale, w, h } = it
   const p = PROPS[obj] || { ko: obj, kind: 'object', w: 16, h: 16 }
-  const url = imgUrl(obj)
+  const url = imgUrl(obj, i, bg)
   const hitW = Math.max(w, 44), hitH = Math.max(h, 44)
   const key = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tap(obj, i) } }
   const tag = it.labelKo || (p.kind === 'character' ? p.ko : '')
@@ -149,12 +147,13 @@ function describe(items) {
 function StageSvg({ layout = [], placed = [], spots = [], highlight, tapObj, onTapObject, onTapSpot, bg = 'park', showPaul, showCookie, size = 'md', reduced, testId, enlarge, className }) {
   const withPaul = showPaul ?? bg === 'park'
   const withCookie = showCookie ?? bg === 'park'
-  const base = layoutItems(layout, { center: !withPaul, enlarge, mini: size === 'sm' })
+  const dims = dimsFor(bg)
+  const base = layoutItems(layout, { center: !withPaul, enlarge, mini: size === 'sm', dims })
   const seen = {}
   base.forEach((it) => { seen[it.obj] = Math.max(seen[it.obj] ?? -1, it.i) })
   const extra = placed.map((p) => {
-    const a = PROPS[p.obj] || { w: 16, h: 16 }
-    const s = (p.scale ?? 1) * Math.min(1, 64 / a.w)
+    const a = dims?.[p.obj] || PROPS[p.obj] || { w: 16, h: 16 }
+    const s = (p.scale ?? 1) * Math.min(1, (dims ? PARK_PLACED_MAX : 64) / a.w)
     return { obj: p.obj, relation: p.relation, ref: p.ref, i: (seen[p.obj] = (seen[p.obj] ?? -1) + 1), x: p.x, y: p.y, z: p.z ?? 999, scale: s, w: a.w * s, h: a.h * s }
   })
   extra.forEach((e) => { // 위치 놓기에서 통 안(in)에 놓았으면 그 통의 앞벽을 물건 위에 다시 그린다
@@ -170,8 +169,9 @@ function StageSvg({ layout = [], placed = [], spots = [], highlight, tapObj, onT
     <svg {...(testId ? { 'data-testid': testId } : {})} data-counts={Object.entries(counts).map(([o, n]) => `${o}:${n}`).join(',')} data-size={size} data-bg={bg} viewBox="0 0 360 220" role="img" aria-label={`${BG_KO[bg] || '장면'} 그림${desc ? `: ${desc}` : ': 비어 있음'}`}
       className={className || `block w-full ${size === 'sm' ? 'max-w-[170px]' : 'max-w-[360px]'} h-auto mx-auto rounded-2xl select-none`}>
       <Bg bg={bg} mini={size === 'sm'} />
-      {withPaul && <image href={paulHappy} x="2" y="128" width="58" height="62" preserveAspectRatio="xMidYMax meet" aria-hidden="true" data-testid="scene-paul" />}
-      {drawn.map((it) => <Obj key={`${it.obj}-${it.i}`} it={it} hl={highlight === it.obj} tap={onTapObject} reduced={reduced} cookie={withCookie && it.obj === 'dog' && it.i === 0 && size !== 'sm'} mini={size === 'sm'} />)}
+      {withPaul && (dims ? <image href={paulHappy} x={PARK_PAUL.x} y={PARK_GROUND - PARK_PAUL.h} width={PARK_PAUL.w} height={PARK_PAUL.h} preserveAspectRatio="xMidYMax meet" aria-hidden="true" data-testid="scene-paul" />
+        : <image href={paulHappy} x="2" y="128" width="58" height="62" preserveAspectRatio="xMidYMax meet" aria-hidden="true" data-testid="scene-paul" />)}
+      {drawn.map((it) => <Obj key={`${it.obj}-${it.i}`} bg={bg} it={it} hl={highlight === it.obj} tap={onTapObject} reduced={reduced} cookie={withCookie && it.obj === 'dog' && it.i === 0 && size !== 'sm'} mini={size === 'sm'} />)}
       {spots.map((s, i) => {
         const sz = s.size || 56
         return (

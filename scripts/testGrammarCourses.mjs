@@ -2,8 +2,8 @@
 import fs from 'node:fs'
 import { GRAMMAR_COURSES } from '../src/utils/grammar/grammarCourses.js'
 import { GRAMMAR_UNITS, SCHOOL_GRAMMAR_NOTE_KO, unitsForCourse, grammarUnitById, courseCounts, resolveChoice, validateGrammarUnit, FUNCTION_WORDS, isComplete, reviewStatusOf, practiceCounts } from '../src/utils/grammar/grammarUnits.js'
-import { buildFrame, validateScene, layoutSentence, countsMatch, sceneCards, layoutItems, relationSpots, positionFrame, viewOf, displayOrder } from '../src/utils/grammar/sceneMission.js'
-import { PROPS, ACTIONS, RELATIONS, CHARACTERS, BACKGROUNDS } from '../src/utils/grammar/sceneProps.js'
+import { buildFrame, validateScene, layoutSentence, countsMatch, sceneCards, layoutItems, relationSpots, positionFrame, viewOf, displayOrder, spotPositions, GROUND } from '../src/utils/grammar/sceneMission.js'
+import { PROPS, ACTIONS, RELATIONS, CHARACTERS, BACKGROUNDS, PARK_DIMS, PARK_GROUND, PARK_PAUL, PARK_FREE, PARK_PLACED_MAX, dimsFor, parkArtKey, parkSrc } from '../src/utils/grammar/sceneProps.js'
 import easyScenes from '../src/utils/grammar/scenes/easy.js'
 import intScenes from '../src/utils/grammar/scenes/int.js'
 import advScenes from '../src/utils/grammar/scenes/adv.js'
@@ -451,9 +451,77 @@ check('scene v2 D: 작은 무대(mini) — 가장 긴 변 ≥22(공 16→22), fa
   Math.max(miniBall.w, miniBall.h) >= 22 - 1e-9 && Math.max(miniFar.w, miniFar.h) >= 16 - 1e-9 && miniFar.w < miniBall.w && Math.max(miniPen.w, miniPen.h) >= 22 && nearBall.w === 16 && LI([{ obj: 'ball', dist: 'far' }])[0].w === 9.6 && STX.includes("mini: size === 'sm'")
   && ['pencil', 'key', 'ball', 'egg', 'phone', 'medal', 'money'].every((k) => { const t = LI([{ obj: k }], { mini: true })[0]; return Math.max(t.w, t.h) >= 22 - 1e-9 }))
 // 2026-10-10 그림 담당(공원 실제 이미지 + 이모지 줄이기)
-check('scene v2 park: 공원 배경은 기존 backgrounds 실파일(하늘·산울타리)만 import, env/ 폴더는 import 안 함, 작은 무대(mini)에선 산울타리 생략, 파일은 실제로 존재',
-  /import skyBackdrop from '\.\.\/\.\.\/assets\/town\/backgrounds\/village-sky-backdrop\.webp'/.test(STG) && /import hedgeBorder from '\.\.\/\.\.\/assets\/town\/backgrounds\/village-hedge-border\.webp'/.test(STG)
-  && !/assets\/town\/env/.test(STG) && STG.includes('{!mini && <>') && fs.existsSync(new URL('../src/assets/town/backgrounds/village-sky-backdrop.webp', import.meta.url)) && fs.existsSync(new URL('../src/assets/town/backgrounds/village-hedge-border.webp', import.meta.url)))
+// 2026-10-10 242차 공원 미션 실제 그림(art kit): 매니페스트 일치·kit import 격리·공원에서만 로드·바닥선·잘림/겹침·그림 수 = 문장
+const PARKART_SRC = read('src/utils/grammar/parkArt.js')
+const PSRC = read('src/components/grammar/ParkScene.jsx')
+const MAN = JSON.parse(read('src/assets/town/kit/manifest.json')).targets
+const KIT_TARGET = { backdrop: 'backgrounds/park-backdrop', 'cookie-stand': 'character/cookie-stand', 'cookie-sit': 'character/cookie-sit', tree: 'nature/tree', bench: 'props/bench', flower: 'props/sunflower-pot' }
+// parkArt.js는 .webp를 import하므로 node가 못 읽는다 → 소스를 파싱해 { 키: { src·src2x 변수, w, h } }를 얻고, 변수가 가리키는 import 경로까지 확인한다
+const IMP = Object.fromEntries([...PARKART_SRC.matchAll(/^import (\w+) from '([^']+)'/gm)].map((m) => [m[1], m[2]]))
+const PARK_ART = Object.fromEntries([...PARKART_SRC.matchAll(/^\s*(?:'([a-z-]+)'|([a-z]+)): mk\((\w+), (\w+), (\d+), (\d+)\)/gm)].map((m) => [m[1] || m[2], { src: IMP[m[3]], src2x: IMP[m[4]], w: +m[5], h: +m[6] }]))
+check('park art: PARK_ART = 6개 키(backdrop·cookie-stand·cookie-sit·tree·bench·flower), w/h가 kit manifest와 같고 1x/@2x가 각각 manifest의 같은 이름 파일을 가리킴, 가져오는 kit 파일은 정확히 12개',
+  Object.keys(PARK_ART).join() === 'backdrop,cookie-stand,cookie-sit,tree,bench,flower'
+  && Object.entries(KIT_TARGET).every(([k, t]) => PARK_ART[k].w === MAN[t].w && PARK_ART[k].h === MAN[t].h && PARK_ART[k].src === `../../assets/town/kit/${t}.webp` && PARK_ART[k].src2x === `../../assets/town/kit/${t}@2x.webp`)
+  && Object.keys(IMP).length === 12 && Object.values(IMP).every((v) => /^\.\.\/\.\.\/assets\/town\/kit\/[a-z/@0-9-]+\.webp$/.test(v)))
+const walkD = (p) => fs.readdirSync(new URL('../' + p, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkD(p + '/' + e.name) : [p + '/' + e.name]))
+const grammarFiles = [...walkD('src/components/grammar'), ...walkD('src/utils/grammar')].filter((f) => /\.(js|jsx|mjs)$/.test(f))
+const kitImporters = grammarFiles.filter((f) => /from\s+'[^']*assets\/town\/kit/.test(strip(read(f)))).join()
+check('park art: 문법 코드에서 kit을 import하는 파일은 utils/grammar/parkArt.js 하나뿐(그 밖에는 kit 경로 import 없음)', kitImporters === 'src/utils/grammar/parkArt.js', kitImporters)
+check('park art: Stage — 공원 배경은 park-backdrop을 360x220에 xMidYMax slice로 채움, 옛 하늘·산울타리·잔디·길 도형 없음, 다른 배경 분기는 그대로, env/ import 없음',
+  /<image href=\{parkSrc\(PARK_ART\.backdrop\)\} x="0" y="0" width="360" height="220" preserveAspectRatio="xMidYMax slice"/.test(STG)
+  && !/village-sky-backdrop|village-hedge-border|skyBackdrop|hedgeBorder|#b9d3a2|#eadfbf/.test(STG) && ["case 'home'", "case 'school'", "case 'street'", "case 'plain'"].every((x) => STG.includes(x)) && !/assets\/town\/env/.test(STG))
+check('park art: Stage — kit 그림은 bg가 park일 때만 고르고(imgUrl), 물건 <image>는 그 물건이 무대에 그려질 때만 생기며 xMidYMax meet(찌그러짐 없음), 그림자 타원 유지, 공원 dims로 배치',
+  /const k = bg === 'park' \? parkArtKey\(obj, i\) : null/.test(STG) && STG.includes('imgUrl(obj, i, bg)') && STG.includes('<Obj key={`${it.obj}-${it.i}`} bg={bg}')
+  && /<image href=\{url\} x=\{x - w \/ 2\} y=\{y - h\} width=\{w\} height=\{h\} preserveAspectRatio="xMidYMax meet" \/>/.test(STG) && /<ellipse cx=\{x\} cy=\{y\} rx=\{w \/ 2\.2\} ry="4"/.test(STG)
+  && STG.includes('const dims = dimsFor(bg)') && STG.includes("layoutItems(layout, { center: !withPaul, enlarge, mini: size === 'sm', dims })") && STG.includes('dims?.[p.obj] || PROPS[p.obj]'))
+check('park art: parkArtKey — dog은 서 있는·앉은 Cookie를 번갈아(0,1,2,3번 = stand,sit,stand,sit), tree·bench·flower는 같은 이름 그림, 그 밖 물건은 null(기존 그림 유지); parkSrc는 배율 1 초과면 @2x, 서버·기본은 1x',
+  [0, 1, 2, 3].map((i) => parkArtKey('dog', i)).join() === 'cookie-stand,cookie-sit,cookie-stand,cookie-sit' && ['tree', 'bench', 'flower'].every((o) => parkArtKey(o, 0) === o)
+  && ['cat', 'ball', 'box', 'paul', 'cookie', 'backdrop', 'lamp'].every((o) => parkArtKey(o, 0) === null)
+  && parkSrc(PARK_ART.tree, 1) === PARK_ART.tree.src && parkSrc(PARK_ART.tree, 2) === PARK_ART.tree.src2x && parkSrc(PARK_ART.tree, 1.5) === PARK_ART.tree.src2x && parkSrc(PARK_ART.tree) === PARK_ART.tree.src)
+check('park art: PARK_DIMS(공원 그림 상자) 비율이 kit 원본 비율과 2% 이내(dog=cookie-stand, flower=sunflower-pot), 키는 dog·tree·bench·flower뿐, 공원이 아닌 배경은 dims 없음(기존 크기 그대로)',
+  Object.keys(PARK_DIMS).join() === 'dog,tree,bench,flower' && [['dog', 'cookie-stand'], ['tree', 'tree'], ['bench', 'bench'], ['flower', 'flower']].every(([o, k]) => Math.abs(PARK_DIMS[o].w / PARK_DIMS[o].h / (PARK_ART[k].w / PARK_ART[k].h) - 1) <= 0.02)
+  && dimsFor('park') === PARK_DIMS && ['home', 'school', 'street', 'plain'].every((b) => dimsFor(b) === undefined)
+  && layoutItems([{ obj: 'dog', n: 1 }]).every((t) => t.w === 54 && t.h === 40 && t.y === GROUND) && (() => { const t = layoutItems([{ obj: 'tree', n: 1 }], { dims: PARK_DIMS })[0]; return Math.abs(t.w / t.h - 1) < 1e-9 && t.h <= 90 && t.y === PARK_GROUND })())
+// 바닥선: park-backdrop(768x512)을 360x220에 xMidYMax slice → 배율 0.46875, 위 20이 잘림, 잔디밭은 원본 y≈170부터(지평선 산울타리 아래) = 무대 y≈60
+const BD_SCALE = Math.max(360 / 768, 220 / 512), BD_TOP_CROP = 512 * BD_SCALE - 220, MEADOW_TOP = 170 * BD_SCALE - BD_TOP_CROP
+check('park art: 바닥선 GROUND=188은 잔디밭(무대 y≈60~220) 안에서 지평선보다 100 넘게 아래, 가장 큰 물건(나무 64) 꼭대기도 지평선 아래, 그림자·이름표가 220 안',
+  GROUND === 188 && PARK_GROUND === 198 && PARK_GROUND <= 204 && Math.abs(MEADOW_TOP - 59.7) < 1 && PARK_GROUND - MEADOW_TOP > 100 && PARK_GROUND - 90 > MEADOW_TOP + 30 && PARK_GROUND + 14 < 220)
+// g-easy-05 모든 그림 + 놓은 나무 1..4: 상자가 360x220 안, 서로 다른 물건끼리 가로 겹침 ≤ 작은 쪽 너비의 15%(개수가 읽힘)
+const PAUL_BOX = { x0: PARK_PAUL.x, x1: PARK_PAUL.x + PARK_PAUL.w, y0: PARK_GROUND - PARK_PAUL.h, y1: PARK_GROUND, o: 'paul' }
+const collect = (o, out) => { if (!o || typeof o !== 'object') return; if (Array.isArray(o.layout)) out.push(o.layout); for (const [k, v] of Object.entries(o)) if (k !== 'layout') collect(v, out) }
+const boxesOf = (layout, mini = false) => layoutItems(layout, { center: false, mini, dims: PARK_DIMS }).map((t) => ({ o: `${t.obj}${t.i}`, x0: t.x - t.w / 2, x1: t.x + t.w / 2, y0: t.y - t.h, y1: t.y }))
+const geomErrors = (boxes) => { const e = []; for (const b of boxes) if (b.x0 < 0 || b.x1 > 360 || b.y0 < 0 || b.y1 > 220) e.push(`밖 ${b.o}`); for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) { const a = boxes[i], b = boxes[j], ov = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0); if (ov > 0.15 * Math.min(a.x1 - a.x0, b.x1 - b.x0) + 1e-9) e.push(`겹침 ${a.o}/${b.o} ${ov.toFixed(1)}`) } return e }
+const E5L = []; collect(sc.steps, E5L)
+const placedTrees = (n) => { const a = PARK_DIMS.tree, s = Math.min(1, PARK_PLACED_MAX / a.w); return spotPositions(4, PARK_DIMS).slice(0, n).map((p, i) => ({ o: `placed${i}`, x0: p.x - (a.w * s) / 2, x1: p.x + (a.w * s) / 2, y0: p.y - a.h * s, y1: p.y })) }
+const geomBad = [...E5L.flatMap((l) => geomErrors([PAUL_BOX, ...boxesOf(l)])), ...E5L.flatMap((l) => geomErrors(boxesOf(l, true))), ...[1, 2, 3, 4].flatMap((n) => geomErrors([PAUL_BOX, ...placedTrees(n)]))]
+check(`park art: g-easy-05 모든 그림 ${E5L.length}개(발견·비교·고르기·읽기·듣기 보기)가 폴 포함 360x220 안·서로 15% 이하 겹침(일반·mini), 놓은 나무 1~4그루(4칸)도 마찬가지`, E5L.length === 15 && geomBad.length === 0, geomBad.join('; '))
+const PARK_UNITS = GRAMMAR_UNITS.filter((u) => u.scene && (u.scene.bg || 'park') === 'park')
+check('park art: 공원 배경을 쓰는 모든 단원(g-easy-03·04·05·int-04·06·adv-06·mid-01) 그림이 360x220 안(공원 dims 적용, 일반·mini)',
+  PARK_UNITS.map((u) => u.id).join() === 'g-easy-03,g-easy-04,g-easy-05,g-int-04,g-int-06,g-adv-06,g-mid-01'
+  && PARK_UNITS.every((u) => { const L = []; collect(u.scene.steps, L); return L.every((l) => [false, true].every((mini) => layoutItems(l, { center: u.scene.mode === 'add', mini, dims: PARK_DIMS }).every((t) => t.x - t.w / 2 >= 0 && t.x + t.w / 2 <= 360 && t.y - t.h >= 0 && t.y <= 220))) }))
+// 그림 수 = 문장
+const S = sc.steps
+const flat = [[S[0].layout, S[0].tap.en], [S[1].left.layout, S[1].left.en], [S[1].right.layout, S[1].right.en]]
+S[2].items.forEach((it) => flat.push([it.layout, it.frame.replace('___', it.options[it.correct])]))
+S[4].pairs.forEach((p) => flat.push([p.layout, p.en]))
+S[5].items.forEach((it) => flat.push([it.options[it.correct].layout, it.en]))
+check('park art: g-easy-05 그림의 보이는 개수 = 문장 — 발견·비교·고르기(정답 채움)·읽기·듣기 정답 모두 layoutSentence(그림)과 같은 문장', flat.length === 11 && flat.every(([l, en]) => layoutSentence(sc, l) === en), flat.map(([l, en]) => `${layoutSentence(sc, l)} / ${en}`).join(' | '))
+check('park art: 듣기 오답 그림은 문장과 다른 문장(개수·물건이 다름) — 오답은 계속 오답', S[5].items.every((it) => it.options.every((o, j) => j === it.correct || layoutSentence(sc, o.layout) !== it.en)))
+check('park art: g-easy-05에 공(ball) 없음 — objects·그림·문장·words가 flower로 교체, 카드 15장·종류 그대로, 단어 수·어휘 규칙 통과',
+  !('ball' in sc.objects) && sc.objects.flower?.en === 'flower' && sc.objects.flower.enPlural === 'flowers' && sc.objects.flower.ko === '꽃' && !/ball/.test(JSON.stringify(sc))
+  && S[2].items[2].frame === 'There ___ three flowers.' && S[2].items[2].layout[0].obj === 'flower' && S[2].items[2].layout[0].n === 3 && S[2].items[2].whyKo.includes('꽃')
+  && S[5].items[0].en === 'There is a flower.' && S[5].items[0].options.map((o) => `${o.layout[0].obj}${o.layout[0].n}`).join() === 'flower1,flower2,dog1' && S[5].items[0].correct === 0
+  && S[6].practice.alternatives.includes('There are two flowers.') && S[6].exam.alternatives.includes('There are two flowers.') && S[7].acceptNoteKo.includes('There are two flowers.')
+  && E5.words.some((w) => w.en === 'flower' && w.ko === '꽃') && E5.words.some((w) => w.en === 'flowers' && w.ko === '꽃들') && !E5.words.some((w) => /^balls?$/.test(w.en))
+  && validateScene(sc, { course: 'easy', unit: E5 }).length === 0 && validateScene(sc, { unit: E5 }).length === 0 && D5.length === 15 && S.map((x) => x.kind).join() === 'discover,compare,choose,build,read,listen,speak,write,finish', validateScene(sc, { course: 'easy', unit: E5 }).join('; '))
+check('park art: 만들기 4칸 위치는 모두 잔디(바닥선 부근) 안에서 360 안, 칸 간격 ≥ 나무 너비(나무가 따로 읽힘)', (() => { const sp = spotPositions(4, PARK_DIMS); const w = PARK_PLACED_MAX; return sp.length === 4 && sp.every((p) => p.y >= PARK_GROUND - 4 && p.y <= PARK_GROUND && p.x - w / 2 >= PARK_FREE.x0 - 1 && p.x + w / 2 <= 360) && sp.every((p, i) => i === 0 || p.x - sp[i - 1].x >= 0.85 * w) && Math.abs((sp[0].x + sp[3].x) / 2 - (PARK_FREE.x0 + PARK_FREE.x1) / 2) <= 1 })())
+check('park art: 만들기 상자 아이콘(artUrl)은 공원이면 kit 그림·아니면 Town 스프라이트, Cookie 이름표는 첫 강아지·큰 무대에만',
+  PSRC.includes("const k = bg === 'park' ? parkArtKey(obj, 0) : null") && SC.includes("artUrl(place.obj, c.unitScene.bg || 'park')") && STG.includes("it.obj === 'dog' && it.i === 0 && size !== 'sm'"))
+check('park art: 한 줄 배치는 Paul 오른쪽 빈 잔디의 가운데에 같은 간격(1~3개), Paul은 앉은 Cookie보다 크고 나무보다 작음, 발은 PARK_GROUND',
+  [1, 2, 3].every((n) => { const it = layoutItems([{ obj: 'dog', n }], { center: false, dims: PARK_DIMS }); const xs = it.map((t) => t.x); const gaps = xs.slice(1).map((x, i) => x - xs[i]); return it.every((t) => t.y === PARK_GROUND) && Math.abs((xs[0] + xs[n - 1]) / 2 - (PARK_FREE.x0 + PARK_FREE.x1) / 2) <= 1 && gaps.every((g) => Math.abs(g - gaps[0]) <= 1) && Math.min(...it.map((t) => t.x - t.w / 2)) >= PARK_FREE.x0 - 1 && Math.max(...it.map((t) => t.x + t.w / 2)) <= PARK_FREE.x1 })
+  && PARK_PAUL.h > PARK_DIMS.dog.h && PARK_PAUL.h < PARK_DIMS.tree.h && PARK_PAUL.x + PARK_PAUL.w < PARK_FREE.x0)
+check('park art: Cookie 이름표(첫 강아지 아래 y+14, 너비 ≈44)는 360x220 안이고 같은 그림의 다른 물건 상자와 겹치지 않음(g-easy-05 모든 그림)',
+  E5L.every((l) => { const it = layoutItems(l, { center: false, dims: PARK_DIMS }); const d = it.find((t) => t.obj === 'dog' && t.i === 0); if (!d) return true; const tag = { x0: d.x - 22, x1: d.x + 22, y0: d.y + 3, y1: d.y + 17 }; return tag.x0 >= 0 && tag.x1 <= 360 && tag.y1 <= 220 && it.every((t) => t === d || t.x + t.w / 2 <= tag.x0 || t.x - t.w / 2 >= tag.x1 || t.y <= tag.y0) }))
 check('scene v2 park: 손으로 그린 해·구름 도형 없음(default 배경에 노란 원·흰 타원 없음)', (() => { const d = STG.slice(STG.indexOf('default: return'), STG.indexOf('const fig =')); return !/#fde047|ellipse cx="80"|ellipse cx="108"/.test(d) })())
 check('scene v2 이모지: SceneCards에 🔊·✅ 글자 없음, 듣기 버튼은 인라인 SVG 스피커 + aria-label "듣기" 유지(testid 그대로), 동작 배지(ACTIONS)는 그대로',
   !/🔊|✅/.test(SC) && SC.includes('const Speaker = () => <svg aria-hidden="true"') && SC.includes('aria-label="듣기"') && SC.includes('<Speaker />') && /ACTIONS\.run|emoji: '🏃'/.test(read('src/utils/grammar/sceneProps.js')))

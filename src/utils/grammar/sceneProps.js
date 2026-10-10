@@ -37,3 +37,17 @@ export const CONTAINERS = ['box', 'bag', 'cup']
 export const RELATIONS = ['in', 'on', 'under', 'next to', 'behind', 'in front of']
 export const CHARACTERS = ['paul', 'cookie', 'mia', 'tom', 'mom', 'dad', 'teacher', 'kid', 'grandma', 'driver']
 export const BACKGROUNDS = ['park', 'home', 'school', 'street', 'plain']
+
+// 공원(bg 'park') 장면에서만 쓰는 실제 그림 상자 크기(viewBox 360x220, h는 바닥에서 위로). 비율은 art kit(manifest) 원본 비율과 같다(찌그러짐 없음).
+// dog=cookie-stand 213x256, tree 256x256, bench 256x244, flower=sunflower-pot 175x256. 다른 배경(home·school·street·plain)과 다른 물건은 위 PROPS 그대로.
+export const PARK_DIMS = { dog: { w: 61, h: 73 }, tree: { w: 90, h: 90 }, bench: { w: 76, h: 73 }, flower: { w: 46, h: 67 } }
+// 공원 무대 배치(360x220): 발이 닿는 바닥선, Paul 상자(키 79 = 앉은 Cookie 73보다 크고 나무 90보다 작음), Paul 오른쪽 빈 잔디 폭, 만들기에서 놓은 물건의 최대 너비(4칸이 겹침 15% 안에 들어가도록 나무 90→76)
+export const PARK_GROUND = 198
+export const PARK_PAUL = { x: 2, w: 74, h: 79 }
+export const PARK_FREE = { x0: 82, x1: 356 }
+export const PARK_PLACED_MAX = 76
+export const dimsFor = (bg) => (bg === 'park' ? PARK_DIMS : undefined)
+// 장면 물건 키(+같은 물건 번호 i) → 공원 그림 키(PARK_ART의 키). 강아지는 서 있는/앉은 Cookie를 번갈아 써서 여러 마리가 따로따로 보이게 한다. 없으면 null(기존 그림 유지).
+export const parkArtKey = (obj, i = 0) => (obj === 'dog' ? (i % 2 === 0 ? 'cookie-stand' : 'cookie-sit') : obj === 'tree' || obj === 'bench' || obj === 'flower' ? obj : null)
+// 화면 배율이 1보다 크면 @2x(서버·기본은 1x). a = { src, src2x }
+export const parkSrc = (a, dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1) => (dpr > 1 ? a.src2x : a.src)
