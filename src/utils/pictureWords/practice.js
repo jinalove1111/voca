@@ -1,4 +1,4 @@
-// Picture Vocabulary practice logic. Pure: no React/DOM/storage/network, no Math.random (the caller passes the seed).
+// Picture Vocabulary practice logic. Pure: no React, DOM, storage or network; randomness only from the seed the caller passes.
 export const STEPS = ['look', 'listen', 'repeat', 'quiz', 'review']
 
 // mulberry32: small deterministic PRNG
