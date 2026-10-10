@@ -2102,3 +2102,7 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testPictureWords.mjs`(754): practice.js 단계 상수(`card,end,quiz,review,summary`)·시험 시작 단계·복습 루프(`reviewNext`) 단위 + 소스 핀(카드에 듣기+녹음기 같이 마운트, `useLocalRecorder` 사용, 단어 변경 시 reset, 새 라벨 객체, pictureWords 폴더에 네트워크/저장/보상/MediaRecorder 직접 사용/점수 문구 0, 시험 문제에 녹음기 없음, Phonics 라벨에 소리 순서 주장 없음). `testPictureWordGames.mjs`(106).
 - 브라우저 `tests/e2e/pictureWordPractice.spec.mjs`(106): 진짜 MediaRecorder + 합성 마이크(`speaking.spec.mjs`와 같은 방식)로 듣기→녹음→내 목소리→다시→다음, 마이크 거부, 360x640 터치, 시험→복습, 연습→게임→시험→복습 전 흐름, 묶음 선택, 녹음 데이터가 기기를 떠나지 않음(로그인 이후 GET 아닌 요청·오디오 페이로드 0; 앱 자체 `/api/grant-xp`는 허용 목록). 단독 실행: 스크래치 `runOne.mjs`(vite preview 4193). `pictureWordGames.spec.mjs`(68)는 내비게이션만 수정.
 
+### 252차 추가 (2026-10-11): 그림 단어 효과음 · 디자인
+- `scripts/testPictureWordGames.mjs`(140): `sfx.js` 설정 기본값/클램프/구독/저장(가짜 storage, AudioContext 없음에서도 throw 없음, 가짜 AudioContext로 호출당 새 오실레이터·꺼짐/볼륨 0 무음) + 소스 핀(오디오 파일·패키지 0, AudioContext는 playSfx 안에서만, 저장 키 1개, 연습 카드/녹음기에 sfx 없음, `#F472B6` 카드, reduced-motion이 모든 애니메이션을 덮음, 애니메이션 150~300ms / 반짝이 ≤ 600ms). `testPictureWords.mjs`의 저장/AudioContext 금지 핀은 `sfx.js` 한 파일만 예외.
+- 브라우저 `pictureWordGames.spec.mjs`(148): `AudioContext.prototype.createOscillator` 감싸기로 소리 시작/주파수를 센다(sx1~sx4, 동작 줄이기, d1 디자인 3 해상도 x 4 화면). `pictureWordPractice.spec.mjs`(107): 카드 녹음 동안 효과음 오실레이터 0(가짜 마이크의 합성 오실레이터는 제외).
+
