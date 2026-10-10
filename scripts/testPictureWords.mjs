@@ -208,9 +208,11 @@ ok(['🎤 따라 말하기', '⏹ 녹음 끝내기', '▶️ 내 목소리 듣�
 ok(/import \{ RecorderControls \} from '\.\.\/SpeakingPracticeItem'/.test(scr) && !/PARTNER_REC_LABELS|SpeakingPracticeItem'.*REC_LABELS/.test(scr), 'card: shared label constants are not used or edited')
 const pwDirs = [path.join(ROOT, 'src/components/pictureWords'), path.join(ROOT, 'src/utils/pictureWords')]
 const pwSrc = pwDirs.flatMap((d) => walk(d)).filter((f) => /\.(jsx?|mjs)$/.test(f)).map((f) => [rel(f), fs.readFileSync(f, 'utf8')])
+const SFX_FILE = 'src/utils/pictureWords/sfx.js' // 252차: the one file allowed a device-preference localStorage key and a Web Audio AudioContext (output only, never input)
 const NOIO = /fetch\(|XMLHttpRequest|WebSocket|sendBeacon|supabase|\/api\/|localStorage|sessionStorage|grantReward|markPronunciationOk|addStars|trackEvent|productEvents/
-ok(pwSrc.every(([, t]) => !NOIO.test(t)), `pictureWords components + utils: no network/storage/reward calls (${pwSrc.filter(([, t]) => NOIO.test(t)).map(([f]) => f).join()})`)
-ok(pwSrc.every(([, t]) => !/MediaRecorder|getUserMedia|AudioContext|new Audio\(|SpeechRecognition|transcribe/.test(t)), 'pictureWords folders do not touch MediaRecorder/getUserMedia/STT directly (only via the shared hook)')
+const noio = (f, t) => (f === SFX_FILE ? !new RegExp(NOIO.source.replace('|localStorage|sessionStorage', '|sessionStorage')).test(t) : !NOIO.test(t))
+ok(pwSrc.every(([f, t]) => noio(f, t)), `pictureWords components + utils: no network/storage/reward calls (${pwSrc.filter(([f, t]) => !noio(f, t)).map(([f]) => f).join()})`)
+ok(pwSrc.every(([f, t]) => !(f === SFX_FILE ? /MediaRecorder|getUserMedia|new Audio\(|SpeechRecognition|transcribe/ : /MediaRecorder|getUserMedia|AudioContext|new Audio\(|SpeechRecognition|transcribe/).test(t)), 'pictureWords folders do not touch MediaRecorder/getUserMedia/STT directly (only via the shared hook)')
 ok(pwSrc.every(([, t]) => !/점수|score|정확도|발음 평가/i.test(t.replace(/\/\/.*$/gm, ''))), 'pictureWords folders: no score / 점수 UI text')
 const quizBefore = (() => { const q = scr.slice(scr.indexOf('function QuizCard'), scr.indexOf('function Session')); return q.slice(0, q.indexOf('{answered && (')) })()
 ok(!/RecorderControls|useLocalRecorder|PracticeCards|pwp-rec/.test(quizBefore) && !/RecorderControls|useLocalRecorder/.test(scr.slice(scr.indexOf('function QuizCard'), scr.indexOf('function Session'))), 'test question: word/meaning/listen/recorder not mounted before the answer (and the question never mounts a recorder)')
