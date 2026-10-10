@@ -4,6 +4,7 @@ import { BTN } from './SpeakingPracticeItem'
 import { Choice } from './UnitScreen'
 import { GRAMMAR_COURSES } from '../utils/grammar/grammarCourses'
 import { unitsForCourse, grammarUnitById, courseCounts, reviewStatusOf, SCHOOL_GRAMMAR_NOTE_KO } from '../utils/grammar/grammarUnits'
+import SceneCards, { sceneCanAdvance } from './grammar/SceneCards'
 import { buildDeck, isPractice, deckCounts, cardIndexById } from '../utils/grammar/grammarDeck'
 
 // 2026-10-10 문법 과정 화면(QA 전용): 과정 5개 → 단원 목록(학습 목표) → 단원 카드 덱(한 화면에 설명 카드 하나 또는 문제 하나). 점수·저장·DB 없음(화면 상태일 뿐).
@@ -98,6 +99,7 @@ const Example = ({ e, testid }) => (
 
 // 다음 버튼을 여는 조건 — 문제는 확인한 뒤에만(자동으로 넘어가지 않는다)
 const canAdvance = (c, a) => {
+  if (c.kind === 'scene') return sceneCanAdvance(c, a)
   if (c.kind === 'choice') return a.picked != null
   if (c.kind === 'blank' || c.kind === 'order') return !!a.checked
   if (c.kind === 'build') return !!a.compared
@@ -105,8 +107,9 @@ const canAdvance = (c, a) => {
   return true
 }
 
-function CardBody({ c, a, set, clear, deck, answers, onBasics, onRetryWrong, onList }) {
+function CardBody({ c, a, set, clear, deck, answers, unit, studentId, onBasics, onRetryWrong, onList }) {
   switch (c.kind) {
+    case 'scene': return <SceneCards card={c} unit={unit} answers={answers} onAnswer={set} onClear={clear} studentId={studentId} />
     case 'goal': {
       const basics = c.basicsUnitId ? grammarUnitById(c.basicsUnitId) : null
       return (
@@ -202,7 +205,7 @@ function CardBody({ c, a, set, clear, deck, answers, onBasics, onRetryWrong, onL
           {wrong.length > 0 && (
             <div className="space-y-1">
               <p className={H}>틀린 문제</p>
-              {wrong.map((x) => <p key={x.id} data-testid={`gd-summary-wrong-${x.id}`} className="text-sm text-gray-800 break-keep">• {x.q.promptKo}</p>)}
+              {wrong.map((x) => <p key={x.id} data-testid={`gd-summary-wrong-${x.id}`} className="text-sm text-gray-800 break-keep">• {x.q ? x.q.promptKo : x.label}</p>)}
               <button data-testid="gd-retry-wrong" onClick={onRetryWrong} className={`${BTN} text-base bg-amber-200 text-gray-800`}>틀린 문제 다시 풀기</button>
             </div>)}
           <button data-testid="gd-to-list" onClick={onList} className={`${BTN} text-base bg-sky-500 text-white`}>단원 목록으로</button>
@@ -211,7 +214,7 @@ function CardBody({ c, a, set, clear, deck, answers, onBasics, onRetryWrong, onL
   }
 }
 
-function GrammarUnitDeck({ unit, units, from, initial, onStateChange, onBasics, onBack }) {
+function GrammarUnitDeck({ unit, units, studentId, from, initial, onStateChange, onBasics, onBack }) {
   const deck = useMemo(() => buildDeck(unit, units), [unit, units])
   const [idx, setIdx] = useState(Math.min(initial?.idx || 0, deck.length - 1))
   const [answers, setAnswers] = useState(initial?.answers || {})
@@ -219,7 +222,7 @@ function GrammarUnitDeck({ unit, units, from, initial, onStateChange, onBasics, 
   const c = deck[idx]
   const a = answers[c.id] || {}
   const total = deck.length
-  const same = deck.filter((x) => x.kind === c.kind)
+  const same = deck.filter((x) => x.kind === c.kind && x.sceneKind === c.sceneKind)
   const sub = same.length > 1 ? ` ${same.indexOf(c) + 1}/${same.length}` : ''
   useEffect(() => { headingRef.current?.focus() }, [idx])
   useEffect(() => { onStateChange?.({ idx, answers }) }, [idx, answers]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -258,7 +261,7 @@ function GrammarUnitDeck({ unit, units, from, initial, onStateChange, onBasics, 
         <div className="max-w-lg mx-auto">
           <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="bg-white rounded-3xl p-5 card-shadow max-h-[52vh] sm:max-h-[64vh] overflow-y-auto space-y-3">
             <h2 ref={headingRef} tabIndex={-1} className="text-lg font-black text-gray-900 break-keep outline-none">{c.title}{sub}</h2>
-            <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
+            <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} unit={unit} studentId={studentId} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
           </div>
         </div>
         <div className="flex gap-3 mt-3">
@@ -271,7 +274,7 @@ function GrammarUnitDeck({ unit, units, from, initial, onStateChange, onBasics, 
   )
 }
 
-function GrammarUnitView({ unit, units, from, initial, onStateChange, onBasics, onBack }) {
+function GrammarUnitView({ unit, units, studentId, from, initial, onStateChange, onBasics, onBack }) {
   if (unit.status !== 'ready') {
     const back = () => { stopSpeaking(); onBack(!from) }
     return (
@@ -285,10 +288,10 @@ function GrammarUnitView({ unit, units, from, initial, onStateChange, onBasics, 
       </div>
     )
   }
-  return <GrammarUnitDeck unit={unit} units={units} from={from} initial={initial} onStateChange={onStateChange} onBasics={onBasics} onBack={onBack} />
+  return <GrammarUnitDeck unit={unit} units={units} studentId={studentId} from={from} initial={initial} onStateChange={onStateChange} onBasics={onBasics} onBack={onBack} />
 }
 
-export default function GrammarCourseScreen({ units, onBack }) {
+export default function GrammarCourseScreen({ units, onBack, studentId }) {
   const [courseId, setCourseId] = useState(null)
   const [unitId, setUnitId] = useState(null)
   const [fromId, setFromId] = useState(null) // 기초 설명으로 건너온 경우 돌아갈 단원
@@ -305,7 +308,7 @@ export default function GrammarCourseScreen({ units, onBack }) {
           <h1 className="text-xl font-black text-indigo-700">문법 과정</h1>
         </div>
         {unit && (
-          <GrammarUnitView key={unit.id} unit={unit} units={units} from={fromId}
+          <GrammarUnitView key={unit.id} unit={unit} units={units} studentId={studentId} from={fromId}
             initial={deckStates.current.get(unit.id)}
             onStateChange={(s) => deckStates.current.set(unit.id, s)}
             onBasics={(id) => { setFromId(unit.id); setUnitId(id) }}

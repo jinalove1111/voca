@@ -226,6 +226,88 @@ const READY_UNITS = [
     id: 'g-easy-05', courseId: 'easy', order: 5,
     titleKo: '…이 있어요 There is', goalKo: '방에 무엇이 있는지 말할 수 있어요',
     conceptId: 'there-is-are', prereqIds: ['g-easy-02'], status: 'ready', reviewStatus: 'unreviewed',
+    scene: {
+      id: 'park', titleKo: '폴타운 공원', bgKo: '공원 배경(하늘·잔디)', characters: ['paul', 'cookie'],
+      objects: {
+        dog:   { en: 'dog',   enPlural: 'dogs',    ko: '강아지' },
+        tree:  { en: 'tree',  enPlural: 'trees',   ko: '나무' },
+        bench: { en: 'bench', enPlural: 'benches', ko: '벤치' },
+        ball:  { en: 'ball',  enPlural: 'balls',   ko: '공' },
+      },
+      steps: [
+        { kind: 'discover', stepKo: '발견',
+          promptKo: '폴과 함께 공원에 왔어요. 공원에 누가 있을까요? 강아지를 눌러 보세요.',
+          layout: [{ obj: 'dog', n: 1 }],
+          tap: { obj: 'dog', en: 'There is a dog.', ko: '강아지 한 마리가 있어.' },
+          noteKo: '하나가 있을 때는 There is a …라고 말해요.' },
+
+        { kind: 'compare', stepKo: '비교',
+          promptKo: '두 그림을 비교해 보세요. 강아지가 몇 마리일까요?',
+          left:  { layout: [{ obj: 'dog', n: 1 }], en: 'There is a dog.',      ko: '강아지 한 마리가 있어.' },
+          right: { layout: [{ obj: 'dog', n: 3 }], en: 'There are three dogs.', ko: '강아지 세 마리가 있어.' },
+          explainKo: ['한 마리면 is와 a dog, 여러 마리면 are와 three dogs예요.', '여러 마리일 때는 dog 뒤에 s를 붙여요.'] },
+
+        { kind: 'choose', stepKo: '선택',
+          items: [
+            { layout: [{ obj: 'tree', n: 2 }], promptKo: '그림을 보고 빈칸에 알맞은 말을 고르세요.',
+              frame: 'There ___ two trees.', options: ['is', 'are'], correct: 1,
+              whyKo: '그림에 나무가 두 그루 있어요. 둘 이상이라서 are를 써요.' },
+            { layout: [{ obj: 'bench', n: 1 }], promptKo: '그림을 보고 빈칸에 알맞은 말을 고르세요.',
+              frame: 'There ___ a bench.', options: ['is', 'are'], correct: 0,
+              whyKo: '그림에 벤치가 하나만 있어요. 하나라서 is를 써요.' },
+            { layout: [{ obj: 'ball', n: 3 }], promptKo: '그림을 보고 빈칸에 알맞은 말을 고르세요.',
+              frame: 'There ___ three balls.', options: ['is', 'are'], correct: 1,
+              whyKo: '그림에 공이 세 개 있어요. 여러 개라서 are를 써요.' },
+          ] },
+
+        { kind: 'build', stepKo: '만들기',
+          promptKo: '공원에 나무 두 그루를 심어 보세요. (끌어다 놓거나, 나무를 누른 뒤 놓을 곳을 눌러요.)',
+          place: { obj: 'tree', n: 2 }, slots: 4,
+          frameEn: 'There are ___ trees.', answerEn: 'There are two trees.', ko: '나무 두 그루가 있어.',
+          acceptEn: ['There are two trees.', 'There are 2 trees.'],
+          whyKo: '내가 심은 나무가 두 그루라서 There are two trees.라고 해요.' },
+
+        { kind: 'read', stepKo: '읽기',
+          promptKo: '문장을 읽고 알맞은 그림과 이어 보세요.',
+          pairs: [
+            { en: 'There is a bench.',      layout: [{ obj: 'bench', n: 1 }] },
+            { en: 'There are two trees.',   layout: [{ obj: 'tree', n: 2 }] },
+            { en: 'There are three dogs.',  layout: [{ obj: 'dog', n: 3 }] },
+          ] },
+
+        { kind: 'listen', stepKo: '듣기',
+          items: [
+            { en: 'There is a ball.',
+              options: [{ layout: [{ obj: 'ball', n: 1 }] }, { layout: [{ obj: 'ball', n: 2 }] }, { layout: [{ obj: 'dog', n: 1 }] }],
+              correct: 0, whyKo: 'a ball은 공 하나예요. 하나라서 is예요.' },
+            { en: 'There are two trees.',
+              options: [{ layout: [{ obj: 'tree', n: 3 }] }, { layout: [{ obj: 'bench', n: 2 }] }, { layout: [{ obj: 'tree', n: 2 }] }],
+              correct: 2, whyKo: 'two trees는 나무 두 그루예요. 벤치도, 세 그루도 아니에요.' },
+          ] },
+
+        { kind: 'speak', stepKo: '말하기',
+          practice: {
+            situationKo: '내가 꾸민 공원을 보고 있어요. 폴에게 공원에 무엇이 있는지 한 문장으로 알려 주세요.',
+            modelEn: 'There are two trees.', modelKo: '나무 두 그루가 있어.',
+            alternatives: ['There is a bench.', 'There is a dog.', 'There are two balls.', 'There are three dogs.'] },
+          exam: {
+            situationKo: '폴이 내가 꾸민 공원에 처음 왔어요. 폴에게 공원에 무엇이 있는지 알려 주세요.',
+            modelEn: 'There are two trees.',
+            alternatives: ['There is a bench.', 'There is a dog.', 'There are two balls.', 'There are three dogs.'] },
+          useMyPark: true },
+
+        { kind: 'write', stepKo: '쓰기',
+          promptKo: '내가 꾸민 공원에 무엇이 있는지 한 문장으로 써 보세요.',
+          exampleEn: 'There are two trees.', exampleKo: '나무 두 그루가 있어.',
+          acceptNoteKo: '내 공원에 있는 것이면 모두 맞아요. 예: There is a dog. / There is a bench. / There are two balls. 하나면 is, 둘 이상이면 are와 s를 써요.',
+          useMyPark: true },
+
+        { kind: 'finish', stepKo: '마무리',
+          canDoKo: ['공원에 무엇이 있는지 There is …로 말할 수 있어요.', '여러 개일 때는 There are two …s로 말할 수 있어요.'],
+          paulKo: '우리 공원에 뭐가 있는지 이제 다 말할 수 있네! 멋져!',
+          rewardNoteKo: '기존 보상 규칙 그대로 — 새 포인트는 없어요' },
+      ],
+    },
     examples: [
       { en: 'There is a ball in the box.', ko: '상자 안에 공이 있어.' },
       { en: 'There is a pencil on the desk.', ko: '책상 위에 연필이 있어.' },
@@ -270,7 +352,7 @@ const READY_UNITS = [
       ],
     },
     use: { kind: 'speaking', promptKo: '교실을 둘러보고 "There is a …" 또는 "There are two …"로 보이는 것 세 가지를 말해요.', exampleEn: 'There is a ball in the box.', exampleKo: '상자 안에 공이 있어.' },
-    words: [{ en: 'book', ko: '책' }, { en: 'books', ko: '책들' }, { en: 'pen', ko: '펜' }, { en: 'pens', ko: '펜들' }, { en: 'cat', ko: '고양이' }, { en: 'two', ko: '둘, 두 개' }, { en: 'shelf', ko: '선반' }],
+    words: [{ en: 'book', ko: '책' }, { en: 'books', ko: '책들' }, { en: 'pen', ko: '펜' }, { en: 'pens', ko: '펜들' }, { en: 'cat', ko: '고양이' }, { en: 'two', ko: '둘, 두 개' }, { en: 'shelf', ko: '선반' }, { en: 'dog', ko: '강아지' }, { en: 'dogs', ko: '강아지들' }, { en: 'ball', ko: '공' }, { en: 'balls', ko: '공들' }, { en: 'tree', ko: '나무' }, { en: 'trees', ko: '나무들' }, { en: 'bench', ko: '벤치' }, { en: 'benches', ko: '벤치들' }, { en: 'park', ko: '공원' }, { en: 'three', ko: '셋' }],
     sources: ['own'],
   },
   {

@@ -910,7 +910,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {qaTestStudent && screen === 'grammarCourses' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <GrammarCourseScreen units={pilotUnits} onBack={() => setScreen('home')} />
+          <GrammarCourseScreen units={pilotUnits} studentId={studentId} onBack={() => setScreen('home')} />
         </React.Suspense>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
