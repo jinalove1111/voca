@@ -149,6 +149,7 @@ import {
 } from '../../../utils/town/proto2_5d/camera'
 import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase, findTappedShop, shopArrivalOk } from '../../../utils/town/proto2_5d/shopInteraction'
 import ProtoShopScreen from './ProtoShopScreen'
+import { MISSION_ART, missionArtUrl } from '../../../assets/town/kit/townMission'
 import { MISSION_SPOTS, missionArrival, isNearMissionSpot, findTappedMissionSpot } from '../../../utils/town/proto2_5d/missionSpots'
 import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
 import { PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements, movePlacement, removePlacement } from '../../../utils/town/proto2_5d/placementSlots'
@@ -2215,46 +2216,81 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
             hit-test(classifyTap)가 처리하므로 pointer-events-none(벤치와 동일 관례),
             키보드는 Enter/Space. 오버레이(가게/내 물건/배치)가 열리면 숨긴다. */}
         {missionUiOpen && missionSpots.map((sp) => {
-          const url = townAsset(sp.assetKey)
+          const url = missionArtUrl(MISSION_ART[sp.assetKey])
           if (!url) return null
           const widthPx = objectRenderedWidthPx(sp, groundSize)
           const done = Array.isArray(completedMissionIds) && completedMissionIds.includes(sp.id)
           const z = obstacleZIndex(`mission-${sp.id}`, sp.anchor.y)
+          const cp = sp.companion
+          const cookieUrl = cp ? missionArtUrl(MISSION_ART[cp.assetKey]) : null
+          const cookieW = cp ? objectRenderedWidthPx(cp, groundSize) : 0
+          const cookieZ = cp ? obstacleZIndex(`mission-${sp.id}-companion`, cp.anchor.y) : 0
+          const shadowStyle = (a, w, zi) => ({
+            left: `${a.x}%`,
+            top: `${a.y}%`,
+            width: `${w}px`,
+            height: `${w * SCENE_OBJECT_SHADOW_HEIGHT_RATIO}px`,
+            transform: `translate(-50%, -${SCENE_OBJECT_SHADOW_HEIGHT_RATIO * 100}%)`,
+            background: SHADOW_BACKGROUND,
+            zIndex: zi,
+          })
           return (
-            <div
-              key={sp.id}
-              role="button"
-              tabIndex={0}
-              aria-label={sp.labelKo}
-              data-testid={`proto25d-mission-spot-${sp.id}`}
-              data-done={done ? 'true' : undefined}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter' && e.key !== ' ') return
-                e.preventDefault()
-                if (character.phase === 'sitting' || character.phase === 'leaving') return
-                startWalkToMission(sp)
-              }}
-              className="absolute pointer-events-none"
-              style={{
-                left: `${sp.anchor.x}%`,
-                top: `${sp.anchor.y}%`,
-                width: `${widthPx}px`,
-                height: `${widthPx * sp.naturalAspect}px`,
-                minHeight: '44px',
-                transform: 'translate(-50%, -100%)',
-                zIndex: z,
-              }}
-            >
-              <img src={url} alt="" draggable={false} className="block w-full h-full" />
-              {done && (
-                <span
-                  data-testid={`proto25d-mission-done-${sp.id}`}
-                  className="absolute left-1/2 -top-1 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-emerald-600 text-white text-xs font-black px-2 py-0.5 shadow"
-                >
-                  완료
-                </span>
+            <Fragment key={sp.id}>
+              <div aria-hidden="true" className="absolute rounded-full pointer-events-none" style={shadowStyle(sp.anchor, widthPx, z)} />
+              {cookieUrl && (
+                <>
+                  <div aria-hidden="true" className="absolute rounded-full pointer-events-none" style={shadowStyle(cp.anchor, cookieW, cookieZ)} />
+                  <div
+                    aria-hidden="true"
+                    data-testid={`proto25d-mission-companion-${sp.id}`}
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: `${cp.anchor.x}%`,
+                      top: `${cp.anchor.y}%`,
+                      width: `${cookieW}px`,
+                      height: `${cookieW * cp.naturalAspect}px`,
+                      transform: 'translate(-50%, -100%)',
+                      zIndex: cookieZ,
+                    }}
+                  >
+                    <img src={cookieUrl} alt="" draggable={false} className="block w-full h-full" />
+                  </div>
+                </>
               )}
-            </div>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={sp.labelKo}
+                data-testid={`proto25d-mission-spot-${sp.id}`}
+                data-done={done ? 'true' : undefined}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return
+                  e.preventDefault()
+                  if (character.phase === 'sitting' || character.phase === 'leaving') return
+                  startWalkToMission(sp)
+                }}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${sp.anchor.x}%`,
+                  top: `${sp.anchor.y}%`,
+                  width: `${widthPx}px`,
+                  height: `${widthPx * sp.naturalAspect}px`,
+                  minHeight: '44px',
+                  transform: 'translate(-50%, -100%)',
+                  zIndex: z,
+                }}
+              >
+                <img src={url} alt="" draggable={false} className="block w-full h-full" />
+                {done && (
+                  <span
+                    data-testid={`proto25d-mission-done-${sp.id}`}
+                    className="absolute left-1/2 -top-1 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-emerald-600 text-white text-xs font-black px-2 py-0.5 shadow"
+                  >
+                    완료
+                  </span>
+                )}
+              </div>
+            </Fragment>
           )
         })}
 

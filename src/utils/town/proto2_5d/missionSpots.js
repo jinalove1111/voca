@@ -10,11 +10,19 @@ export const MISSION_SPOTS = Object.freeze([
   Object.freeze({
     id: 'park',
     labelKo: '공원 미션',
-    assetKey: 'decorations/town-sign',
+    assetKey: 'props/signpost', // kit/townMission.js MISSION_ART 키
     anchor: Object.freeze({ x: 11, y: 66 }), // bottom-center world-%
-    widthPct: 7,
+    widthPct: 7, // 높이 = 7*256/168 = 10.7% unit ≈ Paul(8% 폭 * 128/96) 키
     minWidthPx: 44,
-    naturalAspect: 108 / 72, // town-sign 72x108
+    naturalAspect: 256 / 168, // kit signpost 168x256
+    // Cookie — 표지판 왼쪽 앞의 비상호작용 동반자(무릎~허리 높이 ≈ Paul의 0.45배). 탭/장애물 없음.
+    companion: Object.freeze({
+      assetKey: 'character/cookie-stand',
+      anchor: Object.freeze({ x: 3.8, y: 67.5 }),
+      widthPct: 4,
+      minWidthPx: 20,
+      naturalAspect: 256 / 213, // kit cookie-stand 213x256
+    }),
     hitRect: Object.freeze({ x0: 7.5, x1: 14.5, y0: 60, y1: 66 }),
     arrivalRaw: Object.freeze({ x: 17, y: 68 }), // 표지판 오른쪽 앞
   }),

@@ -359,8 +359,8 @@ section('항목11 — Phase 6C 코멘트 드리프트 정리(stale 문구 제거
   )
   const shadowRatioUsages = protoScreenSrc2.match(/SCENE_OBJECT_SHADOW_HEIGHT_RATIO/g) || []
   check(
-    'SOURCE — SCENE_OBJECT_SHADOW_HEIGHT_RATIO가 선언 포함 정확히 3회 등장(선언 1 + 사용 2)',
-    shadowRatioUsages.length === 3, `matches=${shadowRatioUsages.length}`,
+    'SOURCE — SCENE_OBJECT_SHADOW_HEIGHT_RATIO가 선언 포함 정확히 5회 등장(선언 1 + 씬 오브젝트 사용 2 + 미션 표지판/Cookie 그림자 shadowStyle 사용 2, 2026-10-10)',
+    shadowRatioUsages.length === 5, `matches=${shadowRatioUsages.length}`,
   )
   check(
     'SOURCE — 씬 오브젝트 그림자 높이에 리터럴 0.35 대신 상수 사용',

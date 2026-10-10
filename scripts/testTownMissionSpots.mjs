@@ -28,8 +28,21 @@ const overlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.
 
 const spot = M.missionSpotById('park')
 check('park 표지판이 존재하고 알 수 없는 id는 null', !!spot && M.missionSpotById('nope') === null)
-check('assetKey는 기존 decorations/town-sign', spot.assetKey === 'decorations/town-sign'
-  && /entry\('decorations\/town-sign'/.test(readFileSync('src/assets/town/assetManifest.js', 'utf8')))
+const KIT_MANIFEST = JSON.parse(readFileSync('src/assets/town/kit/manifest.json', 'utf8')).targets
+const ART_SRC = readFileSync('src/assets/town/kit/townMission.js', 'utf8')
+const artW = (k) => KIT_MANIFEST[k].w, artH = (k) => KIT_MANIFEST[k].h
+check('표지판 assetKey는 키트 props/signpost, 비율은 manifest와 동일', spot.assetKey === 'props/signpost'
+  && Math.abs(spot.naturalAspect - artH('props/signpost') / artW('props/signpost')) < 1e-9)
+const cookie = spot.companion
+check('Cookie는 키트 character/cookie-stand, 비율은 manifest와 동일(왜곡 없음)', cookie.assetKey === 'character/cookie-stand'
+  && Math.abs(cookie.naturalAspect - artH('character/cookie-stand') / artW('character/cookie-stand')) < 1e-9)
+for (const k of ['props/signpost', 'character/cookie-stand']) {
+  check(`townMission.js가 ${k} 1x/@2x를 import하고 w/h가 manifest와 같음`,
+    ART_SRC.includes(`'./${k}.webp'`) && ART_SRC.includes(`'./${k}@2x.webp'`)
+    && ART_SRC.includes(`'${k}': Object.freeze({ src: `) && ART_SRC.includes(`w: ${artW(k)}, h: ${artH(k)} })`))
+}
+check('townMission.js: devicePixelRatio>1일 때만 @2x, window 없으면 1x(SSR-safe)', /typeof window !== 'undefined'/.test(ART_SRC) && /dpr > 1 \? art\.src2x : art\.src/.test(ART_SRC))
+check('townMission.js 이모지 없음', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(ART_SRC))
 
 const arrival = M.missionArrival(spot)
 check('도착 지점이 걸을 수 있는 칸', G.classifyPoint(arrival.x, arrival.y) === 'walkable', JSON.stringify(arrival))
@@ -70,6 +83,28 @@ for (const [w, h] of [[360, 640], [390, 844], [1280, 800]]) {
   void bp
 }
 
+// Cookie 박스(px) — 표지판 탭 영역 중심/도착 지점/e2e 탭 지점을 덮지 않고, 화면 안에 있다.
+// depthScale은 Paul/표지판/Cookie 모두 y가 비슷해 생략한 근사(상대 비율만 본다).
+const PAUL_H_RATIO = 128 / 96 // Paul 스프라이트 h/w
+for (const [w, h] of [[360, 640], [390, 844], [1280, 800]]) {
+  const unit = Math.min(w, 1.2 * h)
+  const px = (o) => Math.max(o.minWidthPx || 0, (o.widthPct / 100) * unit)
+  const boxOf = (o) => { const bw = px(o); const bh = bw * o.naturalAspect; return { x0: (o.anchor.x / 100) * w - bw / 2, x1: (o.anchor.x / 100) * w + bw / 2, y0: (o.anchor.y / 100) * h - bh, y1: (o.anchor.y / 100) * h } }
+  const cb = boxOf(cookie), sb = boxOf(spot)
+  const inside = (b, x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1
+  const cx = (((spot.hitRect.x0 + spot.hitRect.x1) / 2) / 100) * w, cy = (((spot.hitRect.y0 + spot.hitRect.y1) / 2) / 100) * h
+  const paulW = Math.max(0.08 * w, 40), paulH = paulW * PAUL_H_RATIO
+  check(`${w}x${h}: Cookie 박스가 화면 안`, cb.x0 >= 0 && cb.y0 >= 0 && cb.y1 <= h, JSON.stringify(cb))
+  check(`${w}x${h}: Cookie가 표지판 탭 영역 중심을 덮지 않음`, !inside(cb, cx, cy))
+  check(`${w}x${h}: Cookie와 표지판 이미지의 가로 겹침은 Cookie 폭의 35% 이하`, cb.x1 - sb.x0 <= 0.35 * (cb.x1 - cb.x0), `${cb.x1} vs ${sb.x0}`)
+  check(`${w}x${h}: Cookie가 도착 지점을 덮지 않음`, !inside(cb, (arrival.x / 100) * w, (arrival.y / 100) * h))
+  check(`${w}x${h}: Cookie가 기존 e2e 탭 지점 4곳+스폰을 덮지 않음`, [[50, 10], [15, 92], [30, 85], [73, 70], [50, 62]].every(([x, y]) => !inside(cb, (x / 100) * w, (y / 100) * h)))
+  check(`${w}x${h}: Cookie 높이는 Paul의 0.3~0.65배`, cb.y1 - cb.y0 >= 0.3 * paulH && cb.y1 - cb.y0 <= 0.65 * paulH, `cookieH=${(cb.y1 - cb.y0).toFixed(1)} paulH=${paulH.toFixed(1)}`)
+  check(`${w}x${h}: 표지판 높이는 Paul의 0.7~1.5배`, sb.y1 - sb.y0 >= 0.7 * paulH && sb.y1 - sb.y0 <= 1.5 * paulH, `signH=${(sb.y1 - sb.y0).toFixed(1)} paulH=${paulH.toFixed(1)}`)
+  console.log(`    ${w}x${h}: sign ${(sb.x1 - sb.x0).toFixed(0)}x${(sb.y1 - sb.y0).toFixed(0)}px, cookie ${(cb.x1 - cb.x0).toFixed(0)}x${(cb.y1 - cb.y0).toFixed(0)}px, paul ${paulW.toFixed(0)}x${paulH.toFixed(0)}px`)
+}
+check('Cookie는 OBSTACLES에 없고 anchor가 월드 안', !G.OBSTACLES.some((o) => /cookie|companion/.test(o.id)) && cookie.anchor.x > 0 && cookie.anchor.x < 100)
+
 // Proto25DScreen 소스 핀
 const src = readFileSync('src/components/town/proto2_5d/Proto25DScreen.jsx', 'utf8')
 for (const [label, re] of [
@@ -81,9 +116,12 @@ for (const [label, re] of [
   ['Enter/Space', /e\.key !== 'Enter' && e\.key !== ' '/],
   ['onStartMission 호출', /onStartMission\(nearMission\.id\)/],
   ['오버레이 중 숨김', /missionUiOpen = !shopOpen && !placingItemId && !myItemsOpen/],
+  ['Cookie testid', /proto25d-mission-companion-\$\{sp\.id\}/],
+  ['Cookie 깊이 z는 앵커 y 기반 obstacleZIndex', /obstacleZIndex\(`mission-\$\{sp\.id\}-companion`, cp\.anchor\.y\)/],
+  ['키트 아트는 townMission 모듈 경유', /from '\.\.\/\.\.\/\.\.\/assets\/town\/kit\/townMission'/],
   ['onStartMission 없으면 비활성', /typeof onStartMission === 'function'/],
 ]) check(`소스 핀: ${label}`, re.test(src))
-check('표지판은 기존 town-sign만 사용(missionSpots 경유, 신규 import 이미지 없음)', !/mission.*\.(webp|png)/i.test(src))
+check('Proto25DScreen은 미션 이미지를 직접 import하지 않음(townMission 모듈 경유)', !/mission.*\.(webp|png)/i.test(src))
 check('이모지 없음(missionSpots.js, 신규 JSX 블록)', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(readFileSync('src/utils/town/proto2_5d/missionSpots.js', 'utf8')))
 
 console.log(`\n총 ${pass + fail}개 단언 — PASS ${pass} / FAIL ${fail}`)
