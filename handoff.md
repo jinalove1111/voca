@@ -68,6 +68,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - 신규 `scripts/testPictureWords.mjs`(registry 등록) + `tests/e2e/pictureWordReview.spec.mjs`(`testBrowserE2E`에 등록; 이 작업에서는 실행하지 않음 — 리드가 브라우저 실행).
 - 설계/한계: `docs/design/PICTURE_WORDS_2026-10-11.md`. 파닉스 학습 순서 미확정(`phonicsOrder: null`), 학습 흐름은 설계만, 상점 구매는 이후 SQL(`town_items`) 필요.
 
+- **리드 검증(248차, HEAD 빌드, 더미 env + 전 네트워크 mock)**: `[picture-words]` 29/0/0 — 카드 32장(불일치 16·불확실 10·여러 개 5·사용 불가 1), 썸네일 32개 로드, 승인·단어 수정·제외·보류, 내보내기 JSON, 새로고침 후 유지, 전체 초기화, 분류 결과 탭(Phonics 13그룹 33단어·순서 미확정 안내·상점 8그룹·재사용/신규), 360px 가로 넘침 0, 콘솔 오류 0, 추가 저장소 키 1개. `[admin]` 21/0/0. `testPictureWords` 666/666. 리드 수정 1건: 스펙의 네트워크 단언이 새로고침으로 인한 앱 부팅 조회(관리자 화면 자체의 반/유닛 GET)와 관리자 재로그인 mock POST까지 패널 탓으로 세던 것을 패널 구간만 보도록 좁힘(패널 구간 Supabase·/api 요청 0, 전 구간 데이터 쓰기 0). 스크린샷으로 두 탭 육안 확인. **미검증**: 실제 Preview에서 실제 관리자 PIN 로그인 후 화면, 실기기, 클립보드 복사 동작(헤드리스에서는 textarea 내용만 확인). 학습 기능·상점 UI·DB 반영은 미구현(승인 대기).
 ## 2026-10-11 (247차) — 하이브리드 마을 클릭/탭 이동
 
 - **무엇**: 새 순수 모듈 `src/utils/town/proto2_5d/world/clickMove.js`(보행 격자 buildWalkGrid / BFS+시야 단순화 planPath / 건물 클릭 -> 입구 resolveClickTarget / followStep). `TownWorld.jsx`는 포인터 탭(10px·500ms 미만, 왼쪽 버튼, HUD·조이스틱·시트·지도 제외)을 월드 레이어 rect + `sRef`로 월드 좌표로 바꿔 경로를 만들고, 기존 틱의 **같은 `stepMove`**(충돌 유지)로 따라 걷는다. 키보드/조이스틱·시트·지도·travel·blur는 경로 취소, 400ms 못 움직이면 취소. 목적지 마커 `tw-dest`(CSS만, 애니메이션 없음 -> reduced-motion 자동 충족), 루트 `data-dest`, 갈 수 없으면 0.7초 `tw-dest-bad`.

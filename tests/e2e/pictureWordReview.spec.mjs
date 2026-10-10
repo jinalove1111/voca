@@ -80,8 +80,10 @@ export async function run(browser, baseURL) {
     r.check('내보내기 텍스트에 수정값 포함', !!parsed && parsed.v === 1 && parsed.decisions[m2.id]?.en === 'edited-word' && parsed.decisions[m2.id]?.ko === '수정된뜻' && parsed.decisions[m1.id]?.action === 'approve' && parsed.decisions[m3.id]?.action === 'exclude' && !parsed.decisions[un.id])
     const stored = await page.evaluate((k) => localStorage.getItem(k), KEY)
     r.check('localStorage 키 저장', !!stored && JSON.parse(stored).v === 1)
+    const preReload = net.length // 새로고침은 앱 부팅(관리자 화면 자체의 반/유닛 조회)을 다시 일으키므로 패널 구간에서 뺀다
     await page.reload({ waitUntil: 'domcontentloaded' })
     await openPanel(page)
+    const postReopen = net.length
     r.check('새로고침 후 결정 유지', (await T(page, `pwr-card-${m1.asset}`).getAttribute('data-decision')) === 'approve' && (await T(page, `pwr-card-${m3.asset}`).getAttribute('data-decision')) === 'exclude' && (await txt(page, 'pwr-count-approved')) === '2')
 
     await T(page, 'pwr-tab-result').click()
@@ -108,7 +110,10 @@ export async function run(browser, baseURL) {
     const after = await keys(page)
     const added = after.filter((k) => !before.includes(k))
     r.check('추가된 저장소 키는 paulEasyVoca_pictureWordReview 뿐', added.length === 1 && added[0] === KEY, JSON.stringify(added))
-    const bad = net.slice(netStart).filter((q) => q.method !== 'GET' || /supabase|\/api\//.test(q.url))
+    const panelNet = [...net.slice(netStart, preReload), ...net.slice(postReopen)]
+    const bad = panelNet.filter((q) => q.method !== 'GET' || /supabase|\/api\//.test(q.url))
+    const writes = net.slice(netStart).filter((q) => q.method !== 'GET' && q.method !== 'HEAD' && q.method !== 'OPTIONS' && !q.url.includes('/api/verify-admin-pin')) // 새로고침 뒤 관리자 재로그인(mock)은 데이터 쓰기가 아니다
+    r.check('새로고침 포함 전 구간 데이터 쓰기 요청 0건', writes.length === 0, JSON.stringify(writes.slice(0, 3)))
     r.check('패널 사용 중 쓰기/Supabase//api 요청 0건', bad.length === 0, JSON.stringify(bad.slice(0, 3)))
     r.check('콘솔 오류 0건', consoleErrors.length === 0, JSON.stringify(consoleErrors.slice(0, 3)))
   } catch (err) {
