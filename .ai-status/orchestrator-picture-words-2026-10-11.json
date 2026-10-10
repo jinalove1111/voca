@@ -40,16 +40,18 @@
     "src/components/pictureWords/HiddenLetters.jsx",
     "src/components/pictureWords/PictureGames.jsx",
     "src/components/pictureWords/ShopShelf.jsx",
-    "scripts/pictureWords/fixtures/decisions.sample.json"
+    "scripts/pictureWords/fixtures/decisions.sample.json",
+    "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "stage done: 5 sample decisions fixture + in-memory tests",
+  "summary": "stage done: 6 browser spec (run 1: 66 PASS / 0 FAIL)",
   "blocker": null,
-  "next_action": "stage 6: tests/e2e/pictureWordGames.spec.mjs",
+  "next_action": "stage 7: docs (design doc, handoff 250, TESTING)",
   "stages_done": [
     "1 levels+games.js+tests+registry",
     "2 AlphabetHammer",
     "3 HiddenLetters",
     "4 PictureGames+ShopShelf+mode picker+connected entry+budget 2.2MB",
-    "5 sample decisions fixture + in-memory tests"
+    "5 sample decisions fixture + in-memory tests",
+    "6 browser spec (run 1: 66 PASS / 0 FAIL)"
   ]
 }
