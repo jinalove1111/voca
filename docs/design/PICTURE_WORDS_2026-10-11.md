@@ -55,6 +55,14 @@
 - 패널/데이터에는 fetch/Supabase/`/api`/보상 호출이 없다(`scripts/testPictureWords.mjs`가 소스 핀으로 검증).
 - 이미지는 `PictureWordReviewPanel` lazy 청크에서만 import(격리 검사). 번들 예산에서는 관리자 전용 청크로 제외.
 
+## 7-A. (249차 추가) 결정 반입 · Phonics 미분류 · 연습 화면
+
+- 결정 파일: `scripts/pictureWords/source/decisions.json`(지금은 비어 있음). 운영자가 내보낸 `{ "v":1, "decisions":{...} }`를 이 파일에 붙여 넣고 `node scripts/pictureWords/validateDecisions.mjs`로 검증한 뒤 `node scripts/pictureWords/buildPictureWordsData.mjs`를 다시 실행하면 학습 데이터가 갱신된다. `pending`은 승인 필요 31장(MISMATCH/UNCERTAIN/MULTIPLE) 중 결정이 없는 것 — 사용 불가 1장은 제외 결정만 가능하며 pending에 세지 않는다. 결정 전까지 학습 대상은 MATCH 119장뿐.
+- Phonics: 운영자 지시로 분류하지 않는다(교재 유닛별 소리 순서 확정 전). `tracks`에서 제거, `phonicsCandidate`와 `phonicsReview.classified=false`만 유지, 학생 화면은 사용하지 않음.
+- 연습 흐름(구현됨, 테스터 4명 전용): 그림 보기 → 영국식 발음 듣기(자동재생 없음) → 따라 말하기(녹음은 선택·메모리 전용·점수 없음) → 그림 보고 단어 맞히기(답 전 단어/뜻 비노출) → 복습(틀린 단어를 맞힐 때까지) → 요약.
+- 세션 한정: 모든 진행 상태는 React state(새로고침 시 사라짐). 저장 키·네트워크·보상·분석 없음.
+- 아직 없음: 철자 쓰기, 그림 듣고 고르기, 보상/기록, 상점 UI, 구매 SQL, 2x 이미지, 기존 18단어 저장 mp3 재사용.
+
 ## 9. 나중에 SQL이 필요한 것 / 하지 않은 것
 
 - 상점 구매(`town_items` 항목 추가)와 승인 결과를 DB에 영구 저장하는 일은 별도 마이그레이션이 필요하다(이번에는 SQL 없음).

@@ -2086,3 +2086,9 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 
 - `scripts/testPictureWords.mjs`(666단언, registry 등록): 151 엔트리·상태 119/16/10/5/1·id=pics2/<stem>·에셋 파일 존재/고아 없음/40KB·autoLink==MATCH·비MATCH tracks 비어 있음·phonics 33(phonicsOrder null)·기존 단어 18·`applyDecisions` 단위·패널/데이터 소스 핀(fetch/supabase/api/grantReward/window.confirm 없음, lazy, 저장 키)·`assets/pictureWords` 참조 격리. 네트워크 0.
 - `tests/e2e/pictureWordReview.spec.mjs`: 관리자 패널 브라우저 시나리오(카드 32·이미지 naturalWidth·승인/수정/제외/보류·새로고침 유지·결과 탭·360px·쓰기/Supabase 요청 0·저장 키 1개). Playwright는 리드가 실행.
+
+### 249차 추가 (2026-10-11): 그림 단어 연습
+
+- `scripts/testPictureWords.mjs`(728단언)에 추가: 결정 검증기 9케이스(빈 파일/승인/수정/제외/미지 id/MATCH id/잘못된 action/빈 en/UNUSABLE 승인), 빈 결정에서 learnable 119·pending 31·excluded 0, 어떤 항목의 `tracks`에도 phonics 없음, `shopSets()` 순서·`ready`, `practice.js` 결정성·보기 4개 서로 다름·정답 1회·정답 위치 비고정·오답 문구≠정답·`reviewQueue`/`summarise`, 연습 화면 소스 핀(fetch/supabase/storage/보상 없음, 퀴즈 조건부 마운트, alt "그림", `data-correct` 없음, 언마운트 시 `stopSpeaking`, `isTownWorldTester` 게이트, 버튼 위치).
+- `tests/e2e/pictureWordPractice.spec.mjs`(`[picture-practice]`, 작성만 — 브라우저 미실행): 전 과정 정답, 오답 복습, 답 전 누출 0, 듣기(speak 스텁), 마이크 없이 따라 말하기, 360x640 넘침·가림 0, 일반 학생 진입 없음 + 홈 메뉴 진입, 콘솔 오류 0·REST 쓰기 0·저장소 키 불변.
+
