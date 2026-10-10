@@ -37,14 +37,17 @@
     "scripts/testPictureWordGames.mjs",
     "src/components/pictureWords/pictureImg.jsx",
     "src/components/pictureWords/AlphabetHammer.jsx",
-    "src/components/pictureWords/HiddenLetters.jsx"
+    "src/components/pictureWords/HiddenLetters.jsx",
+    "src/components/pictureWords/PictureGames.jsx",
+    "src/components/pictureWords/ShopShelf.jsx"
   ],
-  "summary": "stage done: 3 HiddenLetters",
+  "summary": "stage done: 4 PictureGames+ShopShelf+mode picker+connected entry+budget 2.2MB",
   "blocker": null,
-  "next_action": "stage 4: PictureGames.jsx + ShopShelf.jsx + mode picker",
+  "next_action": "stage 5: decisions.sample.json fixture + tests",
   "stages_done": [
     "1 levels+games.js+tests+registry",
     "2 AlphabetHammer",
-    "3 HiddenLetters"
+    "3 HiddenLetters",
+    "4 PictureGames+ShopShelf+mode picker+connected entry+budget 2.2MB"
   ]
 }

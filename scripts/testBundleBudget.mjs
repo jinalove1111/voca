@@ -196,7 +196,8 @@ const TOWN_GZIP_BUDGET_BYTES = 15 * 1000
 // ⚠ 2026-10-10 (scene v2) 1.8MB → 2.0MB — 문법 34단원 그림 미션 데이터(scenes/*.js 약 140KB)와 Stage/SceneCards가 같은 lazy GrammarCourseScreen 청크(약 310KB raw)에 들어가 합계 1.905MB.
 // 문법 화면을 열 때만 받는 청크이고 메인 청크 gzip ≤135KB 단언은 불변(학생 초기 로드 무게 그대로). ponytail: 한 청크 유지 — 문법 청크가 400KB raw를 넘으면 과정별 scenes 동적 import로 분리.
 // ⚠ 2026-10-10(244차 하이브리드 월드) 2.0MB → 2.1MB — TownWorld lazy 청크(36.8KB raw / 12.7KB gzip, QA 플래그 paulTownWorld ON일 때만 로드)와 스프라이트/키트 공유 청크가 합계에 포함돼 2.010MB. 메인 청크 gzip ≤135KB 단언은 불변(130.3KB, 학생 초기 로드 무게 그대로).
-const CORE_RAW_BUDGET_BYTES = 2.1 * 1_000_000
+// ⚠ 2026-10-11(250차 그림 단어 게임) 2.1MB → 2.2MB — 알파벳 망치/숨은 글자/가게 선반이 새 lazy 청크 PictureGames(13.1KB raw)로 들어가고 PictureWordPractice 청크(22.2KB raw)가 모드 선택을 더해 합계가 2.092MB → 2.109MB(+약 17KB). 게임을 열 때만 받는 청크이고 메인 청크 gzip ≤135KB 단언은 불변(130.8KB, 학생 초기 로드 무게 그대로). 제외 규칙 추가 없음.
+const CORE_RAW_BUDGET_BYTES = 2.2 * 1_000_000
 
 // ── 1. 코드 분할 — TownScreen은 별도 청크(lazy), index.html이 직접 참조하지 않음 ──
 section('1. 코드 분할 — TownScreen 지연 로드')

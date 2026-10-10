@@ -1,12 +1,15 @@
 // 그림 단어 연습(249차, 테스터 전용). 보기 → 영국식 발음 듣기 → 따라 말하기 → 그림 보고 맞히기 → 복습.
 // 상태는 React state뿐(새로고침하면 사라짐). 저장·네트워크·보상 호출 0. 녹음은 메모리 전용(useLocalRecorder).
 import React, { useEffect, useMemo, useState } from 'react'
-import { learnableWords, shopSets } from '../../data/pictureWords/index.js'
+import { LEVELS, learnableWords, shopSets } from '../../data/pictureWords/index.js'
 import { STEPS, buildSession, buildQuiz, reviewQueue, summarise } from '../../utils/pictureWords/practice.js'
 import { playWordAudio, stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls, PARTNER_REC_LABELS } from '../SpeakingPracticeItem'
 import { imgUrl } from './pictureImg.jsx'
+
+// 게임/가게 선반은 열 때만 받는 추가 청크
+const PictureGames = React.lazy(() => import('./PictureGames'))
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 const PRIMARY = `${BTN} bg-purple-600 text-white`
@@ -74,7 +77,7 @@ function QuizCard({ word, q, onAnswered, onNext }) {
   )
 }
 
-function Session({ set, seed, onAgain, onOther, onExit }) {
+function Session({ set, seed, onAgain, onOther, onExit, onGame }) {
   const words = useMemo(() => buildSession(set.words, { size: SESSION_SIZE, seed }), [set, seed])
   const quiz = useMemo(() => buildQuiz(words, POOL, seed), [words, seed])
   const rec = useLocalRecorder()
@@ -122,6 +125,8 @@ function Session({ set, seed, onAgain, onOther, onExit }) {
             <ul className="mt-1">{s.needsReview.map((id) => <li key={id} data-testid="pwp-summary-review" className="break-words">{byId(id).en} — {byId(id).ko}</li>)}</ul>
           </div>
         )}
+        <button type="button" data-testid="pwp-game-hammer" onClick={() => onGame('hammer', words)} className={`${SOFT} w-full`}>이 단어로 알파벳 망치</button>
+        <button type="button" data-testid="pwp-game-hidden" onClick={() => onGame('hidden', words)} className={`${SOFT} w-full`}>이 단어로 숨은 글자</button>
         <button type="button" data-testid="pwp-again" onClick={onAgain} className={`${PRIMARY} w-full`}>다시 하기</button>
         <button type="button" data-testid="pwp-other-set" onClick={onOther} className={`${SOFT} w-full`}>다른 묶음</button>
         <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
@@ -187,29 +192,55 @@ function Session({ set, seed, onAgain, onOther, onExit }) {
 }
 
 export default function PictureWordPractice({ onExit }) {
-  const [sel, setSel] = useState(null) // { shop, seed }
+  const [sel, setSel] = useState(null) // 단어 연습: { shop, seed } 또는 { words, seed }
+  const [view, setView] = useState(null) // 게임/선반: { kind:'game', mode, from? } | { kind:'shelf' }
+  const [level, setLevel] = useState('phonics')
   const sets = useMemo(() => shopSets(), [])
-  const set = sel && sets.find((x) => x.shop === sel.shop)
+  const set = sel && (sel.words ? { words: sel.words } : sets.find((x) => x.shop === sel.shop))
+  const practice = (words) => { setView(null); setSel({ words, seed: newSeed() }) }
+  const game = (mode, from) => { setSel(null); setView({ kind: 'game', mode, from }) }
+  let body
+  if (view) {
+    body = (
+      <React.Suspense fallback={<p className="text-center text-sm text-gray-500">불러오는 중...</p>}>
+        <PictureGames key={view.kind + (view.mode || '')} kind={view.kind} mode={view.mode} level={level} from={view.from} onPractice={practice} onMenu={() => setView(null)} onExit={onExit} />
+      </React.Suspense>
+    )
+  } else if (set) {
+    body = <Session key={sel.seed} set={set} seed={sel.seed} onAgain={() => setSel({ ...sel, seed: newSeed() })} onOther={() => setSel(null)} onExit={onExit} onGame={game} />
+  } else {
+    body = (
+      <div data-testid="pwp-root" data-step="pick" data-index={0} className="space-y-2">
+        <div className="flex flex-wrap justify-center gap-2">
+          {LEVELS.map((l) => (
+            <button key={l.id} type="button" data-testid={`pwg-level-${l.id}`} data-active={level === l.id ? 'true' : 'false'} disabled={!l.enabled} onClick={() => setLevel(l.id)}
+              className={`min-h-[44px] rounded-full px-3 text-xs font-black btn-press disabled:opacity-40 ${level === l.id ? 'bg-purple-600 text-white' : 'border-2 border-purple-200 bg-white text-purple-700'}`}>{l.labelKo}</button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <button type="button" data-testid="pwg-mode-practice" className={`${SOFT} px-1 text-sm`}>단어 연습</button>
+          <button type="button" data-testid="pwg-mode-hammer" onClick={() => game('hammer')} className={`${SOFT} px-1 text-sm`}>알파벳 망치</button>
+          <button type="button" data-testid="pwg-mode-hidden" onClick={() => game('hidden')} className={`${SOFT} px-1 text-sm`}>숨은 글자</button>
+        </div>
+        <button type="button" data-testid="pwg-mode-shelf" onClick={() => setView({ kind: 'shelf' })} className={`${SOFT} w-full`}>가게 구경</button>
+        <p className="text-center text-sm text-gray-600">연습할 묶음을 골라요</p>
+        <div className="grid grid-cols-2 gap-2">
+          {sets.map((s) => (
+            <button key={s.shop} type="button" data-testid={`pwp-set-${s.shop}`} disabled={!s.ready} onClick={() => setSel({ shop: s.shop, seed: newSeed() })}
+              className={`${BTN} border-2 border-purple-200 bg-white text-purple-700`}>
+              {s.labelKo}<span className="block text-xs font-bold text-gray-500">{s.ready ? `${s.words.length}개` : '준비 중'}</span>
+            </button>
+          ))}
+        </div>
+        <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
+      </div>
+    )
+  }
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-purple-50 to-sky-50 px-4 py-4 pb-8">
       <div className="mx-auto max-w-lg min-w-0 space-y-3">
         <h1 className="text-center text-xl font-black text-gray-800">그림 단어 연습 <span className="text-xs text-red-600">(테스트)</span></h1>
-        {set ? (
-          <Session key={sel.seed} set={set} seed={sel.seed} onAgain={() => setSel({ shop: sel.shop, seed: newSeed() })} onOther={() => setSel(null)} onExit={onExit} />
-        ) : (
-          <div data-testid="pwp-root" data-step="pick" data-index={0} className="space-y-2">
-            <p className="text-center text-sm text-gray-600">연습할 묶음을 골라요</p>
-            <div className="grid grid-cols-2 gap-2">
-              {sets.map((s) => (
-                <button key={s.shop} type="button" data-testid={`pwp-set-${s.shop}`} disabled={!s.ready} onClick={() => setSel({ shop: s.shop, seed: newSeed() })}
-                  className={`${BTN} border-2 border-purple-200 bg-white text-purple-700`}>
-                  {s.labelKo}<span className="block text-xs font-bold text-gray-500">{s.ready ? `${s.words.length}개` : '준비 중'}</span>
-                </button>
-              ))}
-            </div>
-            <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
-          </div>
-        )}
+        {body}
       </div>
     </div>
   )
