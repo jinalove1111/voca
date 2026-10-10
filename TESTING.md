@@ -2073,3 +2073,7 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - **정적(최종 빌드)**: `testBundleBudget`, `testQaGate` 17/0, `testLazyChunkGuards`, `testGrammarCourses`, `testGrammarVillage`, `testGrammarVillageScreen`, `testStudentPathContracts`, `testPaulSpriteAssets`, `testTownEnvAssets`, `testTownKitAssets`, `testRegistryCoverage`, `testPilotUnit` ALL PASS. 더미 env 빌드 경고 0. 월드 청크 36.8 KB raw / 12.7 KB gzip, 메인 청크 gzip 130.25 KB.
 - **미확정**: `[town-proto2.5d]`(기존 2.5D, 긴 스펙)는 이 기록 작성 시점에 실행 중이라 최종 빌드 결과를 모른다. 이전 빌드 결과는 1524/1529이고 실패 5건은 전부 메모리에 민감한 S37이었다. 통과로 쓰지 않는다. 결과가 나오면 이 표에 덧붙인다.
 - **미확인**: 실기기 터치(Playwright 마우스/터치 에뮬레이션만), 360×640·1280×800 외 뷰포트, 장시간 이동 성능, 화면 읽기 프로그램. 문법 '정답 미리 보임'(연습 정답 434개 중 316개가 앞 카드에 있음, 자체 선택·빈칸 161개는 정답이 항상 0번)은 현황 측정만 했고 시험·수정 없음.
+
+### 245차 추가 (2026-10-10): 새 마을 테스터 접근 분리
+
+- `testTownWorldWiring`에 테스터 목록(Paul 제외·실계정 4명·QA 목록 불변)과 Dashboard/PaulTown 진입점 prop 게이팅 핀 추가, `testQaGate`/`testTownMissions`의 `QA_ONLY_SCREENS` 핀에서 `townWorld` 제거. `[town-world]`에 (g) 마을 전용 테스터(`installMocks(page, { studentId: '…a002' })`, 기본 플래그) / (h) 일반 학생 시나리오 추가 — 브라우저 실행은 리드 몫(작성 시점 미실행).
