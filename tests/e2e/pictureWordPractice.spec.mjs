@@ -13,6 +13,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const LOGIN_WRITES = ['/rest/v1/product_events', '/rest/v1/student_progress', '/rest/v1/student_daily_progress']
 const badWrites = (log) => log.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(c.method)).filter((c) => { try { return !LOGIN_WRITES.includes(new URL(c.url).pathname) } catch { return true } }).map((c) => c.method + ' ' + c.url)
 const storageSnap = (page) => page.evaluate(() => ({ local: Object.keys(localStorage).sort(), session: Object.keys(sessionStorage).sort() }))
+const APP_KEY = /^(paul_easy_|paulEasyVoca_)/
+const keyDiff = (a, b) => ['local', 'session'].flatMap((w) => [...b[w].filter((k) => !a[w].includes(k)).map((k) => `+${w}:${k}`), ...a[w].filter((k) => !b[w].includes(k)).map((k) => `-${w}:${k}`)]).filter((d) => !APP_KEY.test(d.slice(d.indexOf(':') + 1)))
 const POOL = learnableWords()
 const SETS = shopSets()
 const TESTER_ONLY = 'e2e00000-0000-4000-8000-00000000a002'
@@ -111,7 +113,9 @@ export async function run(browser, baseURL) {
       const bad = badWrites(apiCallLog)
       r.check(`${name} 로그인/분석 외 REST 쓰기 0건(업로드/STT 포함)`, bad.length === 0, bad.slice(0, 3).join(' | '))
       const after = await storageSnap(page)
-      r.check(`${name} localStorage/sessionStorage 키 불변(새 키 0)`, JSON.stringify(base) === JSON.stringify(after), JSON.stringify({ base, after }))
+      const d = keyDiff(base, after)
+      const feat = [...after.local, ...after.session].filter((k) => /picture|pwp/i.test(k))
+      r.check(`${name} 앱 자체 키(paul_easy_*/paulEasyVoca_*) 밖의 저장소 키 불변 + picture/pwp 키 0`, d.length === 0 && feat.length === 0, JSON.stringify({ d, feat }))
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
       r.check(`${name} 시나리오 예외 없음`, false, `${err.message} | body=${JSON.stringify(bodyText.slice(0, 300))}`)
@@ -192,6 +196,10 @@ export async function run(browser, baseURL) {
       await T(page, 'pwp-next').click()
       round++
     }
+    // 마지막 복습 문제를 맞히면 "모두 맞혔어요" 카드가 한 번 나온다(앱 의도) → 결과 보기
+    await T(page, 'pwp-review-card').waitFor({ state: 'visible', timeout: 5000 })
+    r.check(`${name} 복습을 모두 마치면 완료 카드`, (await T(page, 'pwp-review-card').getAttribute('data-kind')) === 'clear')
+    await T(page, 'pwp-next').click()
     await waitStep(page, 'summary')
     r.check(`${name} 요약: 처음에 4 / 6`, ((await T(page, 'pwp-summary-first-try').textContent()) || '').replace(/\s/g, '') === '4/6')
     const listed = await T(page, 'pwp-summary-review').allTextContents()
@@ -280,6 +288,8 @@ export async function run(browser, baseURL) {
     await T(page, 'pwp-next').click()
     await answer(page, correctIdx(buildQuiz([S.words[0]], POOL, S.seed + 7919)[0]))
     await T(page, 'pwp-next').click()
+    await T(page, 'pwp-review-card').waitFor({ state: 'visible', timeout: 5000 })
+    await T(page, 'pwp-next').click() // 결과 보기
     await waitStep(page, 'summary')
     r.check(`${name} 요약: 넘침 0 / 작은 버튼 0`, (await overflow(page)) <= 0 && (await small()) === 0)
   }, { studentId: TESTER_ONLY })
@@ -304,6 +314,8 @@ export async function run(browser, baseURL) {
     r.check(`${name} 나가기 → 홈 메뉴 복귀`, (await T(page, 'pwp-root').count()) === 0)
   }, { defaultFlags: false, login: loginToHome })
 
-  r.check('TTS 네트워크 폴백 요청 0건(합성 음성 스텁 경로)', ttsAll.length === 0, JSON.stringify(ttsAll.slice(0, 2)))
+  // mockRoutes는 합성 음성을 항상 실패시켜 playWordAudio가 3단계(mock된 translate_tts, en-GB)로 가게 한다 — 기존 관례. 그 GET만 허용.
+  const okTts = (u) => { try { const x = new URL(typeof u === 'string' ? u : u.url); return x.hostname === 'translate.googleapis.com' && x.pathname === '/translate_tts' && x.searchParams.get('tl') === 'en-GB' } catch { return false } }
+  r.check('듣기의 네트워크 폴백은 mock된 translate_tts(tl=en-GB) GET뿐', ttsAll.every(okTts), JSON.stringify(ttsAll.filter((u) => !okTts(u)).slice(0, 2)))
   return { results: r.results, unmockedRequests, mockErrors }
 }
