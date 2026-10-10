@@ -9,7 +9,7 @@ import { recordsKey } from '../../src/utils/curriculum/unitRecords.js'
 import { UNITS } from '../../src/utils/curriculum/units.js'
 import { grammarUnitById } from '../../src/utils/grammar/grammarUnits.js'
 import { buildDeck, isPractice, deckCounts } from '../../src/utils/grammar/grammarDeck.js'
-import { validateScene, countsMatch } from '../../src/utils/grammar/sceneMission.js'
+import { validateScene, countsMatch, buildFrame } from '../../src/utils/grammar/sceneMission.js'
 
 const VP = { width: 390, height: 844 }
 const SHOTS_DIR = process.env.GRAMMAR_SHOTS_DIR || 'C:\\Users\\jinal\\AppData\\Local\\Temp\\claude\\C--voca\\4dd777a3-9f93-4c78-a984-4f4ee328e279\\scratchpad\\shots'
@@ -257,52 +257,76 @@ export async function run(browser, baseURL) {
     }
   })
 
-  // ---------------- d 만들기 ----------------
-  await scenario('d 만들기(탭 배치·판정)', VP, async ({ page, name, open }) => {
+  // ---------------- d 만들기 (틀·보기는 "놓은 수"를 따른다: buildFrame) ----------------
+  const HINT = /나무를 두\s?그루 심어 보세요/
+  const enabledOpts = (page) => page.locator('[data-testid^="scene-opt-"]:enabled').count()
+  const optTexts = (page) => page.locator('[data-testid^="scene-opt-"]').allTextContents().then((a) => a.map((x) => x.trim()))
+  await scenario('d 만들기(0·1개: 틀·보기·힌트)', VP, async ({ page, name, open }) => {
     const st = S('build'); const bi = cardIdx('build'); const { obj, n } = st.place
     const ko = U.scene.objects[obj].ko
+    const f0 = buildFrame(U.scene, st, 0); const f1 = buildFrame(U.scene, st, 1)
     const spots = () => page.locator('[data-testid^="scene-spot-"]').count()
     const placedText = async () => norm(await txt(page, 'scene-placed-count'))
+    const card = async () => norm(await txt(page, 'gd-card'))
     await open()
     await advanceTo(page, bi)
     const bad = await cardOk(page, bi)
     r.check(`${name} 만들기 카드 공통 불변식`, bad.length === 0, bad.join('; '))
-    r.check(`${name} 처음: tray ${obj}(× ${n}), '놓은 ${ko}: 0 / ${n}', 빈 자리 ${st.slots}개, 그림 비어 있음, 틀 '${st.frameEn}'`,
-      (await T(page, `scene-tray-${obj}`).isEnabled()) && (await txt(page, `scene-tray-${obj}`)).includes(`× ${n}`) && (await placedText()).includes(`0 / ${n}`) && (await spots()) === st.slots && (await countsOf(page)) === '' && (await txt(page, 'scene-frame')) === st.frameEn)
-    r.check(`${name} 처음: 확인 비활성, 다음 비활성+힌트, 다시 놓기 없음`, (await T(page, 'scene-check').isDisabled()) && (await T(page, 'gd-next').isDisabled()) && (await T(page, 'gd-next-hint').count()) === 1 && (await T(page, 'scene-clear').count()) === 0)
-    // (i) 하나도 안 놓고 숫자만 고름 → 틀림
-    await numOpt(page, NUMS[n]).click()
-    r.check(`${name} 숫자 '${NUMS[n]}'만 고르면 틀에 반영, 확인 활성`, (await txt(page, 'scene-frame')) === st.frameEn.replace('___', NUMS[n]) && (await T(page, 'scene-check').isEnabled()))
-    await T(page, 'scene-check').click()
-    r.check(`${name} (i) ${obj} 0개 + '${NUMS[n]}' → data-ok=false, 안내에 '먼저', 다시 풀기, 다음 활성`, (await T(page, 'scene-result').getAttribute('data-ok')) === 'false' && (await txt(page, 'scene-why')).includes('먼저') && (await T(page, 'scene-retry').isVisible()) && (await T(page, 'gd-next').isEnabled()))
-    await T(page, 'scene-retry').click()
-    r.check(`${name} 다시 풀기 → 결과 없음, 숫자 선택 해제(틀 원래대로), 다음 비활성`, (await T(page, 'scene-result').count()) === 0 && (await txt(page, 'scene-frame')) === st.frameEn && (await T(page, 'gd-next').isDisabled()))
-    // (ii) 1개만 놓고 'two' → 불일치
+    r.check(`${name} 처음(0개): tray ${obj}(× ${n}), '놓은 ${ko}: 0 / ${n}', 빈 자리 ${st.slots}개, 그림 비어 있음, 틀 = 데이터 '${f0.frame}'`,
+      (await T(page, `scene-tray-${obj}`).isEnabled()) && (await txt(page, `scene-tray-${obj}`)).includes(`× ${n}`) && (await placedText()).includes(`0 / ${n}`) && (await spots()) === st.slots && (await countsOf(page)) === '' && (await txt(page, 'scene-frame')) === f0.frame)
+    r.check(`${name} 처음(0개): 고를 수 있는 보기 없음(활성 0), 안내 '먼저 놓아', 확인 비활성, 다음 비활성+힌트, 다시 놓기 없음`,
+      (await enabledOpts(page)) === 0 && (await card()).includes('먼저 놓아') && (await T(page, 'scene-check').isDisabled()) && (await T(page, 'gd-next').isDisabled()) && (await T(page, 'gd-next-hint').count()) === 1 && (await T(page, 'scene-clear').count()) === 0)
+    // 1개 놓기
     await T(page, 'scene-spot-0').click()
     r.check(`${name} 트레이를 안 누르고 빈 자리를 눌러도 놓이지 않음`, (await placedText()).includes(`0 / ${n}`) && (await countsOf(page)) === '')
     await T(page, `scene-tray-${obj}`).click()
     r.check(`${name} 트레이 누름 → aria-pressed=true`, (await T(page, `scene-tray-${obj}`).getAttribute('aria-pressed')) === 'true')
     await T(page, 'scene-spot-0').click()
-    r.check(`${name} 빈 자리 누름 → 1개 놓임('1 / ${n}'), data-counts=${obj}:1, 트레이 선택 해제, 빈 자리 ${st.slots - 1}개, 트레이 '× ${n - 1}', 다시 놓기 보임`,
+    r.check(`${name} 1개 놓임: '1 / ${n}', data-counts=${obj}:1, 트레이 선택 해제, 빈 자리 ${st.slots - 1}개, 트레이 '× ${n - 1}', 다시 놓기 보임`,
       (await placedText()).includes(`1 / ${n}`) && (await countsOf(page)) === `${obj}:1` && (await T(page, `scene-tray-${obj}`).getAttribute('aria-pressed')) === 'false' && (await spots()) === st.slots - 1 && (await txt(page, `scene-tray-${obj}`)).includes(`× ${n - 1}`) && (await T(page, 'scene-clear').isVisible()))
+    r.check(`${name} 1개: 틀 '${f1.frame}', 보기 ${f1.options.join('/')} 전부 활성, 힌트 '나무를 두 그루 심어 보세요' 표시, '먼저' 안내 사라짐`,
+      (await txt(page, 'scene-frame')) === f1.frame && JSON.stringify(await optTexts(page)) === JSON.stringify(f1.options) && (await enabledOpts(page)) === f1.options.length && HINT.test(await card()) && !(await card()).includes('먼저 놓아'))
+    // 보기를 고른 뒤 다시 놓기 → 고른 보기 초기화
+    await T(page, `scene-opt-${f1.options.indexOf('two')}`).click()
+    r.check(`${name} 1개 + 'two' 고름 → 틀에 반영, 확인 활성`, (await txt(page, 'scene-frame')) === f1.frame.replace('___', 'two') && (await T(page, 'scene-check').isEnabled()))
     await T(page, 'scene-clear').click()
-    r.check(`${name} 다시 놓기 → 0개, 빈 자리 ${st.slots}개, 다시 놓기 버튼 사라짐`, (await placedText()).includes(`0 / ${n}`) && (await countsOf(page)) === '' && (await spots()) === st.slots && (await T(page, 'scene-clear').count()) === 0)
+    r.check(`${name} 다시 놓기 → 0개, 고른 보기 초기화(틀 = 데이터 틀), 보기 없음, 빈 자리 ${st.slots}개, 다시 놓기 버튼 사라짐`, (await placedText()).includes(`0 / ${n}`) && (await countsOf(page)) === '' && (await txt(page, 'scene-frame')) === f0.frame && (await enabledOpts(page)) === 0 && (await spots()) === st.slots && (await T(page, 'scene-clear').count()) === 0)
+    // 불일치: 1개 + 'two' → 틀림
     await placeTrees(page, 1, obj)
-    await numOpt(page, NUMS[n]).click()
-    await T(page, 'scene-check').click()
-    r.check(`${name} (ii) ${obj} 1개 + '${NUMS[n]}' → data-ok=false, scene-why에 '두 그루' 힌트·'달라요', 다시 풀기, 다시 놓기 잠김`, (await T(page, 'scene-result').getAttribute('data-ok')) === 'false' && (await txt(page, 'scene-why')).includes('두 그루') && (await txt(page, 'scene-why')).includes('달라요') && (await T(page, 'scene-retry').isVisible()) && (await T(page, 'scene-clear').count()) === 0)
+    await T(page, `scene-opt-${f1.options.indexOf('two')}`).click(); await T(page, 'scene-check').click()
+    r.check(`${name} 1개 + 'two' → data-ok=false, 설명에 '두 그루'(데이터 whyKo)·'달라요', 다시 풀기, 다음 활성, 다시 놓기 잠김`, (await T(page, 'scene-result').getAttribute('data-ok')) === 'false' && (await txt(page, 'scene-why')).includes('두 그루') && (await txt(page, 'scene-why')).includes('달라요') && (await T(page, 'scene-retry').isVisible()) && (await T(page, 'gd-next').isEnabled()) && (await T(page, 'scene-clear').count()) === 0)
     await T(page, 'scene-retry').click()
-    r.check(`${name} 다시 풀기 → 놓은 ${obj} 0개로 처음 상태`, (await T(page, 'scene-result').count()) === 0 && (await placedText()).includes(`0 / ${n}`) && (await countsOf(page)) === '' && (await spots()) === st.slots && (await T(page, 'gd-next').isDisabled()))
-    // (iii) 요청한 경로: tray 선택 → spot-0, tray 선택 → spot-1 → n개
-    await T(page, `scene-tray-${obj}`).click(); await T(page, 'scene-spot-0').click()
-    await T(page, `scene-tray-${obj}`).click(); await T(page, 'scene-spot-1').click()
-    r.check(`${name} spot-0, spot-1 차례로 → scene-placed-count '${n} / ${n}', data-counts=${obj}:${n}, 트레이 비활성, 빈 자리 숨김, 숫자 고르기 전 확인 비활성`,
-      (await placedText()).includes(`${n} / ${n}`) && (await countsOf(page)) === `${obj}:${n}` && (await T(page, `scene-tray-${obj}`).isDisabled()) && (await spots()) === 0 && (await T(page, 'scene-check').isDisabled()))
-    await numOpt(page, NUMS[n]).click()
-    r.check(`${name} '${NUMS[n]}' 고름 → 틀 '${st.answerEn}'`, (await txt(page, 'scene-frame')) === st.answerEn)
+    r.check(`${name} 다시 풀기 → 놓은 ${obj} 0개로 처음 상태, 다음 비활성`, (await T(page, 'scene-result').count()) === 0 && (await placedText()).includes(`0 / ${n}`) && (await countsOf(page)) === '' && (await txt(page, 'scene-frame')) === f0.frame && (await spots()) === st.slots && (await T(page, 'gd-next').isDisabled()))
+    // 일관된 문장: 1개 + 'a' → 맞음, 그래도 목표(두 그루) 힌트가 남는다
+    await placeTrees(page, 1, obj)
+    await T(page, `scene-opt-${f1.correct}`).click()
+    r.check(`${name} 1개 + '${f1.options[f1.correct]}' 고름 → 틀 'There is a tree.'`, (await txt(page, 'scene-frame')) === f1.frame.replace('___', f1.options[f1.correct]))
     await T(page, 'scene-check').click()
-    r.check(`${name} (iii) ${obj} ${n}개 + '${NUMS[n]}' → data-ok=true, 설명(${st.whyKo}) + 내 문장, 다시 풀기 없음, 숫자 잠김, 다음 활성`,
-      (await T(page, 'scene-result').getAttribute('data-ok')) === 'true' && (await txt(page, 'scene-why')).includes(st.whyKo) && (await txt(page, 'scene-why')).includes(st.answerEn) && (await T(page, 'scene-retry').count()) === 0 && (await T(page, 'scene-opt-0').isDisabled()) && (await T(page, 'gd-next').isEnabled()) && (await T(page, 'scene-clear').count()) === 0)
+    r.check(`${name} 1개 + 'a' → data-ok=true, 내 문장(There is a tree.), 힌트 '나무를 두 그루 심어 보세요' 표시, 다시 풀기 없음, 보기 잠김, 다음 활성`,
+      (await T(page, 'scene-result').getAttribute('data-ok')) === 'true' && (await txt(page, 'scene-why')).includes('There is a tree.') && HINT.test(await txt(page, 'scene-why')) && (await T(page, 'scene-retry').count()) === 0 && (await T(page, 'scene-opt-0').isDisabled()) && (await T(page, 'gd-next').isEnabled()))
+  })
+
+  await scenario('d 만들기(2개: 정답·선택 초기화)', VP, async ({ page, name, open }) => {
+    const st = S('build'); const { obj, n } = st.place
+    const fn = buildFrame(U.scene, st, n)
+    const placedText = async () => norm(await txt(page, 'scene-placed-count'))
+    await open()
+    await advanceTo(page, cardIdx('build'))
+    // 1개 놓고 보기를 고른 뒤 한 개 더 놓으면 고른 보기가 초기화되고 틀·보기가 바뀐다
+    await placeTrees(page, 1, obj)
+    await T(page, 'scene-opt-0').click()
+    r.check(`${name} 1개 + 보기 선택 상태`, (await T(page, 'scene-opt-0').getAttribute('aria-pressed')) === 'true')
+    await T(page, `scene-tray-${obj}`).click(); await T(page, 'scene-spot-1').click()
+    r.check(`${name} 2개째(spot-1) → '${n} / ${n}', data-counts=${obj}:${n}, 트레이 비활성, 빈 자리 숨김`,
+      (await placedText()).includes(`${n} / ${n}`) && (await countsOf(page)) === `${obj}:${n}` && (await T(page, `scene-tray-${obj}`).isDisabled()) && (await page.locator('[data-testid^="scene-spot-"]').count()) === 0)
+    r.check(`${name} 놓은 수가 바뀌면 고른 보기 초기화(어느 보기도 pressed 아님), 틀 '${fn.frame}', 보기 ${fn.options.join('/')}, 확인 비활성`,
+      (await page.locator('[data-testid^="scene-opt-"][aria-pressed="true"]').count()) === 0 && (await txt(page, 'scene-frame')) === fn.frame && JSON.stringify(await optTexts(page)) === JSON.stringify(fn.options) && (await T(page, 'scene-check').isDisabled()))
+    r.check(`${name} 2개: 목표 달성이라 힌트 '두 그루 심어 보세요' 없음`, !HINT.test(norm(await txt(page, 'gd-card'))))
+    await T(page, `scene-opt-${fn.correct}`).click()
+    r.check(`${name} '${fn.options[fn.correct]}' 고름 → 틀 '${st.answerEn}'`, (await txt(page, 'scene-frame')) === st.answerEn)
+    await T(page, 'scene-check').click()
+    r.check(`${name} 2개 + 'two' → data-ok=true, 설명(${st.whyKo}) + 내 문장, 힌트 없음, 다시 풀기 없음, 보기 잠김, 다음 활성`,
+      (await T(page, 'scene-result').getAttribute('data-ok')) === 'true' && (await txt(page, 'scene-why')).includes(st.whyKo) && (await txt(page, 'scene-why')).includes(st.answerEn) && !HINT.test(await txt(page, 'scene-why')) && (await T(page, 'scene-retry').count()) === 0 && (await T(page, 'scene-opt-0').isDisabled()) && (await T(page, 'gd-next').isEnabled()) && (await T(page, 'scene-clear').count()) === 0)
   })
 
   // ---------------- d2 만들기: 키보드·드래그 ----------------

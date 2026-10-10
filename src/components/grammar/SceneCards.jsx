@@ -137,6 +137,7 @@ function Build({ c, a, set, clear }) {
       {!locked && placed.length > 0 && <button data-testid="scene-clear" onClick={() => set({ placed: [], picked: null })} className={SECOND}>다시 놓기</button>}
       <p data-testid="scene-frame" className="text-lg font-black text-gray-900 break-words">{picked == null ? frame : frame.replace('___', nums[picked])}</p>
       {placed.length === 0 && <p className="text-sm font-bold text-gray-600 break-keep">나무를 먼저 놓아 보세요.</p>}
+      {!locked && placed.length > 0 && placed.length !== place.n && <p className="text-sm font-bold text-gray-600 break-keep">{name}를 {NUMS_KO[place.n] || place.n}그루 심어 보세요.</p>}
       <div className="flex flex-wrap gap-2">
         {nums.map((o, j) => <button key={o} data-testid={`scene-opt-${j}`} disabled={locked} aria-pressed={picked === j} onClick={() => set({ picked: j })} className={optCls(picked === j, locked, a.ok)}>{o}</button>)}
       </div>
