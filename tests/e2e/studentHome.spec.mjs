@@ -121,7 +121,7 @@ export async function run(browser, baseURL) {
       r.check(`${name} nav[aria-label="메인 메뉴"] 존재`, (await page.locator('nav[aria-label="메인 메뉴"]').count()) === 1)
 
       const boxes = []
-      for (const id of ['voca', 'writing', 'speaking', 'growth']) {
+      for (const id of ['voca', 'speaking', 'writing', 'grammar', 'growth']) {
         const c = card(page, id)
         r.check(`${name} ${id} 카드 보임`, await c.isVisible().catch(() => false))
         const b = await c.boundingBox()
@@ -297,7 +297,8 @@ export async function run(browser, baseURL) {
       protoSeen += await page.locator('[data-testid="proto25d-root"]').count()
       await page.waitForTimeout(300)
     }
-    r.check(`${name} 문법 진입 버튼 없음(QA 전용)`, (await page.locator('[data-testid="student-home-grammar"]').count()) === 0)
+    // 비QA는 홈 자체가 없으므로 문법 카드(student-home-menu-grammar)도 없다 — 카드의 aria-disabled/'준비 중' 계약은 홈이 보이는 QA 경로에서만 검증 가능(생략)
+    r.check(`${name} 문법 카드 없음(비QA는 홈 미노출)`, (await page.locator('[data-testid="student-home-menu-grammar"]').count()) === 0)
     r.check(`${name} 홈/안내/2.5D 루트 3회 샘플 모두 0`, homeSeen === 0 && noticeSeen === 0 && protoSeen === 0, `${homeSeen}/${noticeSeen}/${protoSeen}`)
     const sample = async () => {
       let h = 0, n = 0, p = 0
@@ -339,7 +340,7 @@ export async function run(browser, baseURL) {
     const b = page.locator('[data-testid="student-home-speaking-exam"]')
     r.check(`${name} 두 플래그 ON → 시험 바로 가기 버튼 보임`, await b.isVisible().catch(() => false))
     r.check(`${name} 버튼 높이 >=44px`, ((await b.boundingBox())?.height ?? 0) >= 43.5)
-    r.check(`${name} 메인 4카드는 그대로(nav 안 버튼 4개)`, (await page.locator('nav[aria-label="메인 메뉴"] button').count()) === 4)
+    r.check(`${name} 메인 5카드는 그대로(nav 안 버튼 5개)`, (await page.locator('nav[aria-label="메인 메뉴"] button').count()) === 5)
   })
   for (const [label, flags] of [['situationRecallV1 OFF', { situationRecallV1: false }], ['speakingPracticeV1 OFF', { speakingPracticeV1: false }]]) {
     await scenario(`n 시험 바로 가기 ${label}`, MAIN_VP, { flags }, async ({ page, name }) => {
@@ -348,15 +349,26 @@ export async function run(browser, baseURL) {
     })
   }
 
-  // ── r. 문법 진입(QA 전용 📘 버튼) — QA 홈에서만 보이고 non-QA(대시보드)에는 없음 ──
-  await scenario('r QA 홈에 문법 진입 버튼(📘)', MAIN_VP, { flags: { studentHomeMenu: true, paulTown2_5d: true } }, async ({ page, name }) => {
+  // ── r. 문법 카드(2026-10-10) — 메인 메뉴 4번째 카드, QA 홈에서 활성, 나의 성장은 3행 전폭 ──
+  await scenario('r QA 홈에 문법 카드', MAIN_VP, { flags: { studentHomeMenu: true, paulTown2_5d: true } }, async ({ page, name }) => {
     await waitHome(page)
-    const g = page.locator('[data-testid="student-home-grammar"]')
+    const g = card(page, 'grammar')
     await g.waitFor({ state: 'visible', timeout: 15000 })
     const gt = ((await g.textContent()) || '').trim()
-    r.check(`${name} student-home-grammar 보임 + '문법 과정' 포함`, (await g.isVisible()) && gt.includes('문법 과정'), gt)
-    const order = await page.evaluate(() => [...document.querySelectorAll('[data-testid="student-home"] [data-testid]')].map((e) => e.getAttribute('data-testid')).filter((t) => ['student-home-town', 'student-home-unit', 'student-home-grammar'].includes(t)))
-    r.check(`${name} DOM 순서: 내 마을 → unit → grammar(Tab 8정거장 뒤)`, JSON.stringify(order) === JSON.stringify(['student-home-town', 'student-home-unit', 'student-home-grammar']), JSON.stringify(order))
+    r.check(`${name} student-home-menu-grammar 보임 + '문법'/'Grammar' 포함`, (await g.isVisible()) && gt.includes('문법') && gt.includes('Grammar'), gt)
+    r.check(`${name} QA 학생: aria-disabled 없음 + '준비 중' 배지 없음`, (await g.getAttribute('aria-disabled')) === null && !gt.includes('준비 중'), gt)
+    r.check(`${name} 작은 문법 버튼(student-home-grammar) 제거됨`, (await page.locator('[data-testid="student-home-grammar"]').count()) === 0)
+    const growth = card(page, 'growth')
+    const cls = (await growth.getAttribute('class')) || ''
+    const gb = await g.boundingBox(), wb = await growth.boundingBox(), nb = await page.locator('nav[aria-label="메인 메뉴"]').boundingBox()
+    r.check(`${name} 나의 성장 col-span-2`, cls.split(/\s+/).includes('col-span-2'), cls)
+    r.check(`${name} 나의 성장은 3행(문법 카드보다 아래) + 폭 ≈ nav 폭`, !!gb && !!wb && !!nb && wb.y > gb.y + gb.height - 2 && Math.abs(wb.width - nb.width) <= 4, JSON.stringify({ gb, wb, nb }))
+    const order = await page.evaluate(() => [...document.querySelectorAll('[data-testid="student-home"] [data-testid]')].map((e) => e.getAttribute('data-testid')).filter((t) => ['student-home-town', 'student-home-unit', 'student-home-menu-growth'].includes(t)))
+    r.check(`${name} DOM 순서: 나의 성장 → 내 마을 → unit`, JSON.stringify(order) === JSON.stringify(['student-home-menu-growth', 'student-home-town', 'student-home-unit']), JSON.stringify(order))
+    await g.click()
+    r.check(`${name} 문법 카드 클릭 → 5코스 화면(grammar-courses)`, await page.locator('[data-testid="grammar-courses"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false))
+    await page.locator('[data-testid="grammar-courses-home"]').click()
+    r.check(`${name} 문법 ← 홈 → 학생 홈`, await waitHome(page))
   })
 
   // ── g. 키보드 ───────────────────────────────────────────────────────
@@ -365,9 +377,9 @@ export async function run(browser, baseURL) {
     await page.locator('[data-testid="student-home-town"]').waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
     await page.locator(`${HOME} h1`).click() // 순차 포커스 시작점을 h1로
     const seq = []
-    for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); seq.push(await activeTestId(page)) }
-    const expected = ['로그아웃', '▶ 단어 연습 시작하기', 'student-home-menu-voca', 'student-home-menu-writing', 'student-home-menu-speaking', 'student-home-menu-growth', 'student-home-speaking-exam', 'student-home-town']
-    r.check(`${name} Tab 순서 = 로그아웃 → 시작 → 카드4 → 그림 시험 바로 가기 → 내 마을`, JSON.stringify(seq) === JSON.stringify(expected), JSON.stringify(seq))
+    for (let i = 0; i < 9; i++) { await page.keyboard.press('Tab'); seq.push(await activeTestId(page)) }
+    const expected = ['로그아웃', '▶ 단어 연습 시작하기', 'student-home-menu-voca', 'student-home-menu-speaking', 'student-home-menu-writing', 'student-home-menu-grammar', 'student-home-menu-growth', 'student-home-speaking-exam', 'student-home-town']
+    r.check(`${name} Tab 순서 = 로그아웃 → 시작 → 카드5(단어·말하기·쓰기·문법·성장) → 그림 시험 바로 가기 → 내 마을`, JSON.stringify(seq) === JSON.stringify(expected), JSON.stringify(seq))
     await card(page, 'voca').focus()
     await page.keyboard.press('Enter')
     r.check(`${name} 단어 카드에서 Enter → 대시보드`, await waitDashboard(page))
