@@ -2,11 +2,11 @@
   "agent_name": "implementer",
   "role": "구현",
   "task_id": "picture-words-voice-2026-10-11",
-  "task": "251차 그림 단어: 카드 한 장 듣기→말하기→내 목소리 듣기, 연습/시험 분리, 게임 연결",
+  "task": "252차 그림 단어: 효과음(Web Audio) + 소리 설정 + 공통 카드 디자인",
   "status": "completed",
   "progress": 100,
   "started_at": "2026-10-11T01:00:00+09:00",
-  "updated_at": "2026-10-11T12:00:00+09:00",
+  "updated_at": "2026-10-11T18:00:00+09:00",
   "files_owned": [
     "scripts/pictureWords/buildPictureWords.py",
     "scripts/pictureWords/buildPictureWordsData.mjs",
@@ -42,9 +42,13 @@
     "src/components/pictureWords/ShopShelf.jsx",
     "scripts/pictureWords/fixtures/decisions.sample.json",
     "tests/e2e/pictureWordGames.spec.mjs",
-    "src/components/pictureWords/recLabels.js"
+    "src/components/pictureWords/recLabels.js",
+    "src/utils/pictureWords/sfx.js",
+    "src/components/pictureWords/SfxControl.jsx",
+    "src/components/pictureWords/gameFx.jsx",
+    ".ai-status/orchestrator-picture-words-2026-10-11.json"
   ],
-  "summary": "251 docs + final",
+  "summary": "252 docs + final",
   "blocker": null,
   "next_action": "done",
   "stages_done": [
@@ -59,6 +63,12 @@
     "251 stage 2: practice card + recorder, test mode, review, set picker",
     "251 stage 3: game end offers test",
     "251 stage 4: browser specs (practice 106/0, games 68/0)",
-    "251 docs + final"
+    "251 docs + final",
+    "252 sfx.js",
+    "252 SfxControl + hammer interaction + shared tokens",
+    "252 hidden/practice/test/shelf design",
+    "252 static pins",
+    "252 browser specs (games 148/0, practice 107/0)",
+    "252 docs"
   ]
 }

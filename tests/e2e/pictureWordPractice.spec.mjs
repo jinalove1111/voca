@@ -164,6 +164,13 @@ export async function run(browser, baseURL) {
     await page.addInitScript(() => {
       window.__speak = []
       window.__speakLang = []
+      // 252차: 카드(녹음)에서는 효과음 0 — 오실레이터 시작을 센다(앱 코드는 그대로)
+      window.__osc = []
+      const AC = window.AudioContext || window.webkitAudioContext
+      if (AC) {
+        const co = AC.prototype.createOscillator
+        AC.prototype.createOscillator = function (...a) { const o = co.apply(this, a); const st = o.start, cn = o.connect; let mic = false; o.connect = function (d, ...r2) { if (d instanceof MediaStreamAudioDestinationNode) mic = true; return cn.call(this, d, ...r2) }; o.start = function (...b2) { if (!mic) window.__osc.push(performance.now()); return st.apply(this, b2) }; return o } // 가짜 마이크(MediaStream 목적지에 연결된 합성 오실레이터)는 효과음이 아니므로 센다에서 제외
+      }
       const s = window.speechSynthesis
       if (!s) return
       const orig = s.speak.bind(s)
@@ -186,7 +193,7 @@ export async function run(browser, baseURL) {
       r.check(`${name} (r4) 로그인 이후 GET 아닌 요청 0건 + 오디오/멀티파트/blob 페이로드 요청 0건`, nonGet.length === 0 && payload.length === 0, JSON.stringify({ nonGet: nonGet.slice(0, 3), payload: payload.slice(0, 3) }))
       const after = await storageSnap(page)
       const d = keyDiff(base, after)
-      const feat = [...after.local, ...after.session].filter((k) => /picture|pwp/i.test(k))
+      const feat = [...after.local, ...after.session].filter((k) => /picture|pwp/i.test(k) && k !== 'paulEasyVoca_pictureWordSfx') // 252차: 소리 설정 키 1개만 허용(바꿀 때만 생김)
       r.check(`${name} 앱 자체 키(paul_easy_*/paulEasyVoca_*) 밖의 저장소 키 불변 + picture/pwp 키 0`, d.length === 0 && feat.length === 0, JSON.stringify({ d, feat }))
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
@@ -258,6 +265,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} (r1) 내 목소리 듣기 → 재생 중(audio.paused===false, 버튼 잠김)`, !!playing && disabledWhile, JSON.stringify({ playing, disabledWhile }))
     const back = await waitUntil(async () => (await T(page, 'pwp-rec-play').isEnabled()) && (await recStatus(page)).includes('녹음 완료'), { timeout: 8000 })
     r.check(`${name} (r1) 재생이 끝나면 다시 녹음 완료 상태로`, !!back, await recStatus(page))
+    r.check(`${name} (r1) 252차: 카드에서 듣기·녹음·내 목소리 듣기를 하는 동안 효과음 오실레이터 시작 0건(마이크에 효과음이 섞이지 않음)`, (await page.evaluate(() => window.__osc.length)) === 0, String(await page.evaluate(() => window.__osc.length)))
     await T(page, 'pwp-rec-retake').click()
     r.check(`${name} (r1) 다시 말하기 → 이전 녹음 비워짐(src 없음, 재생 버튼 없음)`, (await audioSrc(page)) === '' && (await T(page, 'pwp-rec-play').count()) === 0)
     await recordOnce(page)
@@ -428,7 +436,10 @@ export async function run(browser, baseURL) {
     r.check(`${name} (f1) 게임에도 그만하기(pwg-quit)가 있음`, (await T(page, 'pwg-quit').count()) === 1)
     const played = await playHammerAll(page)
     const ids = new Set(S.words.map((w) => w.id))
-    r.check(`${name} (f1) 알파벳 망치가 같은 세션 단어로 진행(${played.length}개, 모두 세션 단어)`, played.length >= 1 && played.every((w) => ids.has(w.id)) && played.length === S.words.length, played.map((w) => w.en).join())
+    // 망치는 글자 수 2~9인 단어만 쓴다(games.js gameEligible) — 세션에 긴 단어(sweet potato 등)가 섞이면 그만큼 줄어든다
+    const letters = (en) => (en.match(/[a-z]/gi) || []).length
+    const hammerable = S.words.filter((w) => letters(w.en) >= 2 && letters(w.en) <= 9).length
+    r.check(`${name} (f1) 알파벳 망치가 같은 세션 단어로 진행(${played.length}개, 모두 세션 단어)`, played.length >= 1 && played.every((w) => ids.has(w.id)) && played.length === hammerable, `${played.map((w) => w.en).join()} / 기대 ${hammerable}`)
     await T(page, 'pwg-summary').waitFor({ state: 'visible', timeout: 5000 })
     r.check(`${name} (f1) 게임 끝 → "시험 보기" 버튼`, ((await T(page, 'pwg-to-test').textContent()) || '').includes('시험 보기'))
     await T(page, 'pwg-to-test').click()

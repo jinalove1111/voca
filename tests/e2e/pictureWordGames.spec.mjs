@@ -118,8 +118,8 @@ export async function run(browser, baseURL) {
   const mockErrors = []
   const ttsAll = []
 
-  async function scenario(label, vp, body, { studentId = null, hasTouch = false } = {}) {
-    const context = await browser.newContext({ viewport: vp, hasTouch })
+  async function scenario(label, vp, body, { studentId = null, hasTouch = false, reduced = false } = {}) {
+    const context = await browser.newContext({ viewport: vp, hasTouch, reducedMotion: reduced ? 'reduce' : 'no-preference' })
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
@@ -129,10 +129,42 @@ export async function run(browser, baseURL) {
     const { unmockedRequests: u, apiCallLog, ttsFallbackRequests } = await installMocks(page, studentId ? { studentId } : {})
     await page.addInitScript(() => {
       window.__speak = []
+      window.__speakT = []
       const s = window.speechSynthesis
-      if (!s) return
-      const orig = s.speak.bind(s)
-      s.speak = (x) => { if ((x.text || '').trim()) window.__speak.push(x.text); return orig(x) }
+      if (s) {
+        const orig = s.speak.bind(s)
+        s.speak = (x) => { if ((x.text || '').trim()) { window.__speak.push(x.text); window.__speakT.push(performance.now()) } return orig(x) }
+      }
+      // 252차: 효과음 관찰 — 앱 코드는 그대로 두고 AudioContext.createOscillator의 start()만 감싸 시작 시각/주파수/파형을 기록한다.
+      window.__osc = []
+      const AC = window.AudioContext || window.webkitAudioContext
+      if (AC) {
+        const co = AC.prototype.createOscillator
+        AC.prototype.createOscillator = function (...a) {
+          const o = co.apply(this, a)
+          const st = o.start
+          o.start = function (...b) { window.__osc.push({ t: performance.now(), f: o.frequency.value, type: o.type }); return st.apply(this, b) }
+          return o
+        }
+      }
+      // 애니메이션 클래스(pw-shake / pw-glow / 반짝이 / 날아가기)가 켜지고 꺼지는 시각을 rAF로 기록
+      const blank = () => ({ shake: [], glow: [], sparkMax: 0, sparkOn: null, sparkOff: null, flyMax: 0 })
+      window.__fx = blank()
+      window.__fxReset = () => { window.__fx = blank() }
+      let s0 = false, g0 = false
+      const tick = () => {
+        const t = performance.now(), fx = window.__fx
+        const sh = !!document.querySelector('.pw-shake'), gl = !!document.querySelector('.pw-card.pw-glow')
+        if (sh && !s0) fx.shake.push({ on: t, off: null }); if (!sh && s0 && fx.shake.length) fx.shake[fx.shake.length - 1].off = t; s0 = sh
+        if (gl && !g0) fx.glow.push({ on: t, off: null }); if (!gl && g0 && fx.glow.length) fx.glow[fx.glow.length - 1].off = t; g0 = gl
+        const sp = document.querySelectorAll('[data-testid="pw-sparkle"]').length
+        fx.sparkMax = Math.max(fx.sparkMax, sp)
+        if (sp > 0 && fx.sparkOn == null) fx.sparkOn = t
+        if (sp === 0 && fx.sparkOn != null && fx.sparkOff == null) fx.sparkOff = t
+        fx.flyMax = Math.max(fx.flyMax, document.querySelectorAll('[data-testid="pwh-fly"]').length)
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
     })
     const name = `${label} [${vp.width}x${vp.height}]`
     try {
@@ -343,6 +375,219 @@ export async function run(browser, baseURL) {
     const chunk = reqUrls.filter((u) => /PictureWordPractice|PictureGames/i.test(u))
     r.check(`${name} 연습/게임 청크 요청 0건`, chunk.length === 0, chunk.slice(0, 2).join(','))
   }, { studentId: GENERAL })
+
+  // ================= 252차: 효과음 + 공통 디자인 =================
+  const SFX_KEY = 'paulEasyVoca_pictureWordSfx'
+  const bits = async (page) => (await slotsFilled(page)).replace(/true/g, '1').replace(/false/g, '0')
+  const osc = (page) => page.evaluate(() => window.__osc.slice())
+  const resetFx = (page) => page.evaluate(() => { window.__osc.length = 0; window.__speakT.length = 0; window.__fxReset() })
+  const sig = (list) => JSON.stringify([...new Set(list.map((o) => `${o.type}:${Math.round(o.f)}`))].sort())
+  const wordLetters = (w) => [...w.en].filter(isLetter)
+  // 다음 단어로 넘기며 글자가 minLen 이상인 단어를 만난다(요약에 닿으면 다시 하기).
+  async function wordWithLetters(page, minLen) {
+    for (let guard = 0; guard < 14; guard++) {
+      const w = await shownWord(page, 'pwh-picture')
+      if (wordLetters(w).length >= minLen) return w
+      await hammerWord(page, w)
+      await T(page, 'pwh-next').click()
+      await page.locator('[data-testid="pwh-root"], [data-testid="pwg-summary"]').first().waitFor({ state: 'visible', timeout: 5000 })
+      if ((await T(page, 'pwg-summary').count()) > 0) { await T(page, 'pwg-again').click(); await T(page, 'pwh-root').waitFor({ state: 'visible', timeout: 5000 }) }
+    }
+    throw new Error('no word with enough letters')
+  }
+  const tileFor = async (page, ch, usedIds) => (await tiles(page)).find((x) => !x.used && !usedIds.includes(x.id) && lc(x.t) === lc(ch))
+
+  // ---- (sx1) PC 마우스: 맞음/틀림 소리가 다르다 + 완성 → 성공음 → 영국식 발음 + 반짝이/빛
+  await scenario('(sx1) 효과음', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    await startGame(page, 'phonics', 'hammer')
+    const w = await shownWord(page, 'pwh-picture')
+    const letters = wordLetters(w)
+    r.check(`${name} 소리 설정 컨트롤: 기본 켜짐 / 볼륨 60 / 토글 aria-pressed=true`, (await T(page, 'pwsfx-root').getAttribute('data-sfx-on')) === 'true' && (await T(page, 'pwsfx-root').getAttribute('data-sfx-volume')) === '60' && (await T(page, 'pwsfx-toggle').getAttribute('aria-pressed')) === 'true' && ((await T(page, 'pwsfx-toggle').textContent()) || '').includes('🔊'))
+    r.check(`${name} 게임을 열기만 해서는 효과음 0 (진입·마운트는 소리 없음)`, (await osc(page)).length === 0)
+    await resetFx(page)
+    const bad = (await tiles(page)).find((x) => lc(x.t) !== lc(letters[0]))
+    if (bad) {
+      await T(page, bad.id).click()
+      await T(page, 'pwh-feedback').waitFor({ state: 'visible', timeout: 3000 })
+    }
+    const wrongOsc = await osc(page)
+    await resetFx(page)
+    const t0 = await tileFor(page, letters[0], [])
+    await T(page, t0.id).click()
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="pwh-fly"]').length === 0, null, { timeout: 2000 })
+    const rightOsc = await osc(page)
+    r.check(`${name} (sx1) 틀린 탭 → 소리 ≥1, 맞은 탭 → 소리 ≥1, 두 소리의 주파수 구성이 다름`, (!bad || wrongOsc.length >= 1) && rightOsc.length >= 1 && (!bad || sig(wrongOsc) !== sig(rightOsc)), JSON.stringify({ wrong: sig(wrongOsc), right: sig(rightOsc) }))
+    r.check(`${name} (sx1) 맞음=밝게 올라가는 팝(삼각파 660→) / 틀림=낮은 사인파(≤ 240Hz) — 거친 소리 없음`, rightOsc.some((o) => o.type === 'triangle' && o.f >= 600) && (!bad || (wrongOsc.every((o) => o.type === 'sine' && o.f <= 240))), JSON.stringify({ rightOsc, wrongOsc }))
+    // 마지막 글자 직전까지 채우고, 마지막 탭에서 효과를 관찰한다
+    const used = [t0.id]
+    for (let k = 1; k < letters.length - 1; k++) { const t = await tileFor(page, letters[k], used); used.push(t.id); await T(page, t.id).click() }
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="pwh-fly"]').length === 0, null, { timeout: 2000 })
+    await sleep(350)
+    await resetFx(page)
+    const last = await tileFor(page, letters[letters.length - 1], used)
+    await T(page, last.id).click()
+    await T(page, 'pwh-word').waitFor({ state: 'visible', timeout: 5000 })
+    await page.waitForFunction(() => window.__speakT.length >= 1, null, { timeout: 4000 }).catch(() => {})
+    await page.waitForFunction(() => !document.querySelector('[data-testid="pw-sparkle"]'), null, { timeout: 1500 })
+    const o = await osc(page)
+    const st = await page.evaluate(() => ({ speakT: window.__speakT.slice(), fx: window.__fx }))
+    const arp = o.filter((x) => x.type === 'triangle' && [523, 659, 784, 1047].includes(Math.round(x.f)))
+    const gap = st.speakT.length ? st.speakT[0] - Math.min(...arp.map((x) => x.t)) : -1
+    r.check(`${name} (sx1) 완성: 성공음(C5 E5 G5 C6 아르페지오 4음) 다음에 영국식 발음 요청, 간격 ≥ 300ms (${Math.round(gap)}ms)`, arp.length === 4 && st.speakT.length >= 1 && gap >= 300, JSON.stringify({ arp: arp.length, gap, speak: st.speakT.length }))
+    r.check(`${name} (sx1) 반짝이 3~6개가 나타났다가 1초 안에 사라짐 + 카드 테두리 빛(pw-glow)이 잠깐 켜졌다 꺼짐`, st.fx.sparkMax >= 3 && st.fx.sparkMax <= 6 && st.fx.sparkOff != null && st.fx.sparkOff - st.fx.sparkOn <= 1000 && st.fx.glow.length >= 1 && st.fx.glow[0].off != null && st.fx.glow[0].off - st.fx.glow[0].on <= 1000, JSON.stringify(st.fx))
+    r.check(`${name} (sx1) 완성 뒤 영어 단어 공개 + 다음 단어 버튼 (발음 중복 요청 아님)`, (await T(page, 'pwh-word').textContent()) === w.en && (await T(page, 'pwh-next').isVisible()) && (await page.evaluate(() => window.__speak.length)) >= 1)
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (sx2) 음소거 / 볼륨 / 새로고침 후 유지 / 저장 키 1개
+  await scenario('(sx2) 소리 켜기/끄기·볼륨', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    const pickerCtl = (await T(page, 'pwsfx-root').count()) === 1 && (await T(page, 'pwsfx-toggle').count()) === 1
+    r.check(`${name} (sx2) 선택 화면에도 소리 컨트롤이 있음 + 슬라이더 높이 ≥ 44px`, pickerCtl && (await T(page, 'pwsfx-volume').evaluate((e) => e.getBoundingClientRect().height >= 43.9 && e.type === 'range' && e.min === '0' && e.max === '100')))
+    const before = await storageSnap(page)
+    await startGame(page, 'phonics', 'hammer')
+    const w = await shownWord(page, 'pwh-picture')
+    const letters = wordLetters(w)
+    const used = []
+    const slotOf = (k) => [...w.en].map((ch, i) => (isLetter(ch) ? i : -1)).filter((i) => i >= 0)[k]
+    const tapNext = async (k) => { const t = await tileFor(page, letters[k], used); used.push(t.id); await T(page, t.id).click(); await page.waitForFunction((i) => document.querySelector(`[data-testid="pwh-slot-${i}"]`)?.getAttribute('data-filled') === 'true', slotOf(k), { timeout: 3000 }) }
+    await T(page, 'pwsfx-toggle').click()
+    r.check(`${name} (sx2) 끄면 data-sfx-on=false, aria-pressed=false, 🔇`, (await T(page, 'pwsfx-root').getAttribute('data-sfx-on')) === 'false' && (await T(page, 'pwsfx-toggle').getAttribute('aria-pressed')) === 'false' && ((await T(page, 'pwsfx-toggle').textContent()) || '').includes('🔇'))
+    await resetFx(page)
+    await tapNext(0)
+    r.check(`${name} (sx2) 꺼짐: 탭해도 새 소리 0, 게임은 그대로 진행`, (await osc(page)).length === 0 && (await bits(page)).includes('1'))
+    await T(page, 'pwsfx-toggle').click()
+    await resetFx(page)
+    await tapNext(1)
+    const onOsc = (await osc(page)).length
+    r.check(`${name} (sx2) 다시 켜면 소리가 돌아옴 (${onOsc})`, onOsc >= 1 && (await T(page, 'pwsfx-root').getAttribute('data-sfx-on')) === 'true')
+    await T(page, 'pwsfx-volume').fill('0')
+    r.check(`${name} (sx2) 슬라이더가 설정에 즉시 반영 (data-sfx-volume=0)`, (await T(page, 'pwsfx-root').getAttribute('data-sfx-volume')) === '0')
+    await resetFx(page)
+    if (letters.length > 3) await tapNext(2)
+    r.check(`${name} (sx2) 볼륨 0: 소리 0`, (await osc(page)).length === 0)
+    await T(page, 'pwsfx-volume').fill('40')
+    await sleep(300)
+    await resetFx(page)
+    await T(page, 'pwsfx-volume').fill('45')
+    r.check(`${name} (sx2) 볼륨을 바꾸면 짧은 미리듣기(tap) 소리`, (await osc(page)).length >= 1)
+    await T(page, 'pwsfx-volume').fill('40')
+    const stored = await page.evaluate((k) => localStorage.getItem(k), SFX_KEY)
+    const after = await storageSnap(page)
+    const pic = [...after.local, ...after.session].filter((k) => /picture|pw/i.test(k))
+    r.check(`${name} (sx2) 설정이 저장 키 1개(${SFX_KEY})에 {on:true, volume:0.4}로 저장, 그림 단어 관련 새 키는 이것뿐`, !!stored && JSON.parse(stored).on === true && JSON.parse(stored).volume === 0.4 && pic.join() === SFX_KEY && !before.local.includes(SFX_KEY), JSON.stringify({ stored, pic }))
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await sleep(2500)
+    if (await page.getByPlaceholder('이름 입력...').isVisible().catch(() => false)) await loginToDashboard(page)
+    await openScreen(page)
+    r.check(`${name} (sx2) 새로고침 뒤에도 유지: 켜짐 / 볼륨 40 / 저장 값 그대로`, (await T(page, 'pwsfx-root').getAttribute('data-sfx-volume')) === '40' && (await T(page, 'pwsfx-root').getAttribute('data-sfx-on')) === 'true' && (await page.evaluate((k) => localStorage.getItem(k), SFX_KEY)) === stored)
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (sx3) 빠른 연속 입력: PC 마우스 + 360x640 터치
+  for (const touch of [false, true]) {
+    await scenario(`(sx3) 빠른 연속 입력 ${touch ? '터치' : '마우스'}`, touch ? { width: 360, height: 640 } : { width: 1280, height: 800 }, async ({ page, name }) => {
+      await openScreen(page)
+      await startGame(page, 'phonics', 'hammer')
+      const w = await wordWithLetters(page, 4)
+      const letters = wordLetters(w)
+      const used = [], ids = []
+      for (let k = 0; k < 4; k++) { const t = await tileFor(page, letters[k], used); used.push(t.id); ids.push(t.id) }
+      if (touch) await T(page, ids[0]).evaluate((e) => e.parentElement.parentElement.scrollIntoView({ block: 'center' }))
+      const boxes = []
+      for (const id of ids) boxes.push(await T(page, id).boundingBox())
+      const inView = boxes.every((b) => b && b.y >= 0 && b.y + b.height <= (touch ? 640 : 800))
+      await resetFx(page)
+      const t0 = Date.now()
+      for (const b of boxes) { const x = b.x + b.width / 2, y = b.y + b.height / 2; if (touch) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y) }
+      const elapsed = Date.now() - t0
+      await sleep(500)
+      const filled = await bits(page)
+      const cells = [...w.en]
+      const expect = cells.map((ch, i) => (isLetter(ch) ? (cells.slice(0, i).filter(isLetter).length < 4 ? '1' : '0') : '1')).join('')
+      const fb = await T(page, 'pwh-feedback').getAttribute('data-result').catch(() => null)
+      const starts = (await osc(page)).length
+      r.check(`${name} (sx3) 4번 연속 탭(${elapsed}ms, 모두 화면 안=${inView}) → 칸 정확히 4개가 순서대로 채워짐, 틀림 0(피드백 right)`, filled === expect && (fb === 'right') && inView, JSON.stringify({ filled, expect, fb }))
+      r.check(`${name} (sx3) 소리 시작 ≥ 4 (${starts}) — 빠른 탭에도 소리가 빠지지 않음`, starts >= 4)
+    }, { studentId: TESTER_ONLY, hasTouch: touch })
+  }
+
+  // ---- (sx4) 틀린 탭 애니메이션: 클래스가 나타났다 400ms 안에 사라지고, 타일은 계속 누를 수 있다
+  await scenario('(sx4) 틀린 탭 흔들림', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    await startGame(page, 'phonics', 'hammer')
+    const w = await shownWord(page, 'pwh-picture')
+    const letters = wordLetters(w)
+    const bad = (await tiles(page)).find((x) => lc(x.t) !== lc(letters[0]))
+    if (!bad) throw new Error('no wrong tile')
+    await resetFx(page)
+    await T(page, bad.id).click()
+    await sleep(700)
+    const fx1 = await page.evaluate(() => window.__fx.shake)
+    r.check(`${name} (sx4) 틀린 타일에 흔들림 클래스(pw-shake)가 나타났다가 400ms 안에 사라짐`, fx1.length === 1 && fx1[0].off != null && fx1[0].off - fx1[0].on <= 400, JSON.stringify(fx1))
+    r.check(`${name} (sx4) 흔들린 뒤에도 타일은 활성 상태이고 다시 누르면 같은 안내`, (await T(page, bad.id).isEnabled()))
+    await T(page, bad.id).click()
+    await sleep(700)
+    const fx2 = await page.evaluate(() => window.__fx.shake.length)
+    r.check(`${name} (sx4) 같은 타일을 다시 눌러도 다시 흔들림 + 칸 변화 없음`, fx2 === 2 && !(await bits(page)).includes('1') && fx2 === 2, String(fx2))
+    await hammerWord(page, w)
+    r.check(`${name} (sx4) 이어서 정답으로 끝까지 진행`, (await T(page, 'pwh-root').getAttribute('data-done')) === 'true')
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (rm) 동작 줄이기: 날아가기/반짝이/빛 없음, 완성되고 소리는 설정대로 난다
+  await scenario('(rm) 동작 줄이기', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    await startGame(page, 'phonics', 'hammer')
+    const w = await shownWord(page, 'pwh-picture')
+    await resetFx(page)
+    await hammerWord(page, w, { wrongFirst: true })
+    await T(page, 'pwh-word').waitFor({ state: 'visible', timeout: 5000 })
+    await page.waitForFunction(() => window.__speakT.length >= 1, null, { timeout: 4000 }).catch(() => {})
+    await sleep(700)
+    const st = await page.evaluate(() => ({ fx: window.__fx, osc: window.__osc.length, hammer: document.querySelectorAll('[data-testid="pwh-hammer"]').length }))
+    r.check(`${name} (rm) 동작 줄이기: pwh-fly 0 / 반짝이 0 / 빛 0 / 흔들림 0 / 망치 휘두름 0`, st.fx.flyMax === 0 && st.fx.sparkMax === 0 && st.fx.glow.length === 0 && st.fx.shake.length === 0 && st.hammer === 0, JSON.stringify(st.fx))
+    r.check(`${name} (rm) 동작 줄이기에서도 완성되고(단어 공개) 소리는 그대로 난다 (${st.osc})`, (await T(page, 'pwh-word').textContent()) === w.en && st.osc >= 4)
+  }, { studentId: TESTER_ONLY, reduced: true })
+
+  // ---- (d1) 디자인: 3개 화면 크기 x (알파벳 망치, 숨은 글자, 연습 카드, 시험 문제)
+  for (const vp of [{ width: 360, height: 640 }, { width: 768, height: 1024 }, { width: 1280, height: 800 }]) {
+    await scenario('(d1) 디자인', vp, async ({ page, name }) => {
+      const minTile = vp.width <= 360 ? 47.9 : 55.9
+      const covered = (loc) => loc.evaluate((el) => { el.scrollIntoView({ block: 'center' }); const b = el.getBoundingClientRect(); const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return !(top === el || el.contains(top)) })
+      const cardInfo = (picId) => page.evaluate((id) => {
+        const img = document.querySelector(`[data-testid="${id}"]`), card = img.closest('.pw-card'), cs = getComputedStyle(card)
+        const inner = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+        return { border: cs.borderTopColor, radius: parseFloat(cs.borderTopLeftRadius), ratio: img.getBoundingClientRect().width / inner, imgW: img.getBoundingClientRect().width, cropped: getComputedStyle(img).objectFit !== 'contain', bg: cs.backgroundImage.includes('linear-gradient') }
+      }, picId)
+      const check = async (label, picId, progressId, progressText, tileSel, primary) => {
+        const c = await cardInfo(picId)
+        const prog = ((await T(page, progressId).textContent()) || '').trim()
+        const tl = tileSel ? await page.locator(tileSel).evaluateAll((l) => l.map((e) => { const b = e.getBoundingClientRect(); return [b.width, b.height] })) : []
+        let cov = false
+        for (const p of primary) if (await covered(T(page, p))) cov = true
+        const ov = await overflow(page)
+        r.check(`${name} (d1) ${label}: 카드 테두리 #F472B6 / 둥근 모서리 ≥ 12 / 그림 ≥ 70% / 그림 ≤ 384px / contain / 그라데이션 배경`, c.border === 'rgb(244, 114, 182)' && c.radius >= 12 && c.ratio >= 0.7 && c.imgW <= 384 && !c.cropped && c.bg, JSON.stringify(c))
+        r.check(`${name} (d1) ${label}: 진행 "${progressText}" + 진행 막대 / 타일 ≥ ${Math.round(minTile + 0.1)}px / 가로 넘침 0 / 주요 버튼 가림 0`, prog.endsWith(progressText) && (await T(page, progressId).locator('.pw-bar-fill').count()) === 1 && tl.every(([w2, h2]) => w2 >= minTile && h2 >= minTile) && ov <= 0 && !cov, JSON.stringify({ prog, small: tl.filter(([w2, h2]) => w2 < minTile || h2 < minTile), ov, cov }))
+      }
+      await openScreen(page)
+      await startGame(page, 'phonics', 'hammer')
+      await check('알파벳 망치', 'pwh-picture', 'pwh-progress', '1 / 6', '[data-testid^="pwh-tile-"]', ['pwh-listen', 'pwh-tile-0', 'pwg-quit'])
+      await T(page, 'pwg-quit').click()
+      await T(page, 'pwp-root').waitFor({ state: 'visible' })
+      await startGame(page, 'conversation', 'hidden')
+      await check('숨은 글자', 'pwl-picture', 'pwl-progress', '1 / 6', '[data-testid^="pwl-opt-"]', ['pwl-listen', 'pwl-opt-0', 'pwl-opt-3', 'pwg-quit'])
+      await T(page, 'pwg-quit').click()
+      await T(page, 'pwp-root').waitFor({ state: 'visible' })
+      await T(page, 'pwp-start-practice-food').click()
+      await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
+      await check('연습 카드', 'pwp-picture', 'pwp-progress', '1 / 6', null, ['pwp-listen', 'pwp-rec-record', 'pwp-next'])
+      for (let i = 0; i < 6; i++) await T(page, 'pwp-next').click()
+      await T(page, 'pwp-go-test').click()
+      await T(page, 'pwp-quiz').waitFor({ state: 'visible', timeout: 10000 })
+      await check('시험 문제', 'pwp-picture', 'pwp-quiz-progress', '1 / 6', '[data-testid^="pwp-opt-"]', ['pwp-opt-0', 'pwp-opt-3'])
+      const sm = await page.locator('button:visible').evaluateAll((l) => l.filter((b) => b.getBoundingClientRect().height < 43.9).length)
+      r.check(`${name} (d1) 시험 문제: 작은 버튼(<44px) 0`, sm === 0, String(sm))
+    }, { studentId: TESTER_ONLY })
+  }
 
   const okTts = (u) => { try { const x = new URL(typeof u === 'string' ? u : u.url); return x.hostname === 'translate.googleapis.com' && x.pathname === '/translate_tts' && x.searchParams.get('tl') === 'en-GB' } catch { return false } }
   r.check('듣기/발음의 네트워크 폴백은 mock된 translate_tts(tl=en-GB) GET뿐', ttsAll.every(okTts), JSON.stringify(ttsAll.filter((u) => !okTts(u)).slice(0, 2)))
