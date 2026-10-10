@@ -49,7 +49,7 @@ export default function HiddenLetters({ word, seed, difficulty, onDifficulty, in
         <div className="grid grid-cols-4 gap-2">
           {blank.options.map((o, k) => (
             <button key={`${st.filled}-${k}`} type="button" data-testid={`pwl-opt-${k}`} disabled={st.tried.includes(o)} onClick={() => pick(o)}
-              className={`${BTN} border-2 border-purple-300 bg-white text-purple-700`}>{o}</button>
+              className="min-h-[56px] min-w-[48px] rounded-2xl border-2 border-purple-300 bg-white px-3 text-2xl font-black text-purple-700 btn-press disabled:opacity-40">{o}</button>
           ))}
         </div>
       )}

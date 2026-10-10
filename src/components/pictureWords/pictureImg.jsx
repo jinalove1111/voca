@@ -32,6 +32,8 @@ const CSS = `
 @keyframes pw-pop{0%{transform:scale(.4);opacity:.2}100%{transform:scale(1);opacity:1}}
 .pw-swing{animation:pw-swing .45s ease-out both}.pw-shake{animation:pw-shake .35s ease-in-out}.pw-bounce{animation:pw-bounce .5s ease-out}.pw-pop{animation:pw-pop .25s ease-out both}
 .pw-tile{transition:transform .25s ease,opacity .25s ease}
+.pw-cell{min-width:48px;min-height:48px}
+@media (min-width:390px){.pw-cell{min-width:56px;min-height:56px}}
 @media (prefers-reduced-motion: reduce){.pw-swing,.pw-shake,.pw-bounce,.pw-pop{animation:none}.pw-tile{transition:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>
