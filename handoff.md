@@ -9,6 +9,7 @@ _233차 갱신: 2026-10-10 (233차 — **Grammar 커리큘럼 재구성: 5 과�
 _234차 갱신: 2026-10-10 (234차 — **Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙**. Easy 8/8 콘텐츠 구현 완료, 교사 검수 완료 0, Intermediate 1, 미제작 25(Intermediate 7·Advanced 6·Middle 6·High 6) — **커리큘럼 전체 완료 아님**. 코드 `d2842265`. 정적 PASS, 더미 env 빌드 경고 0, `[grammar]` 238/0, `[student-home]` 223/0/1 SKIP. 클릭 경로: 홈 [📘 문법 과정] → Easy (ready 8/8 · 검수 0) → 3. 나는 …이야 am·is·are …. PR #62 Draft·QA 전용. 아래 234차 섹션 참고.)_
 _235차 갱신: 2026-10-10 (235차 — **Paul 로고 모자 PNG 8장을 기존 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 대응으로 적용** + HatCollection 장착 버튼 44px 수정 + 모자 이름 2건 정정. 앱에 "8단계 모자"는 없고 세 축(XP 랭크 5·크기 5단계·수집 모자 8종)이 따로 있어 수집 모자 8종에 대응(리드 판단, **운영자 확인 필요: 남색/주황 대응, 승급 체인 아님**). 점수·승급 규칙·해금·XP 무변경. 커밋 `da4f2d66`·`e4e622d9`·`a97074ef`, 이름 커밋 `f5156fa8`. 신규 `[hats]` 67/0 + 회귀 PASS. Preview 실화면(SSO)·실기기 미확인. PR #62 Draft·QA 전용. 아래 235차 섹션 참고.)_
 _238차 갱신: 2026-10-10 (238차 — **문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드(5카드 그리드)**. 클릭 경로: 홈 [📘 문법 / Grammar] → Easy → 1. 부탁하기 → 카드 1/23 목표 → 다음 … → 선택 문제 → 답 확인 → 다음 … → 마무리. 콘텐츠 34/34 불변, 교사 검수 0, PR #62 QA 전용, DB·저장 0. 아래 238차 섹션 참고.)_
+_247차 갱신: 2026-10-11 (247차 — **하이브리드 마을 클릭/탭 이동**: 바닥을 클릭/탭하면 Paul이 장애물을 돌아 걸어감, 건물 클릭은 입구 앞까지. WASD·방향키·조이스틱 불변(키 입력이 경로를 즉시 취소). 아래 247차 섹션 참고.)_
 _246차 갱신: 2026-10-11 (246차 — **새 마을 테스터 버튼을 화면 맨 위로 이동**: 대시보드 `dash-town-world`·홈 `student-home-town-world`가 첫 화면 아래라 운영자가 못 찾고 기존 마을 버튼을 눌렀음. 아래 246차 섹션 참고.)_
 _245차 갱신: 2026-10-10 (245차 — **새 걷는 마을 테스터 접근 분리 + 진입 경로**: 운영자가 미리보기에서 배경·건물만 보고 캐릭터/이동이 없다고 보고. 원인=새 마을(`townWorld`)이 QA 전용 홈 메뉴에서만 열리고 `paulTownWorld` 기본 꺼짐, 일반 대시보드의 마을 버튼은 옛 V1/V2 마을로 감. 아래 245차 섹션 참고.)_
 _244차 갱신: 2026-10-10 (244차 — **Paul Town 하이브리드 2.5D 마을(C 방식) 3구역 프로토타입**: 새 화면 `townWorld`(플래그 `paulTownWorld` 기본 꺼짐, QA 계정 전용)에서 방향키·WASD·터치 조이스틱으로 Paul을 직접 움직이고, 지도 버튼으로 구역 입구에 빠른 이동. 광장(시작)·공원·학교만 열림, 나머지 4구역은 닫힌 문 '준비 중'. 기존 2.5D 프로토타입과 PR #62 브랜치는 건드리지 않음(별도 브랜치 `feat/paul-town-hybrid-world-2026-10-10`). 커밋 `aafea77a`·`62372ed0`·`f7676353`. 정적 PASS, 브라우저 `[town-world]` 71/71 + 회귀 12종 PASS, **기존 `[town-proto2.5d]`는 실행 중이라 결과 미확정**. 보상·XP·DB·저장·SQL 0, 문법 '정답 미리 보임'은 현황만 보고(수정 안 함). 아래 244차 섹션과 설계 문서 `docs/design/PAUL_TOWN_HYBRID_WORLD_2026-10-10.md` 참고.)_
@@ -56,6 +57,13 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-11 (247차) — 하이브리드 마을 클릭/탭 이동
+
+- **무엇**: 새 순수 모듈 `src/utils/town/proto2_5d/world/clickMove.js`(보행 격자 buildWalkGrid / BFS+시야 단순화 planPath / 건물 클릭 -> 입구 resolveClickTarget / followStep). `TownWorld.jsx`는 포인터 탭(10px·500ms 미만, 왼쪽 버튼, HUD·조이스틱·시트·지도 제외)을 월드 레이어 rect + `sRef`로 월드 좌표로 바꿔 경로를 만들고, 기존 틱의 **같은 `stepMove`**(충돌 유지)로 따라 걷는다. 키보드/조이스틱·시트·지도·travel·blur는 경로 취소, 400ms 못 움직이면 취소. 목적지 마커 `tw-dest`(CSS만, 애니메이션 없음 -> reduced-motion 자동 충족), 루트 `data-dest`, 갈 수 없으면 0.7초 `tw-dest-bad`.
+- **재사용/신규**: `pathfinding.js`(findPath)는 `walkGrid.js`의 고정 OBSTACLES·100x100 좌표계에 묶여 320x240/반지름 1.5 월드에 맞지 않아 호출하지 않음(수정도 안 함). BFS 규칙(8방향·코너 컷팅 금지·고정 이웃 순서)과 선분-사각형 내부 판정을 같은 방식으로 작게 새로 씀. 충돌/좌표/장소는 `freeMove`·`worldMap`·`fastTravel` 그대로.
+- **검증(정적만)**: 신규 `testTownWorldClickMove` 23/23(240쌍 걷기 시뮬: 침범 0·1.0 이내 도착·종료), `testTownWorld` 168/168, `testTownWorldScreen`(신규 핀 7), `testTownWorldWiring`, `testBundleBudget`, `testLazyChunkGuards`, `testRegistryCoverage`, `testTownKitAssets` 1419/1419 PASS, 더미 env 빌드 PASS. 브라우저 `[town-world]` 신규 (l)~(q)는 **리드 실행 예정**(작성자 미실행).
+- 이미지·학습 데이터·저장 키·보상 변경 0.
 
 ## 2026-10-11 (246차) — 새 마을 테스터 버튼 위치를 첫 화면 안으로
 

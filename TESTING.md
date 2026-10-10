@@ -2077,3 +2077,7 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 245차 추가 (2026-10-10): 새 마을 테스터 접근 분리
 
 - `testTownWorldWiring`에 테스터 목록(Paul 제외·실계정 4명·QA 목록 불변)과 Dashboard/PaulTown 진입점 prop 게이팅 핀 추가, `testQaGate`/`testTownMissions`의 `QA_ONLY_SCREENS` 핀에서 `townWorld` 제거. `[town-world]`에 (g) 마을 전용 테스터(`installMocks(page, { studentId: '…a002' })`, 기본 플래그) / (h) 일반 학생 시나리오 추가 — 브라우저 실행은 리드 몫(작성 시점 미실행).
+
+### 247차 추가 (2026-10-11): 클릭/탭 이동
+
+- 신규 `scripts/testTownWorldClickMove.mjs`(23단언, `verify` registry 등록): 보행 격자·결정론 240쌍 걷기 시뮬(솔리드 침범 0, 1.0 이내 도착), 건물 클릭 -> `nearestPlace` 일치, 도달 불가 null. `testTownWorldScreen`에 탭 임계값/키보드 취소/`stepMove` 단일 호출/`tw-dest` 핀 추가. `[town-world]` 브라우저 (l)~(q) 추가 — 작성 시점 미실행(리드 몫).
