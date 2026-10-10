@@ -7,7 +7,9 @@ import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise 
 import { playWordAudio, stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls } from '../SpeakingPracticeItem'
-import { imgUrl } from './pictureImg.jsx'
+import { GameStyle, PwProgress, imgUrl } from './pictureImg.jsx'
+import SfxControl from './SfxControl.jsx'
+import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { PICTURE_REC_LABELS } from './recLabels.js'
 
 // 게임/가게 선반은 열 때만 받는 추가 청크
@@ -22,8 +24,12 @@ const POOL = learnableWords()
 const listen = (en) => playWordAudio(null, en, { source: 'pictureWords' })
 const newSeed = () => Date.now() % 2147483647
 
-function Picture({ word }) {
-  return <img data-testid="pwp-picture" src={imgUrl(word.asset)} alt="그림" draggable={false} className="mx-auto h-40 w-40 max-w-full rounded-2xl bg-white object-contain card-shadow sm:h-56 sm:w-56" />
+function Picture({ word, glow = false }) {
+  return (
+    <div data-testid="pwp-picture-card" className={`pw-card${glow ? ' pw-glow' : ''}`}>
+      <img data-testid="pwp-picture" src={imgUrl(word.asset)} alt="그림" draggable={false} className="pw-pic" />
+    </div>
+  )
 }
 
 function WordText({ word }) {
@@ -64,7 +70,7 @@ function PracticeCards({ words, onDone, single = false, nextLabel = '➡️ 다�
   const lastOne = i + 1 >= words.length
   return (
     <div data-testid="pwp-card" data-word-index={i} className="space-y-3">
-      <p data-testid="pwp-progress" className="text-center text-sm font-black text-purple-700">{i + 1} / {words.length}</p>
+      <PwProgress testid="pwp-progress" n={i + 1} total={words.length} />
       <Picture word={w} />
       <WordText word={w} />
       {said.has(w.id) && <p data-testid="pwp-said-mark" className="text-center text-sm font-bold text-emerald-700">말해 봤어요</p>}
@@ -82,18 +88,19 @@ function PracticeCards({ words, onDone, single = false, nextLabel = '➡️ 다�
 }
 
 // 시험 문제 하나. 답하기 전에는 영어 단어·뜻·듣기·녹음기를 DOM에 올리지 않는다(조건부 마운트). 그림 alt도 중립 문구.
-function QuizCard({ word, q, onAnswered, onNext }) {
+function QuizCard({ word, q, onAnswered, onNext, n, total, label = '시험' }) {
   const [picked, setPicked] = useState(null)
   const answered = picked !== null
   const right = answered && picked === q.correctId
   return (
-    <div className="space-y-3">
-      <Picture word={word} />
+    <div data-testid="pwp-quiz" className="space-y-3">
+      <PwProgress testid="pwp-quiz-progress" label={label} n={n} total={total} />
+      <Picture word={word} glow={right} />
       <p className="text-center text-base font-bold text-gray-700">그림에 맞는 단어를 골라요</p>
       <div className="grid grid-cols-2 gap-2">
         {q.options.map((o, k) => (
           <button key={o.id} type="button" data-testid={`pwp-opt-${k}`} disabled={answered}
-            onClick={() => { if (answered) return; setPicked(o.id); onAnswered(o.id === q.correctId) }}
+            onClick={() => { if (answered) return; setPicked(o.id); playSfx(o.id === q.correctId ? 'right' : 'wrong'); onAnswered(o.id === q.correctId) }}
             className={`${BTN} break-words border-2 ${answered && o.id === q.correctId ? 'border-green-500 bg-green-100 text-green-800' : answered && o.id === picked ? 'border-red-400 bg-red-100 text-red-700' : 'border-gray-200 bg-white text-gray-800'}`}>
             {o.en}
           </button>
@@ -154,8 +161,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
       </div>
     )
   } else if (stage === 'quiz') {
-    progress = `시험 ${qi + 1} / ${words.length}`
-    body = <QuizCard key={words[qi].id} word={words[qi]} q={quiz[qi]} onAnswered={answer(words[qi].id)} onNext={() => (qi + 1 >= words.length ? toReview() : setQi(qi + 1))} />
+    body = <QuizCard key={words[qi].id} n={qi + 1} total={words.length} word={words[qi]} q={quiz[qi]} onAnswered={answer(words[qi].id)} onNext={() => (qi + 1 >= words.length ? toReview() : setQi(qi + 1))} />
   } else if (stage === 'review') {
     progress = '복습'
     if (rev.phase === 'clear') {
@@ -174,7 +180,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
           <PracticeCards key={`${rw.id}-${rev.round}`} words={[rw]} single nextLabel="➡️ 문제 풀기" onDone={() => setRev({ ...rev, phase: 'quiz' })} />
         </div>
       ) : (
-        <QuizCard key={`${rw.id}-${rev.round}`} word={rw} q={buildQuiz([rw], POOL, seed + 7919 * (rev.round + 1))[0]} onAnswered={answer(rw.id)} onNext={afterReviewAnswer} />
+        <QuizCard key={`${rw.id}-${rev.round}`} label="복습" n={1} total={rev.queue.length} word={rw} q={buildQuiz([rw], POOL, seed + 7919 * (rev.round + 1))[0]} onAnswered={answer(rw.id)} onNext={afterReviewAnswer} />
       )
     }
   } else {
@@ -229,6 +235,7 @@ export default function PictureWordPractice({ onExit }) {
   } else {
     body = (
       <div data-testid="pwp-root" data-step="pick" data-index={0} className="space-y-2">
+        <SfxControl />
         <div className="flex flex-wrap justify-center gap-2">
           {LEVELS.map((l) => (
             <button key={l.id} type="button" data-testid={`pwg-level-${l.id}`} data-active={level === l.id ? 'true' : 'false'} disabled={!l.enabled} onClick={() => setLevel(l.id)}
@@ -260,6 +267,7 @@ export default function PictureWordPractice({ onExit }) {
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-purple-50 to-sky-50 px-4 py-4 pb-8">
       <div className="mx-auto max-w-lg min-w-0 space-y-3">
+        <GameStyle />
         <h1 className="text-center text-xl font-black text-gray-800">그림 단어 연습 <span className="text-xs text-red-600">(테스트)</span></h1>
         {body}
       </div>

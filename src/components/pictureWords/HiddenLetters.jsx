@@ -1,8 +1,10 @@
 // 숨은 글자(250차): a _ p _ e 처럼 비어 있는 글자를 4개 보기에서 고른다. 상태는 React state뿐 — 저장·네트워크·보상 0.
 // 숨은 글자와 전체 단어는 맞히기 전에는 DOM에 없다(빈칸은 "_", 전체 단어는 조건부 마운트). 그림 alt는 중립 "그림".
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { hiddenRound, hiddenStart, hiddenPick } from '../../utils/pictureWords/games.js'
-import { GamePicture, playEn } from './pictureImg.jsx'
+import { playSfx } from '../../utils/pictureWords/sfx.js'
+import { GamePicture, PwProgress, playEn, useReducedMotion } from './pictureImg.jsx'
+import { Sparkles, useSuccessThenSpeak } from './gameFx.jsx'
 
 const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-xl btn-press disabled:opacity-40'
 const DIFFS = [['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움']]
@@ -12,24 +14,39 @@ export default function HiddenLetters({ word, seed, difficulty, onDifficulty, in
   const round = useMemo(() => hiddenRound(word, { difficulty, seed }), [word, difficulty, seed])
   const [st, setSt] = useState(() => hiddenStart(round))
   const blank = round.blanks[st.filled]
+  const reduced = useReducedMotion()
+  const [celebrate, setCelebrate] = useState(false)
+  const stRef = useRef(st) // 탭마다 한 번만 처리
+  const { finish, cancel } = useSuccessThenSpeak()
+  useEffect(() => {
+    if (!celebrate) return undefined
+    const t = setTimeout(() => setCelebrate(false), 600)
+    return () => clearTimeout(t)
+  }, [celebrate])
 
   const pick = (letter) => {
-    if (st.done) return
-    const next = hiddenPick(st, letter)
+    const cur = stRef.current
+    if (cur.done) return
+    const next = hiddenPick(cur, letter)
+    if (next === cur) return
+    stRef.current = next
     setSt(next)
-    if (next.done) playEn(word.en) // 사용자 탭 직후
+    if (next.done) { playSfx('tap'); if (!reduced) setCelebrate(true); finish(word.en) } else playSfx(next.last === 'right' ? 'right' : 'wrong')
   }
 
   return (
     <div data-testid="pwl-root" data-index={index} data-done={st.done ? 'true' : 'false'} data-difficulty={difficulty} className="space-y-3">
-      <p className="text-center text-sm font-black text-purple-700">숨은 글자 · {index + 1} / {total}</p>
+      <PwProgress testid="pwl-progress" label="숨은 글자 ·" n={index + 1} total={total} />
       <div className="flex justify-center gap-2">
         {DIFFS.map(([d, ko]) => (
           <button key={d} type="button" data-testid={`pwl-diff-${d}`} onClick={() => d !== difficulty && onDifficulty(d)}
             className={`min-h-[44px] rounded-full px-4 text-sm font-black btn-press ${d === difficulty ? 'bg-purple-600 text-white' : 'bg-white text-purple-700 border-2 border-purple-200'}`}>{ko}</button>
         ))}
       </div>
-      <GamePicture word={word} testid="pwl-picture" />
+      <div className="relative">
+        <GamePicture word={word} testid="pwl-picture" glow={celebrate && !reduced} />
+        {celebrate && !reduced && <Sparkles />}
+      </div>
       <p className="text-center text-lg font-bold text-gray-700 break-words">{word.ko}</p>
       <button type="button" data-testid="pwl-listen" onClick={() => playEn(word.en)} className={`${BTN} w-full bg-sky-100 text-sky-700`}>🔊 듣기</button>
       <div className="flex flex-wrap justify-center gap-1.5">
@@ -39,7 +56,7 @@ export default function HiddenLetters({ word, seed, difficulty, onDifficulty, in
           const current = h >= 0 && h === st.filled && !st.done
           return (
             <span key={i} data-testid={`pwl-cell-${i}`} data-blank={h >= 0 ? 'true' : 'false'} data-filled={filled ? 'true' : 'false'}
-              className={`flex h-12 min-w-[40px] items-center justify-center rounded-xl border-2 text-2xl font-black ${!c.playable ? 'border-transparent text-gray-500' : current ? 'border-purple-500 bg-purple-50' : h >= 0 && filled ? 'border-green-400 bg-green-50 text-gray-900' : 'border-gray-200 bg-white text-gray-900'}`}>
+              className={`flex h-12 min-w-[40px] items-center justify-center rounded-xl text-2xl font-black ${!c.playable ? 'border-2 border-transparent text-gray-500' : h < 0 ? 'border-2 border-gray-200 bg-white text-gray-900' : h >= 0 && filled ? 'pw-slot-on pw-click' : current ? 'pw-slot pw-slot-now' : 'pw-slot'}`}>
               {filled ? c.ch : '_'}
             </span>
           )
@@ -49,7 +66,7 @@ export default function HiddenLetters({ word, seed, difficulty, onDifficulty, in
         <div className="grid grid-cols-4 gap-2">
           {blank.options.map((o, k) => (
             <button key={`${st.filled}-${k}`} type="button" data-testid={`pwl-opt-${k}`} disabled={st.tried.includes(o)} onClick={() => pick(o)}
-              className="min-h-[56px] min-w-[48px] rounded-2xl border-2 border-purple-300 bg-white px-3 text-2xl font-black text-purple-700 btn-press disabled:opacity-40">{o}</button>
+              className={`pw-letter pw-c${k % 4} min-h-[56px] min-w-[48px] rounded-2xl px-3 text-2xl font-black btn-press disabled:opacity-40 ${st.tried.includes(o) ? 'pw-shake' : ''}`}>{o}</button>
           ))}
         </div>
       )}
@@ -61,7 +78,7 @@ export default function HiddenLetters({ word, seed, difficulty, onDifficulty, in
       {st.done && (
         <div className="space-y-2 text-center">
           <p data-testid="pwl-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
-          <button type="button" data-testid="pwl-next" onClick={() => onNext(st.wrong)} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
+          <button type="button" data-testid="pwl-next" onClick={() => { cancel(); onNext(st.wrong) }} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
         </div>
       )}
     </div>

@@ -30,8 +30,8 @@ export default function ShopShelf({ onPractice, onBack }) {
           <button type="button" data-testid="pws-practice-all" disabled={!cur.ready} onClick={() => onPractice(cur.words)} className={`${BTN} w-full bg-purple-600 text-white`}>이 가게 전체 연습</button>
           <ul className="grid grid-cols-2 gap-2">
             {cur.words.map((w) => (
-              <li key={w.id} data-testid={`pws-item-${w.asset}`} className="min-w-0 space-y-1 rounded-xl bg-gray-50 p-2 text-center">
-                <img src={imgUrl(w.asset)} alt="" loading="lazy" draggable={false} className="mx-auto h-24 w-24 max-w-full object-contain" />
+              <li key={w.id} data-testid={`pws-item-${w.asset}`} className="pw-card pw-card-sm min-w-0 space-y-1 text-center">
+                <img src={imgUrl(w.asset)} alt="" loading="lazy" draggable={false} className="pw-pic" />
                 <p className="font-black text-gray-900 break-words">{w.en}</p>
                 <p className="text-xs text-gray-600 break-words">{w.ko}</p>
                 <button type="button" data-testid={`pws-practice-${w.asset}`} disabled={!cur.ready} onClick={() => onPractice(withItem(cur, w))} className={`${BTN} w-full bg-sky-100 text-sm text-sky-700`}>단어 연습</button>
