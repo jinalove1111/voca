@@ -129,5 +129,24 @@ if (exists('src/components/pictureWords/PictureGames.jsx')) {
   ok(imp('pictureImg.jsx'), 'shared image module exists')
 }
 
+// ---- sample decisions fixture (in memory only; the real decisions.json stays the empty placeholder)
+{
+  const { validate } = await import('./pictureWords/validateDecisions.mjs')
+  const fx = JSON.parse(read('scripts/pictureWords/fixtures/decisions.sample.json'))
+  const verdicts = JSON.parse(read('scripts/pictureWords/source/verdicts.json'))
+  const v = validate(fx, verdicts)
+  ok(v.errors.length === 0 && v.approved === 4 && v.edited === 3 && v.excluded === 2 && v.pending === 26, `fixture validates ${JSON.stringify({ ...v, errors: v.errors.length })}`)
+  const beforeLearn = H.learnableWords().length
+  const out = H.applyDecisions(H.PICTURE_WORDS, fx.decisions)
+  const by = (id) => out.find((e) => e.id === id)
+  ok(by('pics2/chocholate cake').learn && by('pics2/chocholate cake').en === H.PICTURE_WORDS.find((e) => e.id === 'pics2/chocholate cake').en && !by('pics2/chocholate cake').edited, 'fixture: plain approve becomes learnable, words unchanged')
+  ok(by('pics2/climb').learn && by('pics2/climb').en === 'climbing frame' && by('pics2/climb').ko === '정글 놀이대' && by('pics2/flower').en === 'tulip' && by('pics2/board').en === 'board' && by('pics2/board').edited, 'fixture: edited approvals carry the edited en/ko')
+  ok(!by('pics2/bun').learn && by('pics2/bun').decision === 'exclude' && !by('pics2/baskettt').learn && by('pics2/baskettt').tracks.length === 0, 'fixture: excluded (incl. UNUSABLE) stay out')
+  ok(H.learnableWords(out).length === beforeLearn + 4 && H.pendingWords(out).length === 26, `fixture: learnable ${beforeLearn} -> ${beforeLearn + 4}, pending 26`)
+  ok(H.learnableWords().length === beforeLearn && read('scripts/pictureWords/source/decisions.json').replace(/\s/g, '').includes('"decisions":{}'), 'fixture: real data and real decisions.json untouched (empty)')
+  // the games accept the newly learnable words too
+  ok(G.gameWords('conversation', { seed: 3, game: 'hidden', from: H.learnableWords(out), count: 500 }).length >= G.gameWords('conversation', { seed: 3, game: 'hidden', count: 500 }).length, 'fixture: games work with the approved words')
+}
+
 console.log(fail ? `FAIL ${fail}/${n}` : `PASS ${n}/${n} picture-word game checks`)
 process.exit(fail ? 1 : 0)

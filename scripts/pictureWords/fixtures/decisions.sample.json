@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "note": "SAMPLE for tests only — NOT an operator decision. Never copy into source/decisions.json; tests apply it in memory.",
+  "decisions": {
+    "pics2/chocholate cake": { "action": "approve", "at": 1 },
+    "pics2/climb": { "action": "approve", "en": "climbing frame", "ko": "정글 놀이대", "at": 2 },
+    "pics2/flower": { "action": "approve", "en": "tulip", "ko": "튤립", "at": 3 },
+    "pics2/board": { "action": "approve", "en": "board", "at": 4 },
+    "pics2/bun": { "action": "exclude", "at": 5 },
+    "pics2/baskettt": { "action": "exclude", "at": 6 }
+  }
+}
