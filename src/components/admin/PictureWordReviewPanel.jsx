@@ -33,7 +33,7 @@ function Card({ e, decision, onSave, onReset }) {
     <div data-testid={`pwr-card-${e.asset}`} data-status={e.status} data-decision={state}
       className={`bg-white rounded-2xl border-2 p-3 min-w-0 ${state === 'approve' ? 'border-green-400' : state === 'exclude' ? 'border-gray-300 opacity-70' : 'border-gray-200'}`}>
       <div className="flex gap-3 min-w-0">
-        <img data-testid={`pwr-img-${e.asset}`} src={imgUrl(e.asset)} alt={e.shown} loading="lazy" className="w-20 h-20 shrink-0 object-contain bg-gray-50 rounded-xl" />
+        <img data-testid={`pwr-img-${e.asset}`} src={imgUrl(e.asset)} alt={e.shown} className="w-20 h-20 shrink-0 object-contain bg-gray-50 rounded-xl" />
         <div className="min-w-0 flex-1 text-sm break-words">
           <span className={`inline-block text-xs font-black px-2 py-0.5 rounded-full ${STATUS_CLS[e.status]}`}>{STATUS_KO[e.status]} · {e.status}</span>
           <p className="text-xs text-gray-400 mt-1">기존 파일명: {e.sourceFile}</p>
