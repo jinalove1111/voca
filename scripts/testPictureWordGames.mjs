@@ -153,5 +153,85 @@ if (exists('src/components/pictureWords/PictureGames.jsx')) {
   ok(G.gameWords('conversation', { seed: 3, game: 'hidden', from: H.learnableWords(out), count: 500 }).length >= G.gameWords('conversation', { seed: 3, game: 'hidden', count: 500 }).length, 'fixture: games work with the approved words')
 }
 
+// ---- sound effects + shared design (252차)
+{
+  const sfxSrc = read('src/utils/pictureWords/sfx.js')
+  const dir = 'src/components/pictureWords'
+  const comps = fs.readdirSync(path.join(ROOT, dir)).filter((f) => /\.(jsx|js)$/.test(f))
+  const KEY = 'paulEasyVoca_pictureWordSfx'
+  // settings logic with a fake storage and NO AudioContext (node): clamp, default, subscribe, persistence, no throw
+  const mem = new Map()
+  globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) }
+  const A = await import('../src/utils/pictureWords/sfx.js?a')
+  ok(JSON.stringify(A.getSfxSettings()) === '{"on":true,"volume":0.6}', 'sfx: default on / 0.6')
+  let seen = 0
+  const off = A.subscribeSfx(() => { seen++ })
+  ok(A.setSfxSettings({ volume: 5 }).volume === 1 && A.setSfxSettings({ volume: -2 }).volume === 0 && A.setSfxSettings({ volume: 'x' }).volume === 0.6, 'sfx: volume clamps to 0..1 (junk -> default)')
+  A.setSfxSettings({ on: false, volume: 0.3 })
+  ok(seen === 4 && A.getSfxSettings().on === false && JSON.parse(mem.get(KEY)).volume === 0.3, 'sfx: subscribe fires per change + persists to the one key')
+  off(); A.setSfxSettings({ on: true }); ok(seen === 4, 'sfx: unsubscribe works')
+  ok([...mem.keys()].join() === KEY, 'sfx: exactly one storage key is written')
+  const B = await import('../src/utils/pictureWords/sfx.js?b')
+  ok(B.getSfxSettings().volume === 0.3 && B.getSfxSettings().on === true, 'sfx: settings survive a fresh module load')
+  mem.set(KEY, '{broken'); const C = await import('../src/utils/pictureWords/sfx.js?c')
+  ok(C.getSfxSettings().on === true && C.getSfxSettings().volume === 0.6, 'sfx: corrupt storage -> defaults')
+  let threw = false
+  try { for (const nme of ['tap', 'right', 'wrong', 'success', 'nope']) C.playSfx(nme) } catch { threw = true }
+  ok(!threw, 'sfx: playSfx without AudioContext is a silent no-op')
+  delete globalThis.localStorage
+  const D = await import('../src/utils/pictureWords/sfx.js?d')
+  ok(D.setSfxSettings({ volume: 0.2 }).volume === 0.2, 'sfx: works without storage')
+  // fake AudioContext: each call starts its own oscillators; off / volume 0 create nothing
+  let made = 0, starts = 0
+  globalThis.AudioContext = class { constructor() { this.currentTime = 0; this.state = 'running'; this.destination = {} } createOscillator() { made++; return { type: '', frequency: { value: 0, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {}, start() { starts++ }, stop() {} } } createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} } } }
+  const E = await import('../src/utils/pictureWords/sfx.js?e')
+  E.playSfx('right'); E.playSfx('right'); E.playSfx('success')
+  ok(starts === 2 + 2 + 4 && made === starts, `sfx: overlapping calls each start their own oscillators (right x2 = 4, success = 4; got ${starts})`)
+  E.setSfxSettings({ on: false }); E.playSfx('tap'); E.setSfxSettings({ on: true, volume: 0 }); E.playSfx('tap')
+  ok(starts === 8, 'sfx: no sound when off or volume 0')
+  delete globalThis.AudioContext
+
+  // source pins
+  ok(!/import [^\n]*\.(mp3|wav|ogg|m4a|aac)['"]/.test(comps.map((f) => read(`${dir}/${f}`)).join('\n') + sfxSrc) && !/new Audio\(/.test(sfxSrc), 'sfx: no audio file imports / no Audio element')
+  const pkg = JSON.parse(read('package.json'))
+  ok(!Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).some((d) => /^(howler|tone|tone\.js|use-sound|pizzicato|wavesurfer)/i.test(d)), 'sfx: no audio dependency in package.json')
+  ok((sfxSrc.match(/new AC\(\)/g) || []).length === 1 && (sfxSrc.match(/getCtx\(\)/g) || []).length === 2 && /export function playSfx[\s\S]*getCtx\(\)/.test(sfxSrc), 'sfx: the AudioContext is created lazily, only inside playSfx')
+  ok(!/^(const|let) \w+ = new (AC|AudioContext)/m.test(sfxSrc) && !/^getCtx\(/m.test(sfxSrc), 'sfx: nothing created on import')
+  ok((sfxSrc.match(/paulEasyVoca_pictureWordSfx/g) || []).length === 1 && (sfxSrc.match(/setItem\(/g) || []).length === 1, 'sfx: single storage key literal, single write')
+  const others = comps.filter((f) => f !== 'SfxControl.jsx' && f !== 'gameFx.jsx').map((f) => read(`${dir}/${f}`)).join('\n')
+  ok(!/localStorage|sessionStorage|pictureWordSfx/.test(others + read(`${dir}/SfxControl.jsx`) + read(`${dir}/gameFx.jsx`)), 'sfx: components never touch storage directly')
+  const recFiles = ['src/hooks/useLocalRecorder.js', 'src/components/SpeakingPracticeItem.jsx', `${dir}/recLabels.js`, `${dir}/pictureImg.jsx`]
+  ok(recFiles.every((f) => !/pictureWords\/sfx|SfxControl|gameFx|playSfx/.test(read(f))), 'sfx: recorder, record labels and shared image module import no sfx')
+  const prac = read(`${dir}/PictureWordPractice.jsx`)
+  const cards = prac.slice(prac.indexOf('function PracticeCards'), prac.indexOf('function QuizCard'))
+  ok(cards.length > 500 && !/playSfx|SfxControl|sfx/i.test(cards), 'sfx: the practice card (PracticeCards) has no sfx at all')
+  ok(/playSfx\(o\.id === q\.correctId/.test(prac) && /<SfxControl \/>/.test(prac), 'sfx: test-question feedback + picker use sfx')
+  ok(/<SfxControl \/>/.test(read(`${dir}/PictureGames.jsx`)), 'sfx: game screens show the control')
+  const ctl = read(`${dir}/SfxControl.jsx`)
+  ok(['pwsfx-toggle', 'pwsfx-volume', 'data-sfx-on', 'data-sfx-volume', 'aria-pressed', 'type="range"', 'min-h-[44px]', 'h-11', '🔊', '🔇'].every((t) => ctl.includes(t)), 'sfx: control testids/data/aria/44px/icons')
+  const fx = read(`${dir}/gameFx.jsx`)
+  ok(/setTimeout\([\s\S]*SUCCESS_MS/.test(fx) && /playSfx\('success'\)/.test(fx) && /clearTimeout\(t\.current\)/.test(fx) && /useEffect\(\(\) => cancel/.test(fx), 'sfx: success sound, then pronunciation after it; pending pronunciation cancelled on unmount')
+  const starN = (fx.match(/\['[^']+', '/g) || []).length
+  ok(starN >= 3 && starN <= 6, `sparkle: 3-6 star elements (${starN})`)
+  // design tokens (CSS only)
+  const img = read(`${dir}/pictureImg.jsx`)
+  const css = img.slice(img.indexOf('const CSS = `'))
+  ok(/\.pw-card\{[^}]*border:3px solid #F472B6/.test(css) && /\.pw-card\{[^}]*border-radius:24px/.test(css) && /linear-gradient\(160deg,#FFE4EF[^)]*#FFF8EC/.test(css), 'design: .pw-card pink #F472B6 border, rounded, pink -> cream gradient')
+  ok(/\.pw-pic\{[^}]*width:100%[^}]*object-fit:contain/.test(css) && !/object-fit:cover/.test(css), 'design: picture fills the card width, contain, never cropped')
+  ok(['pw-c0', 'pw-c1', 'pw-c2', 'pw-c3', 'pw-slot', 'pw-slot-on', 'pw-progress', 'pw-bar-fill'].every((c) => css.includes(`.${c}`)), 'design: pastel letter colours, slots, progress classes')
+  const reduce = css.slice(css.indexOf('@media (prefers-reduced-motion'))
+  const anims = [...new Set([...css.slice(0, css.indexOf('@media (prefers-reduced-motion')).matchAll(/\.(pw-[a-z-]+)\{animation:/g)].map((m) => m[1]))]
+  ok(anims.length >= 8 && anims.every((a) => reduce.includes(`.${a}`)), `design: reduced-motion covers every animation class (${anims.join(',')})`)
+  ok(/\.pw-spark-star\{display:none\}/.test(reduce) && /useReducedMotion\(\)/.test(read(`${dir}/AlphabetHammer.jsx`)) && /!reduced/.test(read(`${dir}/HiddenLetters.jsx`)), 'design: reduced motion hides sparkle and skips glow/fly')
+  const durs = [...css.matchAll(/\.(pw-[a-z-]+)\{animation:[a-z-]+ ([\d.]+)s/g)].map((m) => [m[1], Number(m[2])])
+  ok(durs.length === anims.length && durs.every(([c, d]) => (c === 'pw-spark' ? d <= 0.6 : d >= 0.15 && d <= 0.3)), `design: animation durations 150-300 ms (sparkle <= 600): ${durs.map((x) => x.join('=')).join(' ')}`)
+  const hs2 = read(`${dir}/AlphabetHammer.jsx`)
+  ok(/SWING_MS = 120, FLY_MS = 180/.test(hs2) && /setTimeout\(\(\) => setFx\(null\), 300\)/.test(hs2) && /setTimeout\(\(\) => setCelebrate\(false\), 600\)/.test(hs2), 'hammer: swing/fly 300 ms total, wrong shake cleared <= 300 ms, sparkle 600 ms')
+  ok(/stRef\.current/.test(hs2) && !/onPointer|onTouch|onMouse/.test(hs2 + read(`${dir}/HiddenLetters.jsx`)), 'hammer: each tap handled once (ref state, click handler only)')
+  ok(/Math\.min\(100/.test(img) && /pw-card-sm/.test(read(`${dir}/ShopShelf.jsx`)), 'design: progress bar clamps, shelf items use the card')
+  // rule modules untouched by this round
+  ok(!/sfx|Sfx/.test(read('src/utils/pictureWords/games.js') + read('src/utils/pictureWords/practice.js')), 'rules: games.js/practice.js know nothing about sound')
+}
+
 console.log(fail ? `FAIL ${fail}/${n}` : `PASS ${n}/${n} picture-word game checks`)
 process.exit(fail ? 1 : 0)
