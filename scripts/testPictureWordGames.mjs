@@ -123,7 +123,7 @@ if (exists('src/components/pictureWords/HiddenLetters.jsx')) {
 if (exists('src/components/pictureWords/PictureGames.jsx')) {
   const hubSrc = read('src/components/pictureWords/PictureGames.jsx'), shelfSrc = read('src/components/pictureWords/ShopShelf.jsx'), scr = read('src/components/pictureWords/PictureWordPractice.jsx')
   for (const [name, src] of [['hub', hubSrc], ['shelf', shelfSrc], ['screen', scr]]) ok(!FORBID.test(src), `${name}: no network/storage/reward/analytics`)
-  for (const id of ['pwg-summary', 'pwg-again', 'pwg-other', 'pwg-to-practice', 'pwg-exit']) ok(hubSrc.includes(id), `testid ${id}`)
+  for (const id of ['pwg-summary', 'pwg-again', 'pwg-other', 'pwg-to-practice', 'pwg-to-test', 'pwg-exit']) ok(hubSrc.includes(id), `testid ${id}`)
   for (const id of ['pwg-mode-practice', 'pwg-mode-hammer', 'pwg-mode-hidden', 'pwg-level-', '이 단어로 알파벳 망치', '이 단어로 숨은 글자']) ok(scr.includes(id), `screen has ${id}`)
   for (const id of ['pws-root', 'pws-shop-', 'pws-item-', 'pws-practice-', 'pws-practice-all', '준비 중']) ok(shelfSrc.includes(id), `shelf has ${id}`)
   ok(!/가격|구매하기|코인|\bbuy\b|price|useTownShop|townCatalog|TownShopPanel/i.test(shelfSrc), 'shelf: no price/buy/coins/town-shop code')
