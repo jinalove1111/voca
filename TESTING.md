@@ -2092,3 +2092,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testPictureWords.mjs`(728단언)에 추가: 결정 검증기 9케이스(빈 파일/승인/수정/제외/미지 id/MATCH id/잘못된 action/빈 en/UNUSABLE 승인), 빈 결정에서 learnable 119·pending 31·excluded 0, 어떤 항목의 `tracks`에도 phonics 없음, `shopSets()` 순서·`ready`, `practice.js` 결정성·보기 4개 서로 다름·정답 1회·정답 위치 비고정·오답 문구≠정답·`reviewQueue`/`summarise`, 연습 화면 소스 핀(fetch/supabase/storage/보상 없음, 퀴즈 조건부 마운트, alt "그림", `data-correct` 없음, 언마운트 시 `stopSpeaking`, `isTownWorldTester` 게이트, 버튼 위치).
 - `tests/e2e/pictureWordPractice.spec.mjs`(`[picture-practice]`, 작성만 — 브라우저 미실행): 전 과정 정답, 오답 복습, 답 전 누출 0, 듣기(speak 스텁), 마이크 없이 따라 말하기, 360x640 넘침·가림 0, 일반 학생 진입 없음 + 홈 메뉴 진입, 콘솔 오류 0·REST 쓰기 0·저장소 키 불변.
 
+
+### 250차 추가 (2026-10-11): 그림 단어 게임
+
+- `scripts/testPictureWordGames.mjs`(100단언, registry 등록): 레벨(phonics=길이만), 전 학습 가능 단어 x 시드 3개로 망치(타일=글자 순열·순서가 다름·정답 스크립트 wrong 0·오답은 wrong/last만 변경·중복 글자 호환)와 숨은 글자(난이도별 개수·전부 숨김 없음·보기 4개 정답 1·스크립트 완주·오답은 진행 안 함) 검증, 결정 샘플 fixture를 메모리에서 validator/`applyDecisions`에 적용(119→123, pending 26), 컴포넌트/선반 소스 핀(네트워크·저장·보상·정답 속성 없음, 조건부 마운트).
+- `tests/e2e/pictureWordGames.spec.mjs`(`[picture-games]`, 66 PASS/0 FAIL 1회 실행): 망치/숨은 글자/연결 진입/가게 선반/360x640 터치/일반 학생 제한. 단어는 그림 src 슬러그로만 파악.

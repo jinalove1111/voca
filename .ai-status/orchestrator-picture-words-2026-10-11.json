@@ -3,7 +3,7 @@
   "role": "구현",
   "task_id": "picture-words-games-2026-10-11",
   "task": "250차 그림 단어 게임(알파벳 망치/숨은 글자)+레벨+가게 선반",
-  "status": "working",
+  "status": "completed",
   "progress": 100,
   "started_at": "2026-10-11T01:00:00+09:00",
   "updated_at": "2026-10-11T05:00:00+09:00",
@@ -43,15 +43,16 @@
     "scripts/pictureWords/fixtures/decisions.sample.json",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "stage done: 6 browser spec (run 1: 66 PASS / 0 FAIL)",
+  "summary": "stage done: 7 docs",
   "blocker": null,
-  "next_action": "stage 7: docs (design doc, handoff 250, TESTING)",
+  "next_action": "done",
   "stages_done": [
     "1 levels+games.js+tests+registry",
     "2 AlphabetHammer",
     "3 HiddenLetters",
     "4 PictureGames+ShopShelf+mode picker+connected entry+budget 2.2MB",
     "5 sample decisions fixture + in-memory tests",
-    "6 browser spec (run 1: 66 PASS / 0 FAIL)"
+    "6 browser spec (run 1: 66 PASS / 0 FAIL)",
+    "7 docs"
   ]
 }

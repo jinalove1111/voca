@@ -9,6 +9,7 @@ _233차 갱신: 2026-10-10 (233차 — **Grammar 커리큘럼 재구성: 5 과�
 _234차 갱신: 2026-10-10 (234차 — **Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙**. Easy 8/8 콘텐츠 구현 완료, 교사 검수 완료 0, Intermediate 1, 미제작 25(Intermediate 7·Advanced 6·Middle 6·High 6) — **커리큘럼 전체 완료 아님**. 코드 `d2842265`. 정적 PASS, 더미 env 빌드 경고 0, `[grammar]` 238/0, `[student-home]` 223/0/1 SKIP. 클릭 경로: 홈 [📘 문법 과정] → Easy (ready 8/8 · 검수 0) → 3. 나는 …이야 am·is·are …. PR #62 Draft·QA 전용. 아래 234차 섹션 참고.)_
 _235차 갱신: 2026-10-10 (235차 — **Paul 로고 모자 PNG 8장을 기존 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 대응으로 적용** + HatCollection 장착 버튼 44px 수정 + 모자 이름 2건 정정. 앱에 "8단계 모자"는 없고 세 축(XP 랭크 5·크기 5단계·수집 모자 8종)이 따로 있어 수집 모자 8종에 대응(리드 판단, **운영자 확인 필요: 남색/주황 대응, 승급 체인 아님**). 점수·승급 규칙·해금·XP 무변경. 커밋 `da4f2d66`·`e4e622d9`·`a97074ef`, 이름 커밋 `f5156fa8`. 신규 `[hats]` 67/0 + 회귀 PASS. Preview 실화면(SSO)·실기기 미확인. PR #62 Draft·QA 전용. 아래 235차 섹션 참고.)_
 _238차 갱신: 2026-10-10 (238차 — **문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드(5카드 그리드)**. 클릭 경로: 홈 [📘 문법 / Grammar] → Easy → 1. 부탁하기 → 카드 1/23 목표 → 다음 … → 선택 문제 → 답 확인 → 다음 … → 마무리. 콘텐츠 34/34 불변, 교사 검수 0, PR #62 QA 전용, DB·저장 0. 아래 238차 섹션 참고.)_
+_250차 갱신: 2026-10-11 (250차 — **그림 단어 게임 2종(알파벳 망치·숨은 글자) + 레벨 구조 + 가게 구경 선반 + 샘플 결정 fixture**: 테스터 4명 전용 화면 안에서만. 보상·저장·네트워크·DB 없음. 새 spec `[picture-games]` 66/0 1회 실행.)
 _249차 갱신: 2026-10-11 (249차 — **그림 단어 연습(테스터 4명 전용, 로컬 빌드) + 승인 결정 파일 반입 경로**: 그림 보기 → 영국식 발음 듣기 → 따라 말하기 → 그림 보고 단어 맞히기 → 복습. 보상·저장·네트워크 0. Phonics는 운영자 지시로 미분류. 브라우저 검증은 리드 몫(미실행).)_
 _248차 갱신: 2026-10-11 (248차 — **그림 단어 151장 분류 + 관리자 전용 승인 검토 화면**: WebP 151개(합계 2,448,798B), 생성 데이터, 관리자 탭 🖼 그림단어. 학생 기능 없음, DB/SQL 없음, 결정은 localStorage만.)
 _247차 갱신: 2026-10-11 (247차 — **하이브리드 마을 클릭/탭 이동**: 바닥을 클릭/탭하면 Paul이 장애물을 돌아 걸어감, 건물 클릭은 입구 앞까지. WASD·방향키·조이스틱 불변(키 입력이 경로를 즉시 취소). 아래 247차 섹션 참고.)_
@@ -59,6 +60,20 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-11 (250차) — 그림 단어 게임 · 레벨 · 가게 구경 선반
+
+테스터 전용 그림 단어 화면(`pictureWords`)에 추가. 학생 기록·보상·저장 키·네트워크·DB·SQL 없음(상태는 React state뿐). 운영자 미승인 결정은 만들지 않았다(`source/decisions.json`은 빈 그대로).
+
+- **레벨(구조만)**: `LEVELS`(phonics / conversation / advanced 비활성), `wordsForLevel`. phonics = 단일 단어·a-z·3~4글자 **길이만**으로 선택(21개). `phonicsCandidate`·소리 분류·순서 미사용 — 실제 단원/소리 순서는 미확정(운영자 지시). conversation = 학습 가능 전부(119). advanced = [].
+- **게임 로직** `src/utils/pictureWords/games.js`(순수, 시드): `letterCells`, `hammerRound/hammerStart/hammerTap`, `hiddenRound/hiddenStart/hiddenPick`, `gameWords`. 구분자(공백·하이픈·아포스트로피)는 미리 채워진 비플레이 칸. 같은 글자 타일은 서로 바꿔 쓸 수 있다(apple의 p 두 개).
+- **컴포넌트**: `AlphabetHammer.jsx`, `HiddenLetters.jsx`, `ShopShelf.jsx`, 이를 담는 추가 lazy 청크 `PictureGames.jsx`(게임/선반을 열 때만 로드), 공유 `pictureImg.jsx`(그림 URL·중립 alt "그림"·reduced-motion 훅·CSS). 완성 전에는 영어 단어/숨은 글자가 DOM에 없다(조건부 마운트, 정답 속성·aria-label 없음, 위치 testid).
+- **화면 연결**: 모드 선택(단어 연습/알파벳 망치/숨은 글자/가게 구경) + 레벨 칩. 연습 요약의 `이 단어로 알파벳 망치/숨은 글자`가 그 세션 단어로 게임을 시작(연결 진입).
+- **가게 선반**: 8개 가게, 항목 그림+영어+뜻 둘러보기, 항목별 `단어 연습`(그 단어 + 같은 가게 최대 5개), `이 가게 전체 연습`(가게에서 무작위 최대 6개). 4개 미만 가게(garden, pet)는 준비 중. 가격/구매/코인/인벤토리 없음, 마을 상점 코드 미접촉.
+- **fixture**: `scripts/pictureWords/fixtures/decisions.sample.json`(샘플, 승인 4(수정 3)·제외 2). 테스트가 메모리에서만 validator/`applyDecisions`에 적용 → learnable 119→123, pending 26. 생성 데이터·실제 decisions.json 불변.
+- **번들 예산**: 핵심 raw 2.092MB → 2.109MB(PictureGames 13.1KB, PictureWordPractice 22.2KB). 리드 결정에 따라 `CORE_RAW_BUDGET_BYTES` 2.1MB → 2.2MB(주석 한 줄 append, 제외 규칙 추가 없음). 메인 청크 gzip 130.8KB(≤135KB 단언 불변).
+- **검증**: `testPictureWordGames.mjs` 100/100(전 학습 가능 단어 x 시드 3 x 난이도 3), `testPictureWords.mjs` 728/728, 브라우저 `[picture-games]` 66/0(1회, 프리뷰 4193). `verify:all`·`testBrowserE2E` 미실행.
+- **한계/미구현**: 타일이 칸으로 날아가는 이동 애니메이션 대신 칸 pop + 타일 축소 전환(CSS). 보상/별/점수 없음. advanced 레벨 내용 없음. 푸시 안 함(Preview 배포 미승인).
 
 ## 2026-10-11 (249차) — 그림 단어 연습(테스터 전용) + 결정 파일 반입
 
