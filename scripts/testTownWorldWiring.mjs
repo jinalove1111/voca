@@ -51,4 +51,7 @@ check('Dashboard/PaulTown/StudentHome 셋 다 onGoWorld를 goTownWorld로 전달
 check('Dashboard 진입 버튼은 onGoWorld일 때만(dash-town-world)', /\{onGoWorld && \(\s*<button[^>]*data-testid="dash-town-world"/.test(dash))
 check('PaulTown 진입 카드는 onGoWorld일 때만 + 래퍼 조건 포함', /\{onGoWorld && \(\s*<button[^>]*data-testid="paul-town-world-entry"/.test(pt) && /\(onGoTown \|\| onGoWorld \|\|/.test(pt))
 check('PlaceSheet: 미션 비허용이면 tw-missions-closed + disabled', /!missionsOpen && \(\s*<p data-testid="tw-missions-closed"/.test(sheet) && /disabled=\{!missionsOpen\}/.test(sheet))
+// 246차: 새 마을 버튼은 첫 화면에 보이도록 위쪽에 둔다
+check('Dashboard: dash-town-world 블록이 프로필 카드({/* Profile */})보다 앞', dash.indexOf('data-testid="dash-town-world"') > 0 && dash.indexOf('data-testid="dash-town-world"') < dash.indexOf('{/* Profile */}'))
+check('StudentHome: student-home-town-world가 order -1, 이름 줄이 order -2(시각상 시작 버튼보다 위, Tab 순서 불변)', /data-testid="student-home-town-world" onClick=\{onGoWorld\} style=\{\{ order: -1 \}\}/.test(sh) && /pt-2" style=\{\{ order: -2 \}\}/.test(sh) && sh.indexOf('data-testid="student-home-town-world"') > sh.indexOf('data-testid="student-home-town"'))
 if (fail) { console.log(`\n${fail}건 FAIL`); process.exit(1) } else console.log('\nALL PASS')

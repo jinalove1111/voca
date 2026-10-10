@@ -416,6 +416,21 @@ export async function run(browser, baseURL) {
     r.check(`${name} (e) 걸어서 어떤 준비 중 구역 사각형 안에도 들어가지 못함(${s2.length}샘플)`, s2.every((q) => !inSoon(q) && !hitsAnySolid(q)), JSON.stringify(s2.find(inSoon)))
   }, { hasTouch: true })
 
+  // ---- 246차: 새 마을 버튼은 첫 화면(스크롤 전) 안에 있어야 한다 ----
+  const fullyIn = (b, vp) => !!b && b.width > 0 && b.height >= 43.9 && b.x >= 0 && b.y >= 0 && b.x + b.width <= vp.width && b.y + b.height <= vp.height
+  for (const vp of [{ width: 1280, height: 800 }, { width: 360, height: 640 }]) {
+    await scenario('(j) 대시보드 새 마을 버튼 첫 화면', vp, async ({ page, name }) => {
+      await T(page, 'dash-town-world').waitFor({ state: 'visible', timeout: 15000 })
+      const b = await T(page, 'dash-town-world').boundingBox()
+      r.check(`${name} dash-town-world가 스크롤 없이 첫 화면 안(높이 44px 이상)`, fullyIn(b, vp), JSON.stringify(b))
+    }, { studentId: 'e2e00000-0000-4000-8000-00000000a002', defaultFlags: true })
+    await scenario('(k) 홈 메뉴 새 마을 버튼 첫 화면', vp, async ({ page, name }) => {
+      await T(page, 'student-home-town-world').waitFor({ state: 'visible', timeout: 15000 })
+      const b = await T(page, 'student-home-town-world').boundingBox()
+      r.check(`${name} student-home-town-world가 스크롤 없이 첫 화면 안(높이 44px 이상)`, fullyIn(b, vp), JSON.stringify(b))
+    })
+  }
+
   // ---- (i) 기존 홈 '내 마을' 버튼은 새 마을을 열지 않는다(기존 경로 보존) ----
   await scenario('(i) 기존 내 마을 버튼 보존', { width: 1280, height: 800 }, async ({ page, name }) => {
     await T(page, 'student-home-town').waitFor({ state: 'visible', timeout: 15000 })
@@ -432,6 +447,8 @@ export async function run(browser, baseURL) {
   await scenario('(g) 마을 전용 테스터', { width: 1280, height: 800 }, async ({ page, name }) => {
     const vp = { width: 1280, height: 800 }
     await T(page, 'dash-town-world').waitFor({ state: 'visible', timeout: 15000 })
+    const bb0 = await T(page, 'dash-town-world').boundingBox() // 스크롤 전
+    r.check(`${name} 로그인 직후(스크롤 전) 새 마을 버튼이 뷰포트 안`, !!bb0 && bb0.y >= 0 && bb0.y + bb0.height <= vp.height && bb0.x >= 0 && bb0.x + bb0.width <= vp.width, JSON.stringify(bb0))
     const bb = await T(page, 'dash-town-world').boundingBox()
     r.check(`${name} 대시보드에 새 마을 버튼 보임(높이 44px 이상, 홈 메뉴 없이)`, bb && bb.height >= 43.9 && (await T(page, 'student-home').count()) === 0, JSON.stringify(bb))
     await T(page, 'dash-town-world').click()
