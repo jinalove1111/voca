@@ -6,6 +6,7 @@ import { GRAMMAR_COURSES } from '../utils/grammar/grammarCourses'
 import { unitsForCourse, grammarUnitById, courseCounts, reviewStatusOf, SCHOOL_GRAMMAR_NOTE_KO } from '../utils/grammar/grammarUnits'
 import SceneCards, { sceneCanAdvance } from './grammar/SceneCards'
 import { missionForUnit, readyMissions } from '../utils/grammar/townMissions'
+import { placeById } from '../utils/grammar/village'
 import { buildDeck, isPractice, deckCounts, cardIndexById } from '../utils/grammar/grammarDeck'
 
 // 2026-10-10 문법 과정 화면(QA 전용): 과정 5개 → 단원 목록(학습 목표) → 단원 카드 덱(한 화면에 설명 카드 하나 또는 문제 하나). 점수·저장·DB 없음(화면 상태일 뿐).
@@ -89,7 +90,7 @@ function WriteCompare({ inputId, compareId, exampleId, q, noteKo, a, set }) {
 }
 
 const ReviewBadge = ({ unit, testid }) => { const r = reviewStatusOf(unit); return (
-  <span data-testid={testid} data-review={r} className={`ml-2 text-xs px-2 py-0.5 rounded-full ${r === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{r === 'reviewed' ? '검수 완료' : '검수 전'}</span>) }
+  <span data-testid={testid} data-review={r} className={`ml-2 shrink-0 text-xs px-2 py-0.5 rounded-full ${r === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{r === 'reviewed' ? '검수 완료' : '검수 전'}</span>) }
 
 const Example = ({ e, testid }) => (
   <div className="flex items-center gap-2">
@@ -108,8 +109,8 @@ const canAdvance = (c, a) => {
   return true
 }
 
-function CardBody({ c, a, set, clear, deck, answers, unit, studentId, returnTown, onBasics, onRetryWrong, onList }) {
-  const mission = missionForUnit(unit.id)
+function CardBody({ c, a, set, clear, deck, answers, unit, place, studentId, returnTown, onBasics, onRetryWrong, onList }) {
+  const mission = missionForUnit(unit.id) || (place && place.doKo ? { placeKo: place.nameKo, introKo: place.doKo } : null) // 공원 미션은 기존 소개, 마을 장소는 장소 이름 + 하는 일
   switch (c.kind) {
     case 'scene': return <SceneCards card={c} unit={unit} answers={answers} onAnswer={set} onClear={clear} studentId={studentId} />
     case 'goal': {
@@ -222,7 +223,7 @@ function CardBody({ c, a, set, clear, deck, answers, unit, studentId, returnTown
   }
 }
 
-function GrammarUnitDeck({ unit, units, studentId, from, returnTown, initial, onStateChange, onBasics, onBack, onMissionComplete }) {
+function GrammarUnitDeck({ unit, units, studentId, from, returnTown, returnKind, place, initial, onStateChange, onBasics, onBack, onMissionComplete, onUnitComplete }) {
   const deck = useMemo(() => buildDeck(unit, units), [unit, units])
   const [idx, setIdx] = useState(Math.min(initial?.idx || 0, deck.length - 1))
   const [answers, setAnswers] = useState(initial?.answers || {})
@@ -235,7 +236,7 @@ function GrammarUnitDeck({ unit, units, studentId, from, returnTown, initial, on
   useEffect(() => { headingRef.current?.focus() }, [idx])
   useEffect(() => { onStateChange?.({ idx, answers }) }, [idx, answers]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => stopSpeaking(), [])
-  useEffect(() => { if (c.kind === 'summary') { const m = missionForUnit(unit.id); if (m) onMissionComplete?.(m.id) } }, [c.kind]) // eslint-disable-line react-hooks/exhaustive-deps -- 요약 카드에 닿을 때마다 1회(App이 중복 제거)
+  useEffect(() => { if (c.kind === 'summary') { const m = missionForUnit(unit.id); if (m) onMissionComplete?.(m.id); onUnitComplete?.(unit.id) } }, [c.kind]) // eslint-disable-line react-hooks/exhaustive-deps -- 요약 카드에 닿을 때마다 1회(App이 중복 제거)
   const go = (i) => { stopSpeaking(); window.scrollTo({ top: 0 }); setIdx(Math.max(0, Math.min(total - 1, i))) }
   const set = (patch) => setAnswers((s) => ({ ...s, [c.id]: { ...s[c.id], ...patch } }))
   const clear = () => setAnswers((s) => { const n = { ...s }; delete n[c.id]; return n })
@@ -248,18 +249,20 @@ function GrammarUnitDeck({ unit, units, studentId, from, returnTown, initial, on
   const ok = canAdvance(c, a)
   const last = idx === total - 1
   const leave = (toList) => { stopSpeaking(); onBack(toList) }
-  // 360x640 높이 예산: 44(바깥 홈 행)+8+44(제목 행)+4+18(단계 행)+6(바)+12+333(52vh 카드)+12+56(nav) ≈ 537 <= 564(innerHeight-76, 플로팅 위젯 위)
+  // 360x640 높이 예산(덱 화면): 화면 위 여백 16 + 덱 높이 calc(100dvh-104px)=536 → 덱 바닥 y=552 = 플로팅 속도 위젯 위(fixed bottom-5 + 높이 56 → top 564)보다 12 위.
+  //  덱 안(flex 세로, gap 8): 헤더 한 줄 44 + 단계 행 16 + 바 6(위 블록 74) · 카드 flex-1(= 536-74-16(안내 줄)-56(nav)-24(gap 3) = 366) · 안내 줄 16(항상 자리 예약) · nav 56.
   const TXT_BACK = 'min-h-[44px] px-2 font-black text-gray-600 btn-press shrink-0'
   const backBtn = from
     ? <button data-testid="gu-basics-back" onClick={() => leave(false)} className={TXT_BACK}>← 돌아가기</button>
-    : <button data-testid="gu-back" data-return={returnTown ? 'town' : undefined} onClick={() => leave(true)} className={TXT_BACK}>{returnTown ? '← 마을' : '← 단원 목록'}</button>
+    : <button data-testid="gu-back" data-return={returnTown ? returnKind : undefined} onClick={() => leave(true)} className={TXT_BACK}>{returnTown ? '← 마을' : '← 단원 목록'}</button>
   return (
-    <div data-testid="grammar-unit" data-unit={unit.id} className="space-y-3">
-      <div data-testid="gd-root" data-unit={unit.id} data-idx={idx} data-total={total} data-kind={c.kind} className="space-y-3 pb-28">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+    <div data-testid="grammar-unit" data-unit={unit.id}>
+      <div data-testid="gd-root" data-unit={unit.id} data-idx={idx} data-total={total} data-kind={c.kind} className="flex flex-col gap-2 h-[calc(100dvh-104px)] min-h-[440px] max-h-[760px]">
+        <div className="shrink-0 space-y-1">
+          <div data-testid="gd-header" className="flex items-center gap-1">
             {backBtn}
-            <p className="min-w-0 flex-1 text-base font-black text-indigo-700 truncate">{unit.order}. {unit.titleKo}<ReviewBadge unit={unit} testid="gu-review-status" /></p>
+            <p data-testid="gd-title" className="min-w-0 flex-1 text-base font-black text-indigo-700 overflow-hidden text-ellipsis whitespace-nowrap">{unit.order}. {unit.titleKo}</p>
+            <ReviewBadge unit={unit} testid="gu-review-status" />
           </div>
           <div className="flex items-center justify-between gap-2 text-xs font-bold text-gray-700">
             <span data-testid="gd-step">{c.stepKo}</span>
@@ -267,23 +270,23 @@ function GrammarUnitDeck({ unit, units, studentId, from, returnTown, initial, on
           </div>
           <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden"><div data-testid="gd-bar" className="h-full bg-indigo-500" style={{ width: `${((idx + 1) / total) * 100}%` }} /></div>
         </div>
-        <div className="max-w-lg mx-auto">
-          <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="bg-white rounded-3xl p-5 card-shadow max-h-[52vh] sm:max-h-[64vh] overflow-y-auto space-y-3">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div key={c.id} data-testid="gd-card" data-kind={c.kind} data-id={c.id} className="flex-1 min-h-0 bg-white rounded-3xl p-4 card-shadow overflow-y-auto space-y-3">
             <h2 ref={headingRef} tabIndex={-1} className="text-lg font-black text-gray-900 break-keep outline-none">{c.title}{sub}</h2>
-            <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} unit={unit} studentId={studentId} returnTown={returnTown} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
+            <CardBody c={c} a={a} set={set} clear={clear} deck={deck} answers={answers} unit={unit} place={place} studentId={studentId} returnTown={returnTown} onBasics={(id) => { stopSpeaking(); onBasics(id) }} onRetryWrong={retryWrong} onList={() => leave(true)} />
           </div>
         </div>
-        <div className="flex gap-3 mt-3">
+        <p data-testid="gd-next-hint-slot" className="shrink-0 h-4 text-xs font-bold text-gray-500 text-center break-keep leading-4">{!last && !ok && <span data-testid="gd-next-hint">답을 확인한 뒤 다음으로 가요</span>}</p>
+        <div data-testid="gd-nav" className="shrink-0 flex gap-3">
           <button data-testid="gd-prev" disabled={idx === 0} onClick={() => go(idx - 1)} className={`${NAV} bg-white card-shadow text-gray-700`}>← 이전</button>
           {!last && <button data-testid="gd-next" disabled={!ok} onClick={() => go(idx + 1)} className={`${NAV} bg-sky-500 text-white`}>다음 →</button>}
         </div>
-        {!last && !ok && <p data-testid="gd-next-hint" className="text-sm font-bold text-gray-500 text-center break-keep">답을 확인한 뒤 다음으로 가요</p>}
       </div>
     </div>
   )
 }
 
-function GrammarUnitView({ unit, units, studentId, from, returnTown, initial, onStateChange, onBasics, onBack, onMissionComplete }) {
+function GrammarUnitView({ unit, units, studentId, from, returnTown, returnKind, place, initial, onStateChange, onBasics, onBack, onMissionComplete, onUnitComplete }) {
   if (unit.status !== 'ready') {
     const back = () => { stopSpeaking(); onBack(!from) }
     return (
@@ -297,13 +300,14 @@ function GrammarUnitView({ unit, units, studentId, from, returnTown, initial, on
       </div>
     )
   }
-  return <GrammarUnitDeck unit={unit} units={units} studentId={studentId} from={from} returnTown={returnTown} initial={initial} onStateChange={onStateChange} onBasics={onBasics} onBack={onBack} onMissionComplete={onMissionComplete} />
+  return <GrammarUnitDeck unit={unit} units={units} studentId={studentId} from={from} returnTown={returnTown} returnKind={returnKind} place={place} initial={initial} onStateChange={onStateChange} onBasics={onBasics} onBack={onBack} onMissionComplete={onMissionComplete} onUnitComplete={onUnitComplete} />
 }
 
-export default function GrammarCourseScreen({ units, onBack, studentId, initialUnitId = null, returnTo = null, onMissionComplete }) {
+export default function GrammarCourseScreen({ units, onBack, studentId, initialUnitId = null, returnTo = null, placeId = null, homeLabel = '← 홈', onMissionComplete, onUnitComplete }) {
   const [courseId, setCourseId] = useState(null)
   const [unitId, setUnitId] = useState(initialUnitId)
-  const town = returnTo === 'town' // 마을에서 들어온 경우 — 덱을 나가면 목록이 아니라 마을로
+  const town = returnTo === 'town' || returnTo === 'village' // 마을(2.5D 또는 문법 마을)에서 들어온 경우 — 덱을 나가면 목록이 아니라 마을로
+  const place = returnTo === 'village' && placeId ? placeById(placeId) : null
   const [fromId, setFromId] = useState(null) // 기초 설명으로 건너온 경우 돌아갈 단원
   const deckStates = useRef(new Map()) // 단원 id → { idx, answers } — 기초 설명을 다녀와도 같은 카드·답이 남는다(화면 상태일 뿐, 저장 없음)
   useEffect(() => () => stopSpeaking(), [])
@@ -311,14 +315,15 @@ export default function GrammarCourseScreen({ units, onBack, studentId, initialU
   const unit = grammarUnitById(unitId)
   const list = courseId ? unitsForCourse(courseId) : []
   return (
-    <div data-testid="grammar-courses" data-view={unit ? 'unit' : course ? 'units' : 'courses'} className="min-h-screen p-4 pb-24">
+    <div data-testid="grammar-courses" data-view={unit ? 'unit' : course ? 'units' : 'courses'} className={`min-h-screen p-4 ${unit && unit.status === 'ready' ? 'pb-4' : 'pb-24'}`}>
       <div className="max-w-lg mx-auto space-y-4 overflow-x-hidden">
+        {!(unit && unit.status === 'ready') && ( // 덱(카드 화면)에서는 이 줄을 숨겨 카드 높이를 확보한다 — 덱 헤더 한 줄(gd-header)이 ← 단원 목록/← 마을을 맡는다
         <div className="flex items-center gap-2 pt-2">
-          <button data-testid="grammar-courses-home" onClick={() => { stopSpeaking(); onBack() }} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 홈</button>
+          <button data-testid="grammar-courses-home" onClick={() => { stopSpeaking(); onBack() }} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">{homeLabel}</button>
           <h1 className="text-xl font-black text-indigo-700">문법 과정</h1>
-        </div>
+        </div>)}
         {unit && (
-          <GrammarUnitView key={unit.id} unit={unit} units={units} studentId={studentId} from={fromId} returnTown={town && !fromId} onMissionComplete={onMissionComplete}
+          <GrammarUnitView key={unit.id} unit={unit} units={units} studentId={studentId} from={fromId} returnTown={town && !fromId} returnKind={returnTo} place={place} onMissionComplete={onMissionComplete} onUnitComplete={onUnitComplete}
             initial={deckStates.current.get(unit.id)}
             onStateChange={(s) => deckStates.current.set(unit.id, s)}
             onBasics={(id) => { setFromId(unit.id); setUnitId(id) }}

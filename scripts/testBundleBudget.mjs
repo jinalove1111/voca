@@ -348,8 +348,11 @@ const HAT_IMAGE_FILE_RE = /^paul-hat-(pink|red|orange|green|blue|navy|purple|gol
 const TOWN_MISSION_KIT_FILE_RE = /^(signpost|cookie-stand)(@2x)?-[\w-]+\.webp$/
 // 2026-10-10 공원 미션 키트 아트(src/utils/grammar/parkArt.js, GrammarCourseScreen 청크 전용): backdrop·cookie-stand·cookie-sit·tree·bench·sunflower-pot 1x/@2x 12개.
 const PARK_KIT_FILE_RE = /^(park-backdrop|cookie-stand|cookie-sit|tree|bench|sunflower-pot)(@2x)?-[\w-]+\.webp$/
+// 2026-10-10 문법 마을 키트 아트(src/utils/grammar/villageArt.js, GrammarVillage 청크 전용): manifest의 모든 target 1x/@2x가 별도 파일(인라인 아님)로 나온다 — 파일명은 manifest 기준으로 허용.
+const VILLAGE_KIT_BASENAMES = Object.keys(JSON.parse(readFileSync(path.join(process.cwd(), 'src/assets/town/kit/manifest.json'), 'utf8')).targets).map((t) => t.split('/').pop().replace(/[^\w-]/g, ''))
+const VILLAGE_KIT_FILE_RE = new RegExp(String.raw`^(${VILLAGE_KIT_BASENAMES.join('|')})(@2x)?-[\w-]+\.webp$`)
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f) && !VILLAGE_KIT_FILE_RE.test(f),
 )
 check(
   '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',
@@ -380,7 +383,8 @@ check(
 )
 check(
   'owl은 물리 파일로 dist/assets에 존재하지 않음(3.8KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('owl-') || f === 'owl.webp'),
+  // 마을 키트에도 animals/owl이 있어(1x+@2x 별도 파일) 그 쌍이 있으면 'owl-' 1x 파일은 키트 것이다 — 카탈로그 owl의 인라인 여부는 아래 data:image 계약(5건)이 따로 지킨다.
+  assetFiles.some((f) => f.startsWith('owl@2x-')) || !assetFiles.some((f) => f.startsWith('owl-') || f === 'owl.webp'),
 )
 check(
   'puppy는 물리 파일로 dist/assets에 존재하지 않음(2.7KB < 4KB 인라인 한도, 의도된 Vite 동작)',

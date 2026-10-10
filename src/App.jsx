@@ -12,7 +12,9 @@ const WritingPractice = React.lazy(() => import('./components/WritingPractice'))
 const UnitScreen = React.lazy(() => import('./components/UnitScreen'))
 // 2026-10-10 문법 과정 5개(Easy~High School) — QA 계정 홈에서만. 시범 Unit 데이터(pilotUnits)를 선택 연습에 재사용
 const GrammarCourseScreen = React.lazy(() => import('./components/GrammarCourseScreen'))
-import { readyMissions, missionById } from './utils/grammar/townMissions'
+// 2026-10-10 문법 마을(QA 전용) — 키트 그림이 많아 자체 청크(홈 문법 카드에서만 로드)
+const GrammarVillage = React.lazy(() => import('./components/GrammarVillage'))
+import { readyMissions, missionById, missionForUnit } from './utils/grammar/townMissions'
 const loadPilotUnits = () => import('./utils/curriculum/units')
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
@@ -255,7 +257,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
   useEffect(() => () => resetStudentHomeState(), [])
   const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') && isQaTestStudent(studentId) ? 'home' : 'dashboard'))
-  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'unit', 'grammarCourses']
+  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'unit', 'grammarCourses', 'grammarVillage']
   useEffect(() => { if (!qaTestStudent && QA_ONLY_SCREENS.includes(screen)) setScreen('dashboard') }, [qaTestStudent, screen])
   const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
   // Speaking 연습 끝 → [이 표현 써보기] → Writing 문항 → ← 목록이면 원래 Speaking(그 세트의 연습 끝 화면)으로
@@ -269,6 +271,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 폴타운 미션(2026-10-10) — 마을에서 문법 단원으로 들어온 세션 상태(저장 없음). 완료 id는 중복 없이 모은다
   const [grammarEntry, setGrammarEntry] = useState(null) // { unitId, returnTo: 'proto25d' } | null
   const [completedMissionIds, setCompletedMissionIds] = useState([])
+  // 문법 마을(2026-10-10) — 세션 상태(저장 없음): 마을에서 연 단원의 복귀 정보 + 완료 단원 id(중복 없음) + 마을이 스크롤할 마지막 장소
+  const [completedUnitIds, setCompletedUnitIds] = useState([])
+  const [villageFocus, setVillageFocus] = useState(null) // placeId | 'notes' | null
   const [pilotUnitsFailed, setPilotUnitsFailed] = useState(false) // 226차: 청크 로드 실패 시 빈 화면 대신 안내 + 홈
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
@@ -329,6 +334,8 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 게이팅과 완전히 무관한 독립 dev/QA 서피스).
   const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false) && qaTestStudent
   const townReturn = !!grammarEntry && grammarEntry.returnTo === 'proto25d' && paulTown2_5dEnabled // 플래그가 꺼졌으면 홈으로
+  const villageReturn = !!grammarEntry && grammarEntry.returnTo === 'village' // 문법 마을에서 연 덱
+  const villageBack = villageReturn || (!!grammarEntry && !!grammarEntry.viaVillage) // 과정 목록/덱을 나가면 마을로
   // 2026-09-27 경제 단계 A2 — paulTown2_5d 단독 플래그(townShopV1/townV1
   // 자격 없이)로도 코인 배지가 실제 서버 잔액을 읽을 수 있도록 훅 게이트를
   // 넓힌다. 위 STEP 0 안전성 검토(get_town_shop_state RPC는 순수 SELECT,
@@ -863,8 +870,8 @@ function AppInner({ studentId, studentName, onLogout }) {
             // 228차: 말하기(시험 제외)·쓰기·오늘의 학습은 모두 같은 선택기(screen 'unit')로. 이 홈은 QA 전용이다
             const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach'
             if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
-            if (t === 'grammar') { setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
-            goFrom('home', t === 'grammar' ? 'grammarCourses' : viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+            if (t === 'grammar') { setVillageFocus(null); setGrammarEntry(null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
+            goFrom('home', t === 'grammar' ? 'grammarVillage' : viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
@@ -909,16 +916,27 @@ function AppInner({ studentId, studentName, onLogout }) {
           <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '문법 과정을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.' : '불러오는 중...'}</p>
           <div className="flex flex-wrap justify-center gap-2">
             {pilotUnitsFailed && <button data-testid="grammar-load-reload" onClick={() => window.location.reload()} className="min-h-[44px] px-5 rounded-2xl font-black bg-teal-500 text-white btn-press">🔄 새로고침</button>}
-            <button data-testid="grammar-load-home" onClick={() => { setGrammarEntry(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+            <button data-testid="grammar-load-home" onClick={() => { const toVillage = villageBack; setGrammarEntry(null); setScreen(toVillage ? 'grammarVillage' : 'home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
           </div>
         </div>
       )}
       {qaTestStudent && screen === 'grammarCourses' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
           <GrammarCourseScreen units={pilotUnits} studentId={studentId}
-            initialUnitId={townReturn ? grammarEntry.unitId : null} returnTo={townReturn ? 'town' : null}
-            onMissionComplete={(id) => setCompletedMissionIds((s) => (s.includes(id) ? s : [...s, id]))}
-            onBack={() => { setGrammarEntry(null); setScreen(townReturn ? 'proto25d' : 'home') }} />
+            initialUnitId={townReturn || villageReturn ? grammarEntry.unitId : null} returnTo={townReturn ? 'town' : villageReturn ? 'village' : null}
+            placeId={villageReturn ? grammarEntry.placeId || null : null} homeLabel={villageBack ? '← 마을 지도' : '← 홈'}
+            onMissionComplete={(id) => { setCompletedMissionIds((s) => (s.includes(id) ? s : [...s, id])); const m = missionById(id); if (m) setCompletedUnitIds((s) => (s.includes(m.unitId) ? s : [...s, m.unitId])) }}
+            onUnitComplete={(uid) => { setCompletedUnitIds((s) => (s.includes(uid) ? s : [...s, uid])); const m = missionForUnit(uid); if (m) setCompletedMissionIds((s) => (s.includes(m.id) ? s : [...s, m.id])) }}
+            onBack={() => { setGrammarEntry(null); setScreen(townReturn ? 'proto25d' : villageBack ? 'grammarVillage' : 'home') }} />
+        </React.Suspense>
+      )}
+      {qaTestStudent && screen === 'grammarVillage' && (
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <GrammarVillage completedUnitIds={completedUnitIds} focusId={villageFocus}
+            onStart={(unitId, focusId) => { setVillageFocus(focusId); setGrammarEntry({ unitId, returnTo: 'village', placeId: focusId === 'notes' ? null : focusId }); setPilotUnitsFailed(false)
+              if (!pilotUnits) loadPilotUnits().then((r) => setPilotUnits(r.UNITS)).catch(() => setPilotUnitsFailed(true)); setScreen('grammarCourses') }}
+            onCourses={() => { setGrammarEntry({ unitId: null, returnTo: null, viaVillage: true }); setScreen('grammarCourses') }}
+            onHome={() => { setVillageFocus(null); setGrammarEntry(null); setScreen('home') }} />
         </React.Suspense>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
@@ -1231,7 +1249,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && screen !== 'unit' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && screen !== 'unit' && screen !== 'grammarVillage' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구

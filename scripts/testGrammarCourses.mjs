@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import { GRAMMAR_COURSES } from '../src/utils/grammar/grammarCourses.js'
 import { GRAMMAR_UNITS, SCHOOL_GRAMMAR_NOTE_KO, unitsForCourse, grammarUnitById, courseCounts, resolveChoice, validateGrammarUnit, FUNCTION_WORDS, isComplete, reviewStatusOf, practiceCounts } from '../src/utils/grammar/grammarUnits.js'
-import { buildFrame, validateScene, layoutSentence, countsMatch, sceneCards, layoutItems, relationSpots, positionFrame, viewOf, displayOrder, spotPositions, GROUND } from '../src/utils/grammar/sceneMission.js'
+import { buildFrame, validateScene, layoutSentence, countsMatch, sceneCards, layoutItems, relationSpots, miniCrop, positionFrame, viewOf, displayOrder, spotPositions, GROUND } from '../src/utils/grammar/sceneMission.js'
 import { PROPS, ACTIONS, RELATIONS, CHARACTERS, BACKGROUNDS, PARK_DIMS, PARK_GROUND, PARK_PAUL, PARK_FREE, PARK_PLACED_MAX, dimsFor, parkArtKey, parkSrc } from '../src/utils/grammar/sceneProps.js'
 import easyScenes from '../src/utils/grammar/scenes/easy.js'
 import intScenes from '../src/utils/grammar/scenes/int.js'
@@ -92,7 +92,7 @@ check('덱: deckSteps 순서·중복 없음, isPractice는 선택·빈칸·순�
 check('덱 모듈: 순수(React·PNG·units import 없음)', !dSrc.includes("from 'react'") && !dSrc.includes('.png') && !dSrc.includes('curriculum/units'))
 const sKeys = ['gd-root', 'gd-step', 'gd-progress', 'gd-bar', 'gd-card', 'gd-prev', 'gd-next', 'gd-next-hint', 'gd-check', 'gd-result', 'gd-why', 'gd-retry', 'gd-build-input', 'gd-build-compare', 'gd-build-example', 'gd-use-done', 'gd-use-listen', 'gd-use-input', 'gd-use-compare', 'gd-summary', 'gd-retry-wrong', 'gd-to-list', 'gd-order-clear', 'gd-order-answer', 'gd-order-word-', 'gd-blank-opt-', 'gd-example-', 'gd-structure-', 'gd-error', 'gd-explain', 'gd-compare', 'gd-goal', 'gu-basics-link', 'gu-review-status']
 check('화면: 카드 덱 testid가 소스에 모두 있음', sKeys.every((t) => sSrc.includes(t)), sKeys.filter((t) => !sSrc.includes(t)).join())
-check('화면: go()에서 stopSpeaking·window.scrollTo, 제목에 focus, Choice는 initialPicked로 복원, 다음은 확인 전 disabled, 보기 카드 max-h·overflow-y-auto', ['const go = (i) => { stopSpeaking(); window.scrollTo({ top: 0 })', 'headingRef.current?.focus()', 'initialPicked={a.picked', 'data-testid="gd-next" disabled={!ok}', 'max-h-[52vh] sm:max-h-[64vh] overflow-y-auto', 'deckStates = useRef(new Map())'].every((t) => sSrc.includes(t)))
+check('화면: go()에서 stopSpeaking·window.scrollTo, 제목에 focus, Choice는 initialPicked로 복원, 다음은 확인 전 disabled, 보기 카드 max-h·overflow-y-auto', ['const go = (i) => { stopSpeaking(); window.scrollTo({ top: 0 })', 'headingRef.current?.focus()', 'initialPicked={a.picked', 'data-testid="gd-next" disabled={!ok}', 'flex-1 min-h-0 bg-white rounded-3xl p-4 card-shadow overflow-y-auto', 'h-[calc(100dvh-104px)]', 'deckStates = useRef(new Map())'].every((t) => sSrc.includes(t)))
 check('화면: 자동으로 다음 카드로 넘어가지 않음(go 호출은 prev·next·retry-wrong 3곳뿐)', sSrc.split('go(').length - 1 === 3 && sSrc.includes('const go ='), String(sSrc.split('go(').length - 1))
 check('화면: 필수 testid(과정/단원 목록, 듣기, 구조 S/V/+, 다시 풀기, 진행, 기초 링크, 뒤로)', ['grammar-course-${c.id}', 'grammar-unit-${u.id}', 'grammar-units-back', 'gd-example-${i}-listen', 'gu-basics-link', 'gu-basics-back', 'data-testid="gu-back"', '준비 중', '예시는 하나의 답일 뿐이에요', '학교 문법 (제안)', '숙련도', 'grammar-school-note', 'SCHOOL_GRAMMAR_NOTE_KO', 'gu-preparing', 'data-status="preparing"', '이 단원은 준비 중이에요'].every((t) => sSrc.includes(t)))
 check('화면: 저장·점수·네트워크 없음(localStorage/sessionStorage/fetch/supabase/점수)', !/localStorage|sessionStorage|fetch\(|supabase|markActivity|점수:/.test(sSrc))
@@ -101,8 +101,8 @@ check('화면: 준비 중 단원은 disabled(빈 화면 없음), 직접 쓴 글�
 
 // ── App / 홈 / UnitScreen ──
 const app = strip(read('src/App.jsx'))
-check("App: QA_ONLY_SCREENS에 grammarCourses, 렌더가 qaTestStudent 게이팅, 문법 화면은 lazy + Suspense", /const QA_ONLY_SCREENS = \[[^\]]*'grammarCourses'\]/.test(app) && /qaTestStudent && screen === 'grammarCourses' && pilotUnits/.test(app) && /const GrammarCourseScreen = React\.lazy\(\(\) => import\('\.\/components\/GrammarCourseScreen'\)\)/.test(app) && /<GrammarCourseScreen units=\{pilotUnits\}/.test(app))
-check("App: onGo grammar → grammarCourses, viaPicker에 grammar 없음, 선택기 intent에 grammar 없음", /t === 'grammar' \? 'grammarCourses'/.test(app) && !/const viaPicker = [^\n]*'grammar'/.test(app) && !/setUnitIntent\([^\n]*'grammar'/.test(app))
+check("App: QA_ONLY_SCREENS에 grammarCourses, 렌더가 qaTestStudent 게이팅, 문법 화면은 lazy + Suspense", /const QA_ONLY_SCREENS = \[[^\]]*'grammarCourses'[^\]]*\]/.test(app) && /qaTestStudent && screen === 'grammarCourses' && pilotUnits/.test(app) && /const GrammarCourseScreen = React\.lazy\(\(\) => import\('\.\/components\/GrammarCourseScreen'\)\)/.test(app) && /<GrammarCourseScreen units=\{pilotUnits\}/.test(app))
+check("App: onGo grammar → grammarVillage(문법 마을, 과정 목록은 gv-to-courses), viaPicker에 grammar 없음, 선택기 intent에 grammar 없음", /t === 'grammar' \? 'grammarVillage'/.test(app) && !/const viaPicker = [^\n]*'grammar'/.test(app) && !/setUnitIntent\([^\n]*'grammar'/.test(app))
 const u = strip(read('src/components/UnitScreen.jsx'))
 check('UnitScreen: Choice를 named export, 선택기의 문법 intent·문법 모음 제거', /export function Choice\(/.test(u) && !/intent === 'grammar'/.test(u) && !u.includes('GrammarSetScreen'))
 check('UnitScreen Choice: initialPicked 선택 prop(기본 null)이 초기 상태로만 쓰임, 화면은 Choice를 initialPicked로 사용', u.includes('onPick, initialPicked = null }') && u.includes('useState(initialPicked)') && sSrc.includes('initialPicked={'))
@@ -163,7 +163,7 @@ check('scene: 순수 모듈(React·PNG·localStorage 없음), 화면은 scene �
 const STG = strip(read('src/components/grammar/Stage.jsx'))
 const PSW = read('src/components/grammar/ParkScene.jsx')
 const PRP = read('src/utils/grammar/sceneProps.js')
-check("scene: 그림 — sceneProps가 nature/tree·decorations/bench·animals/puppy를 지정하고 Stage가 townAsset + Paul 이미지, 인라인 svg(viewBox 360x220, role img), 공은 SVG 원, 장면 testid·data-counts·spot·obj, ParkScene은 Stage(park) 포장", ["tree: o('나무', 48, 64, 'nature/tree')", "bench: o('벤치', 54, 36, 'decorations/bench')", "dog: a('강아지', 54, 40, 'animals/puppy')"].every((x) => PRP.includes(x)) && /townAsset\(PROPS\[obj\]\.asset\)/.test(STG) && /from '..\/..\/assets\/paul'/.test(STG) && STG.includes('viewBox="0 0 360 220"') && STG.includes('role="img"') && STG.includes('<circle') && ['park-scene', 'data-counts', 'scene-spot-${i}', 'scene-obj-${obj}-${i}', '여기에 놓기', 'tabIndex', 'onKeyDown', 'data-testid="scene-paul"'].every((t) => STG.includes(t)) && read('src/components/grammar/Stage.jsx').includes('TODO assets') && !/localStorage/.test(STG) && /<Stage bg="park"/.test(PSW) && /export const artUrl/.test(PSW))
+check("scene: 그림 — sceneProps가 nature/tree·decorations/bench·animals/puppy를 지정하고 Stage가 townAsset + Paul 이미지, 인라인 svg(viewBox 360x220, role img), 공은 SVG 원, 장면 testid·data-counts·spot·obj, ParkScene은 Stage(park) 포장", ["tree: o('나무', 48, 64, 'nature/tree')", "bench: o('벤치', 54, 36, 'decorations/bench')", "dog: a('강아지', 54, 40, 'animals/puppy')"].every((x) => PRP.includes(x)) && /townAsset\(PROPS\[obj\]\.asset\)/.test(STG) && /from '..\/..\/assets\/paul'/.test(STG) && STG.includes("'0 0 360 220'") && STG.includes('miniCrop(base)') && STG.includes('role="img"') && STG.includes('<circle') && ['park-scene', 'data-counts', 'scene-spot-${i}', 'scene-obj-${obj}-${i}', '여기에 놓기', 'tabIndex', 'onKeyDown', 'data-testid="scene-paul"'].every((t) => STG.includes(t)) && read('src/components/grammar/Stage.jsx').includes('TODO assets') && !/localStorage/.test(STG) && /<Stage bg="park"/.test(PSW) && /export const artUrl/.test(PSW))
 const sceneIds = ['scene-caption', 'scene-opt-${j}', 'scene-check', 'scene-result', 'scene-why', 'scene-retry', 'scene-tray-${place.obj}', 'scene-placed-count', 'scene-sent-${i}', 'scene-pic-${j}', 'scene-listen-play', 'scene-sentence', 'scene-model-listen', 'scene-said', 'scene-reveal', 'scene-write-input', 'scene-write-compare', 'scene-finish']
 check('scene: SceneCards 필수 testid가 소스에 모두 있음', sceneIds.every((t) => SC.includes(t)), sceneIds.filter((t) => !SC.includes(t)).join())
 const examSrc = SC.slice(SC.indexOf('function SpeakExam'), SC.indexOf('function Write'))
@@ -466,7 +466,7 @@ check('park art: PARK_ART = 6개 키(backdrop·cookie-stand·cookie-sit·tree·b
 const walkD = (p) => fs.readdirSync(new URL('../' + p, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkD(p + '/' + e.name) : [p + '/' + e.name]))
 const grammarFiles = [...walkD('src/components/grammar'), ...walkD('src/utils/grammar')].filter((f) => /\.(js|jsx|mjs)$/.test(f))
 const kitImporters = grammarFiles.filter((f) => /from\s+'[^']*assets\/town\/kit/.test(strip(read(f)))).join()
-check('park art: 문법 코드에서 kit을 import하는 파일은 utils/grammar/parkArt.js 하나뿐(그 밖에는 kit 경로 import 없음)', kitImporters === 'src/utils/grammar/parkArt.js', kitImporters)
+check('park art: 문법 코드에서 kit을 import하는 파일은 utils/grammar/parkArt.js(수업 그림)와 villageArt.js(문법 마을 지도 전용 청크) 둘뿐', kitImporters === 'src/utils/grammar/parkArt.js,src/utils/grammar/villageArt.js', kitImporters)
 check('park art: Stage — 공원 배경은 park-backdrop을 360x220에 xMidYMax slice로 채움, 옛 하늘·산울타리·잔디·길 도형 없음, 다른 배경 분기는 그대로, env/ import 없음',
   /<image href=\{parkSrc\(PARK_ART\.backdrop\)\} x="0" y="0" width="360" height="220" preserveAspectRatio="xMidYMax slice"/.test(STG)
   && !/village-sky-backdrop|village-hedge-border|skyBackdrop|hedgeBorder|#b9d3a2|#eadfbf/.test(STG) && ["case 'home'", "case 'school'", "case 'street'", "case 'plain'"].every((x) => STG.includes(x)) && !/assets\/town\/env/.test(STG))
@@ -499,6 +499,13 @@ const PARK_UNITS = GRAMMAR_UNITS.filter((u) => u.scene && (u.scene.bg || 'park')
 check('park art: 공원 배경을 쓰는 모든 단원(g-easy-03·04·05·int-04·06·adv-06·mid-01) 그림이 360x220 안(공원 dims 적용, 일반·mini)',
   PARK_UNITS.map((u) => u.id).join() === 'g-easy-03,g-easy-04,g-easy-05,g-int-04,g-int-06,g-adv-06,g-mid-01'
   && PARK_UNITS.every((u) => { const L = []; collect(u.scene.steps, L); return L.every((l) => [false, true].every((mini) => layoutItems(l, { center: u.scene.mode === 'add', mini, dims: PARK_DIMS }).every((t) => t.x - t.w / 2 >= 0 && t.x + t.w / 2 <= 360 && t.y - t.h >= 0 && t.y <= 220))) }))
+// mini 공원 확대 창(miniCrop): 모든 공원 단원의 mini 그림에서 창이 360x220 안·가로:세로 2.2:1·모든 물건(그림자·이름표 포함)이 창 안, 물건 줄이 창 높이의 대부분(≥45%, 큰 줄은 폭 때문에 낮을 수 있어 최소만 확인)
+const cropBad = []; let cropMax = 0
+for (const u of PARK_UNITS) { const L = []; collect(u.scene.steps, L); for (const l of L) { const it = layoutItems(l, { center: true, mini: true, dims: PARK_DIMS }); if (!it.length) continue; const [x, y, w, h] = miniCrop(it)
+  if (x < -1e-9 || y < -1e-9 || x + w > 360 + 1e-9 || y + h > 220 + 1e-9 || Math.abs(w / h - 2.2) > 1e-9) cropBad.push(`${u.id} 창 밖/비율`)
+  for (const t of it) if (t.x - t.w / 2 < x - 1e-9 || t.x + t.w / 2 > x + w + 1e-9 || t.y - t.h < y - 1e-9 || t.y + 14 > y + h + 1e-9 && y + h < 220) cropBad.push(`${u.id} ${t.obj}${t.i} 창에 안 들어옴`)
+  cropMax = Math.max(cropMax, Math.max(...it.map((t) => t.h)) / h) } }
+check('park art: mini 공원 확대 창(miniCrop) — 모든 공원 단원 mini 그림의 물건이 창 안(그림자·이름표 포함)·창은 360x220 안·2.2:1, 가장 큰 물건은 창 높이의 ≥ 55%', cropBad.length === 0 && cropMax >= 0.55 && miniCrop([]).join() === '0,0,360,220', cropBad.slice(0, 3).join('; ') + ' max=' + cropMax.toFixed(2))
 // 그림 수 = 문장
 const S = sc.steps
 const flat = [[S[0].layout, S[0].tap.en], [S[1].left.layout, S[1].left.en], [S[1].right.layout, S[1].right.en]]
