@@ -9,6 +9,7 @@ import { stepMove, facingFor, bodyHits } from '../../../../utils/town/proto2_5d/
 import { keysToVector, combine } from '../../../../utils/town/proto2_5d/world/inputVector.js'
 import { nearestPlace } from '../../../../utils/town/proto2_5d/world/proximity.js'
 import { travelTarget, zoneAt } from '../../../../utils/town/proto2_5d/world/fastTravel.js'
+import { buildWalkGrid, planPath, resolveClickTarget, followStep } from '../../../../utils/town/proto2_5d/world/clickMove.js'
 import { computeCameraTarget, stepCamera } from '../../../../utils/town/proto2_5d/camera.js'
 import { PAUL_SPRITE_MANIFEST } from '../../../../utils/town/proto2_5d/characterSpriteManifest.default.js'
 import { validateSpriteManifest, resolveSpriteFrame } from '../../../../utils/town/proto2_5d/characterSpriteContract.js'
@@ -20,6 +21,11 @@ import PlaceSheet from './PlaceSheet.jsx'
 const SOLIDS = solids()
 const BODY_R = 1.5
 const WALK_FRAME_MS = 180
+const SPEED = 28 // freeMove.stepMove 기본 속도와 같다(도착 보정용)
+const TAP_MAX_PX = 10 // 탭 판정: 이동 10px 미만
+const TAP_MAX_MS = 500 // 탭 판정: 500ms 미만
+const STUCK_MS = 400 // 경로를 따라가는데 이만큼 못 움직이면 경로 취소
+const NO_TAP = 'button, [data-testid="tw-joystick"], [role="dialog"], [data-testid="tw-map"], [data-testid="tw-mission-enter"], [data-testid="tw-place-sheet"]'
 const ZERO = { x: 0, y: 0 }
 const NAVY = '#1f2a44'
 const CREAM = '#fffaf0'
@@ -154,11 +160,17 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
   const wakeRef = useRef(() => {})
   const reducedRef = useRef(false)
   const openerRef = useRef(null)
+  const pathRef = useRef(null) // 클릭/탭 이동 웨이포인트(없으면 null). 저장 없음
+  const stuckRef = useRef(0)
+  const tapRef = useRef(null)
+  const badTimerRef = useRef(0)
 
   const [view, setView] = useState(() => ({ x: startRef.current.x, y: startRef.current.y, facing: 'front', moving: false, frame: 0 }))
   const [near, setNear] = useState(nearRef.current)
   const [sheet, setSheet] = useState(null) // { place, wasVisited }
   const [mapOpen, setMapOpen] = useState(false)
+  const [dest, setDest] = useState(null) // 걷는 중인 목적지 {x,y}
+  const [bad, setBad] = useState(null) // 갈 수 없는 곳 표시 {x,y}(잠깐)
   const [showJoy, setShowJoy] = useState(true)
   const lockRef = useRef(false)
   lockRef.current = !!sheet || mapOpen
@@ -178,6 +190,8 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
     setView(next)
   }
 
+  const clearPath = useCallback(() => { pathRef.current = null; stuckRef.current = 0; setDest(null) }, [])
+
   const emit = useCallback(() => {
     const cb = propsRef.current.onSessionChange
     if (cb) cb({ pos: { x: posRef.current.x, y: posRef.current.y }, visited: [...visitedRef.current], done: propsRef.current.initial?.done || [] })
@@ -190,14 +204,28 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
       if (document.hidden) { lastTs.current = 0; return }
       const dt = Math.min(lastTs.current ? t - lastTs.current : 16, 50)
       lastTs.current = t
-      const vec = lockRef.current ? ZERO : combine(keysToVector(keysRef.current), joyRef.current)
-      const active = !!(vec.x || vec.y)
+      let vec = lockRef.current ? ZERO : combine(keysToVector(keysRef.current), joyRef.current)
+      let active = !!(vec.x || vec.y)
+      let following = false
+      if (pathRef.current) {
+        // 키보드/조이스틱이 항상 이기고 경로를 취소한다. 시트/지도가 열려도 취소.
+        if (active || lockRef.current) clearPath()
+        else {
+          const f = followStep(posRef.current, pathRef.current, 0.6, SPEED * dt / 1000)
+          if (f.done) clearPath()
+          else { pathRef.current = f.waypoints; vec = f.vec; active = true; following = true }
+        }
+      }
       let moved = false
       if (active) {
         const r = stepMove(posRef.current, vec, dt, { solids: SOLIDS })
         facingRef.current = facingFor(vec, facingRef.current)
         moved = r.moved
         posRef.current = { x: r.x, y: r.y }
+        if (following) {
+          stuckRef.current = moved ? 0 : stuckRef.current + dt
+          if (stuckRef.current > STUCK_MS) clearPath()
+        }
       }
       movingRef.current = moved
       clockRef.current = moved ? clockRef.current + dt : 0
@@ -214,7 +242,7 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
       else lastTs.current = 0
     }
     wakeRef.current = () => { if (!rafRef.current && !document.hidden) rafRef.current = requestAnimationFrame(tick) }
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); rafRef.current = 0; wakeRef.current = () => {} }
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); rafRef.current = 0; wakeRef.current = () => {}; clearTimeout(badTimerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -254,11 +282,12 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
       if (k === 'm') { openerRef.current = document.activeElement; setMapOpen(true); return }
       if (!MOVE.has(k)) return
       if (k.startsWith('arrow')) e.preventDefault()
+      clearPath() // 키보드가 클릭 이동을 즉시 취소
       keysRef.current.add(k)
       wakeRef.current()
     }
     const up = (e) => { keysRef.current.delete(String(e.key).toLowerCase()); wakeRef.current() }
-    const reset = () => { keysRef.current.clear(); joyRef.current = ZERO }
+    const reset = () => { keysRef.current.clear(); joyRef.current = ZERO; clearPath() }
     const vis = () => { if (document.hidden) { reset(); lastTs.current = 0 } else wakeRef.current() }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
@@ -276,12 +305,43 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
   // 시트/지도가 열리면 입력을 비우고 정지, 닫히면 루프 재개 + 포커스 복귀.
   useEffect(() => {
     if (sheet || mapOpen) {
-      keysRef.current.clear(); joyRef.current = ZERO; movingRef.current = false; clockRef.current = 0; commit()
+      keysRef.current.clear(); joyRef.current = ZERO; clearPath(); movingRef.current = false; clockRef.current = 0; commit()
     } else { openerRef.current?.focus?.(); wakeRef.current() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheet, mapOpen])
 
   const onJoy = useCallback((v) => { joyRef.current = v; wakeRef.current() }, [])
+
+  // ---- 클릭/탭 이동: 월드 바닥을 짧게 눌렀다 떼면(10px/500ms 미만) 그곳까지 장애물을 돌아 걷는다 ----
+  const onPointerDown = (e) => {
+    if (e.button !== 0 || lockRef.current || e.target?.closest?.(NO_TAP)) { tapRef.current = null; return }
+    tapRef.current = tapRef.current ? null : { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() } // 두 번째 손가락이면 취소
+  }
+  const onPointerUp = (e) => {
+    const d = tapRef.current
+    tapRef.current = null
+    if (!d || d.id !== e.pointerId || lockRef.current) return
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) >= TAP_MAX_PX || performance.now() - d.t >= TAP_MAX_MS) return
+    const rect = worldRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const sc = sRef.current
+    const wp = { x: (e.clientX - rect.left) / sc, y: (e.clientY - rect.top) / sc }
+    if (wp.x < 0 || wp.y < 0 || wp.x > WORLD_W || wp.y > WORLD_H) return
+    const tgt = resolveClickTarget(wp)
+    const path = planPath(posRef.current, tgt, buildWalkGrid(), SOLIDS)
+    if (!path || !path.length) {
+      clearTimeout(badTimerRef.current)
+      setBad({ x: wp.x, y: wp.y })
+      badTimerRef.current = setTimeout(() => setBad(null), 700)
+      return
+    }
+    keysRef.current.clear()
+    stuckRef.current = 0
+    pathRef.current = path
+    setDest({ x: path[path.length - 1].x, y: path[path.length - 1].y })
+    wakeRef.current()
+  }
+  const onPointerCancel = () => { tapRef.current = null }
 
   const openSheet = (placeId) => {
     const place = PLACES.find((p) => p.id === placeId)
@@ -298,7 +358,7 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
     if (!t) return
     posRef.current = { x: t.x, y: t.y }
     facingRef.current = 'front'; movingRef.current = false; clockRef.current = 0
-    keysRef.current.clear(); joyRef.current = ZERO
+    keysRef.current.clear(); joyRef.current = ZERO; clearPath()
     nearRef.current = nearestPlace(posRef.current, PLACES, undefined, null)
     setNear(nearRef.current)
     camRef.current = camTarget(); writeCam()
@@ -320,6 +380,10 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
       data-zone={zone.id}
       data-x={String(r1(view.x))}
       data-y={String(r1(view.y))}
+      data-dest={dest ? `${r1(dest.x)},${r1(dest.y)}` : ''}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onContextMenu={noDrag}
       onDragStart={noDrag}
       style={{ position: 'fixed', inset: 0, height: '100dvh', overflow: 'hidden', background: '#d9d2c4', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', color: NAVY }}
@@ -336,6 +400,14 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
             </div>
           )
         })}
+        {dest && (
+          <div data-testid="tw-dest" aria-hidden="true"
+            style={{ position: 'absolute', left: px(dest.x), top: px(dest.y), width: px(3), height: px(3), transform: 'translate(-50%,-50%)', borderRadius: '50%', border: `3px solid ${NAVY}`, background: 'rgba(255,250,240,0.55)', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2400 }} />
+        )}
+        {bad && (
+          <div data-testid="tw-dest-bad" aria-hidden="true"
+            style={{ position: 'absolute', left: px(bad.x), top: px(bad.y), transform: 'translate(-50%,-50%)', fontSize: Math.max(14, s * 2.4), fontWeight: 900, color: '#b3261e', pointerEvents: 'none', zIndex: 2400 }}>x</div>
+        )}
         <PaulSprite view={view} s={s} />
       </div>
 
