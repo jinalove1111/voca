@@ -2030,3 +2030,12 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. `testQaGate` 17/0. `testBundleBudget` PASS. `testLazyChunkGuards` 95/95. `testPilotUnit`·`testRegistryCoverage`·`testStudentPathContracts` ALL PASS. 3개 스펙 `node --check` 통과. 구현자 서버 렌더 스모크: 232 장면 카드가 throw 없이 렌더, 확인 전 듣기 영어 없음, NaN/undefined 없음, `neg` 가위표 7장, 통 앞벽 6장, 타임라인 범례 있음.
 - **브라우저 미실행 (RAM)**: 여유 RAM 2.04 GB(<3 GB 규칙, 점유는 운영자의 다른 앱). `[grammar-scenes]` 전체, `[grammar-scene]`, `[grammar]` 및 239차 대기분(`c47b1e10` 360×640 3건)과 회귀 `[unit]`·`[hats]`·`[speaking]`·`[writing]`·`[student-home]` 모두 미실행. `[grammar-scenes]`는 한 번도 돈 적이 없어 첫 실행 실패는 스펙 오류일 수도 제품 결함일 수도 있다. 분류 후 갱신할 것. 레이아웃·탭·끌기·음성·360×640 동작은 확인된 바 없다.
 - **재실행**: 239차와 같은 방법(워크트리 루트, RAM ≥3GB, 한 번에 1개). 이후 스크린샷을 모두 열어 그림 명확성을 눈으로 확인한다.
+
+### 241차 추가 (2026-10-10): 폴타운 장소 미션(공원) — 정적 스위트 2종, `[town-mission]` 스펙 신규
+
+- **신규 `scripts/testTownMissions.mjs`**: 순수 모듈 `townMissions.js`(park → `g-easy-05`, ready, 조회 함수)와 소스 핀(App의 세션 한정 상태·`grammarEntry`, `GrammarCourseScreen`의 `initialUnitId`·`returnTo`·`onMissionComplete`, testid `gd-mission-intro`·`gd-to-town`·`grammar-missions`·`grammar-mission-park`·`gu-place-tag`) 15개 점검 PASS. 하네스 등록은 구현자 영역.
+- **신규 `scripts/testTownMissionSpots.mjs`**: `missionSpots.js`의 표지판 좌표·도착 칸 보정·근접 판정·탭 판정 54/54 PASS.
+- **신규 `tests/e2e/townMission.spec.mjs` (`[town-mission]`)**: 마을 → 표지판 터치(CDP 실제 좌표) → 걷기 → '공원 미션 시작' → 덱(상황 소개) → 요약 → '마을로 돌아가기'(표지판 '완료' 칩), 중간에 '← 마을'로 이탈, 문법 홈 입구(뒤로 = 과정 목록), 마무리 이벤트 최대 1회, 저장 키 변화 없음, 360×640·1280×800 스크린샷. 네트워크 전체 mock.
+- **정적 결과**: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. 기존 `testProto25d*` 12개 스위트와 스프라이트 스위트 PASS(구현자 실행). `testQaGate` 17/0. `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts`, `testTownEnvAssets` PASS(문법 lazy 청크 256.4 KB raw / 71.3 KB gzip). 스펙 4개 `node --check` 통과. 서버 렌더 스모크: 파일럿 카드에 🔊·✅ 없음, 확인 전 듣기 영어 없음.
+- **브라우저 미실행 (RAM)**: 여유 RAM 2.01 GB(<3 GB 규칙). `[town-mission]`은 한 번도 돈 적이 없어 CDP 터치 탭과 걷기 타이밍이 검증되지 않았고, 첫 실행 실패는 스펙 오류일 수도 제품 결함일 수도 있다. `[grammar-scenes]`, `[grammar-scene]`, `[grammar]`, `[proto25d]` 회귀도 대기. 분류 후 갱신할 것. 화면 동작은 확인된 바 없다.
+- **재실행**: 239차와 같은 방법(워크트리 루트, RAM ≥3GB, 한 번에 1개). `[town-mission]` 먼저, 스크린샷을 눈으로 확인한다.

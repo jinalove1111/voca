@@ -9,6 +9,7 @@ _233차 갱신: 2026-10-10 (233차 — **Grammar 커리큘럼 재구성: 5 과�
 _234차 갱신: 2026-10-10 (234차 — **Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙**. Easy 8/8 콘텐츠 구현 완료, 교사 검수 완료 0, Intermediate 1, 미제작 25(Intermediate 7·Advanced 6·Middle 6·High 6) — **커리큘럼 전체 완료 아님**. 코드 `d2842265`. 정적 PASS, 더미 env 빌드 경고 0, `[grammar]` 238/0, `[student-home]` 223/0/1 SKIP. 클릭 경로: 홈 [📘 문법 과정] → Easy (ready 8/8 · 검수 0) → 3. 나는 …이야 am·is·are …. PR #62 Draft·QA 전용. 아래 234차 섹션 참고.)_
 _235차 갱신: 2026-10-10 (235차 — **Paul 로고 모자 PNG 8장을 기존 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 대응으로 적용** + HatCollection 장착 버튼 44px 수정 + 모자 이름 2건 정정. 앱에 "8단계 모자"는 없고 세 축(XP 랭크 5·크기 5단계·수집 모자 8종)이 따로 있어 수집 모자 8종에 대응(리드 판단, **운영자 확인 필요: 남색/주황 대응, 승급 체인 아님**). 점수·승급 규칙·해금·XP 무변경. 커밋 `da4f2d66`·`e4e622d9`·`a97074ef`, 이름 커밋 `f5156fa8`. 신규 `[hats]` 67/0 + 회귀 PASS. Preview 실화면(SSO)·실기기 미확인. PR #62 Draft·QA 전용. 아래 235차 섹션 참고.)_
 _238차 갱신: 2026-10-10 (238차 — **문법 단원 한 장씩 덱 전환 + 홈 Grammar 카드(5카드 그리드)**. 클릭 경로: 홈 [📘 문법 / Grammar] → Easy → 1. 부탁하기 → 카드 1/23 목표 → 다음 … → 선택 문제 → 답 확인 → 다음 … → 마무리. 콘텐츠 34/34 불변, 교사 검수 0, PR #62 QA 전용, DB·저장 0. 아래 238차 섹션 참고.)_
+_241차 갱신: 2026-10-10 (241차 — **폴타운 장소 미션: 공원 미션 마을 진입~복귀 + 34단원 장소 연결표(설계 제안)**. 마을 표지판 또는 문법 홈 카드 → 상황 소개 → 기존 15장 덱(문법·듣기·말하기·쓰기) → '마을로 돌아가기'. 커밋 3개. 새 보상·XP·DB·저장 0, 중복 보상 없음. 정적 PASS; **브라우저 미실행(RAM 2.01 GB <3 GB)**, 신규 `[town-mission]` 스펙은 한 번도 돈 적 없음. 연결된 장소 1/26. 클릭 경로: 홈 마을 → 표지판 → '공원 미션 시작' / 홈 [문법 Grammar] → '폴타운 미션'. 설계 문서 `docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md`. 아래 241차 섹션 참고.)_
 _240차 갱신: 2026-10-10 (240차 — **그림 미션 34단원 확장(Scene v2)**: 시범(There is/are)의 그림·상황 활동을 기존 34단원 전부로 확장(새 단원 없음). 한 장씩 덱에 그림 설명 카드(구조 카드 뒤)·그림 활동 카드(오류 카드 뒤)를 끼워 넣고 기존 카드·id·정답·피드백은 불변. 커밋 `3b3c409e`(33단원 장면 데이터)·`6a8a5bb8`(v2 프레임워크)·`2b7643d6`(테스트). 독립 검수 3건이 찾은 결함(답 새어 나감·다의 정답·거짓 규칙 진술 등) 수정. 정적 PASS·더미 빌드 경고 0. **상태**: 임시 이미지 34/34 단원 / 실제(최종) 에셋 0/34 단원(실제 스프라이트 소품 7종, 임시 31종) / **브라우저 검증 0/34(미실행, RAM <3GB)** / 교사 검수 0/34. 클릭 경로: 홈 [📘 문법 Grammar] → 과정 → 단원 → 구조 카드 뒤 그림 설명 → 오류 카드 뒤 그림 활동. 아래 240차 섹션 참고.)_
 _239차 갱신: 2026-10-10 (239차 — **그림 상황 미션 시범 단원: Easy 5. There is/are 공원 + 공통 장면 컴포넌트**. 커밋 `bd62cc15`(구현)·`18afbb35`(설계 문서)·`58767b3f`(e2e). 클릭 경로: 홈 [📘 문법 Grammar] → Easy → 5. …이 있어요 There is → 카드 1/15 목표 → 다음 → 발견(강아지 누르기) → 비교 → 선택 ×3 → 만들기(나무 2) → 읽기 → 듣기 ×2 → 말하기 연습/시험 → 쓰기 → 마무리 → 요약. 정적 PASS·더미 빌드 경고 0. **브라우저 미검증**: 시범 단원과 `c47b1e10` 컴팩트 헤더 모두 e2e 미실행(RAM <3GB). 임시 SVG 배경·공, Cookie는 강아지 대역 — 운영자 에셋 필요. 콘텐츠 34/34 구현·교사 검수 0. 아래 239차 섹션 참고.)_
 _237차 갱신: 2026-10-10 (236~237차 야간 자율 세션 — **문법 전 과정 34단원 콘텐츠 구현(교사 검수 전) + 모자 헤더 1.25em + 8단계 승급 설계 문서 + e2e 일반화**. Easy 8·Intermediate 8·Advanced 6·Middle 6·High 6 전부 ready, 교사 검수 완료 0 — 구현은 끝났으나 **검수 전이라 "커리큘럼 완료"는 선언하지 않음**. 커밋 `8f82a313`·`ff069fdc`·`df206852`·`e1e799da`·학교 단원 `119e3b89`·번들 예산 `d5c2f1bd`(push 완료 `d5c2f1bd`). 정적 PASS, `[grammar]` 659/0/1 SKIP, `[hats]` 67/0. 아침 확인 클릭 경로: 홈 [📘 문법 과정] → 각 과정 → 단원 → 9섹션 / Middle School → 1. 시제 정리 → [기초 설명 보기 → 어제 있었던 일] → ← 돌아가기 / 홈 헤더 모자 크기. PR #62 Draft·QA 전용. 아래 236~237차 섹션 참고.)_
@@ -50,6 +51,33 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-10 (241차) — 폴타운 장소 미션: 공원 미션 마을 진입~복귀 + 장소 연결표 (14:05~14:20)
+
+운영자 요청: 한 장씩 카드 흐름은 유지하고 문법을 "마을에서 공부하는 일"로 잇는다. 공원·학교·빵집·과일 가게·기차역 같은 장소가 상황에 맞는 미션을 맡고, 장소를 고르면 상황 소개 → 문법 활동 → 같은 목표 표현의 듣기·말하기·쓰기 → 마을 복귀로 이어진다. 같은 미션은 문법 홈 카드에서도 들어갈 수 있다. 장소는 학습 상황에 실제로 쓰여야 하고 억지 연결은 금지. 따뜻한 영국 마을 느낌으로 아기 캐릭터·이모지·장식을 줄이고, 중·고등은 같은 마을에서 대화·메시지·시간표·뉴스를 쓴다. 먼저 공원 미션 하나를 끝까지 완성하고 나머지는 장소 표로 문서화. 프로젝트에 있는 이미지 파일만 쓰고 필요한 파일명과 폴더를 목록으로. 기존 진도·보상 유지, 중복 보상 방지. merge·배포·DB 없음. 기준 `368003f4`, PR #62 QA 전용. 설계 문서: `docs/design/GRAMMAR_TOWN_MISSIONS_2026-10-10.md`.
+
+**구현 (커밋 3개)**
+1. "feat(grammar-mission): park mission entry from the town and the grammar home, return to town after learning": `src/utils/grammar/townMissions.js`(park → `g-easy-05`, status ready, 순수 데이터). App에 세션 한정 `grammarEntry`·`completedMissionIds`(스토리지 없음). `GrammarCourseScreen`에 `initialUnitId`·`returnTo`·`onMissionComplete`. 목표 카드 상황 소개 `gd-mission-intro`, 요약 카드 `gd-to-town` '마을로 돌아가기'(마을 모드에서 `gd-to-list` 숨김), 헤더 뒤로 `gu-back` + `data-return="town"` '← 마을', 문법 홈 섹션 `grammar-missions` + `grammar-mission-park`, 단원 행 태그 `gu-place-tag`. 마을 플래그가 꺼져 있으면 문법 홈으로 돌아간다.
+2. "feat(town-2.5d): park mission sign…": 월드 (11, 66)에 기존 `decorations/town-sign` 스프라이트 표지판(장애물 아님). 탭 → Paul이 도착 칸 (17, 68)으로 걸어감 → 버튼 `proto25d-mission-enter` '공원 미션 시작' → 미션. 완료 후 칩 `proto25d-mission-done-park` '완료'(세션 한정). 상점·내 물건·배치 오버레이가 열리면 숨김. 미션 props가 없으면 마을 DOM 불변. 좌표·판정은 `src/utils/town/proto2_5d/missionSpots.js`.
+3. "feat(grammar-scene): park backdrop…": 공원 배경이 기존 `src/assets/town/backgrounds/village-sky-backdrop.webp`·`village-hedge-border.webp`를 사용(새 파일 0, 문법 청크 256.4 KB raw / 71.3 KB gzip). 잔디·길은 아직 단색 도형. 장면 카드의 장식 이모지(🔊·✅) 제거(인라인 스피커 아이콘 + 접근성 이름 '듣기'). 동작 배지 이모지는 대체 이미지 파일이 없어 유지.
+
+**덱 흐름(시범 15장, 불변)**: 목표(+상황 소개) → 발견 → 비교 → 선택 ×3 → 만들기 → 읽기 → 듣기 ×2 → 말하기 연습/시험 → 쓰기 → 마무리 → 요약 → 마을로 돌아가기.
+
+**진도·보상**: 새 보상·XP·DB·스토리지 없음. 마무리 카드의 분석 이벤트 `grammar_scene_finish`는 마운트당 한 번 가드와 제품 이벤트의 세션 `${event}:${studentId}:${localDay}` 중복 제거를 그대로 쓰며 입구와 무관하다. 덱 답은 단원별 기존 상태 맵. 마을의 '완료' 칩과 미션 완료는 세션 한정이라 새로고침하면 사라진다(한계로 기록, 영구 진도는 운영자의 저장·DB 결정 필요).
+
+**진입 조건**: 2.5D 마을 = 플래그 `paulTown2_5d` ON + QA 테스트 계정. 문법 = QA 테스트 계정. 실제 학생에게는 보이지 않는다.
+
+**장소 연결표(설계 제안, 확정 전)**: 34단원 중 연결 26 / 연결 안 함 8(I01·I07·A02·A03·A04·M04·H03·H04, 장소가 문형을 돕지 않음). 공원 다음 5개 제안: I08 카페 → E08 책방 → E04 공원 → E06 과일 가게 → I03 빵집. 새로 필요한 파일 14개(`buildings/bakery`·`fruit-shop`, `special/train-station`, `decorations/notice-board`·`newspaper-stand`, `props/bread-basket`·`fruit-crate`·`apple`·`cake`·`timetable-board`·`ticket`·`newspaper`·`letter`·`juice`)와 `Stage.jsx` 파일 목록은 설계 문서 §4~§5.
+
+**검증**
+- 정적 PASS: 더미 env 빌드 경고 0. `testGrammarCourses` ALL PASS. `testTownMissions` PASS(15개 점검). `testTownMissionSpots` 54/54. 기존 `testProto25d*` 12개 스위트와 스프라이트 스위트 PASS(구현자 실행). `testQaGate` 17/0. `testBundleBudget`, `testLazyChunkGuards`, `testPilotUnit`, `testRegistryCoverage`, `testStudentPathContracts`, `testTownEnvAssets` PASS. 스펙 4개 `node --check`. 파일럿 카드 서버 렌더 스모크(🔊·✅ 없음, 확인 전 듣기 영어 없음).
+- **브라우저 전부 미실행**: 여유 RAM 2.01 GB(<3 GB 규칙). 신규 `[town-mission]` 스펙(마을 → 표지판 → 시작 → 덱 → 요약 → 마을 복귀와 '완료' 칩, 중간 이탈, 문법 홈 입구, 마무리 이벤트 최대 1회, 360×640·1280×800 스크린샷)은 한 번도 돈 적이 없고 CDP 터치 탭과 걷기 타이밍도 검증되지 않았다. `[grammar-scenes]`, `[grammar-scene]`, `[grammar]`, `[proto25d]` 회귀도 대기. 화면 동작은 확인된 것이 없다.
+
+**알려진 한계**: 마을 복귀 시 화면이 다시 마운트되어 Paul 위치가 처음으로 돌아간다. 잔디·길·공·Cookie 그림은 임시, 동작 배지는 이모지. 연결된 장소 1/26. 완료 표시는 세션 한정. 장소표는 제안.
+
+**클릭 경로**: (A) 홈 마을 버튼 → 2.5D 마을 → 벤치 왼쪽 앞 표지판 누르기 → '공원 미션 시작' → 카드 1/15 … 요약 → '마을로 돌아가기' → 표지판에 '완료'. (B) 홈 [문법 Grammar] → '폴타운 미션' → '공원 미션 · There is / There are' → 같은 덱 → 뒤로 = 과정 목록.
+
+**열린 항목 / 다음**: RAM ≥3GB에서 `[town-mission]`·`[grammar-scenes]`·`[grammar-scene]`·`[grammar]`·`[proto25d]` 실행 → 스크린샷 확인 → 결과 반영. 운영자: 에셋 제공, 장소 연결표 확정, 완료 표시를 남길지 결정.
 
 ## 2026-10-10 (240차) — 그림 미션 34단원 확장(Scene v2) (13:10~14:00)
 
