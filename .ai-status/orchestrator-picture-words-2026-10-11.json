@@ -36,13 +36,15 @@
     "src/utils/pictureWords/games.js",
     "scripts/testPictureWordGames.mjs",
     "src/components/pictureWords/pictureImg.jsx",
-    "src/components/pictureWords/AlphabetHammer.jsx"
+    "src/components/pictureWords/AlphabetHammer.jsx",
+    "src/components/pictureWords/HiddenLetters.jsx"
   ],
-  "summary": "stage done: 2 AlphabetHammer",
+  "summary": "stage done: 3 HiddenLetters",
   "blocker": null,
-  "next_action": "stage 3: HiddenLetters.jsx",
+  "next_action": "stage 4: PictureGames.jsx + ShopShelf.jsx + mode picker",
   "stages_done": [
     "1 levels+games.js+tests+registry",
-    "2 AlphabetHammer"
+    "2 AlphabetHammer",
+    "3 HiddenLetters"
   ]
 }
