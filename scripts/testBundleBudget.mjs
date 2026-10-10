@@ -352,8 +352,11 @@ const PARK_KIT_FILE_RE = /^(park-backdrop|cookie-stand|cookie-sit|tree|bench|sun
 // 2026-10-10 문법 마을 키트 아트(src/utils/grammar/villageArt.js, GrammarVillage 청크 전용): manifest의 모든 target 1x/@2x가 별도 파일(인라인 아님)로 나온다 — 파일명은 manifest 기준으로 허용.
 const VILLAGE_KIT_BASENAMES = Object.keys(JSON.parse(readFileSync(path.join(process.cwd(), 'src/assets/town/kit/manifest.json'), 'utf8')).targets).map((t) => t.split('/').pop().replace(/[^\w-]/g, ''))
 const VILLAGE_KIT_FILE_RE = new RegExp(String.raw`^(${VILLAGE_KIT_BASENAMES.join('|')})(@2x)?-[\w-]+\.webp$`)
+// 2026-10-11 그림 단어 검토 패널(admin/PictureWordReviewPanel, 관리자 lazy 청크 전용): 151장 WebP는 manifest 기준으로 허용(파일명 = <asset>-<hash>.webp).
+const PICTURE_WORD_BASENAMES = Object.values(JSON.parse(readFileSync(path.join(process.cwd(), 'src/assets/pictureWords/manifest.json'), 'utf8')).assets).map((a) => a.asset)
+const PICTURE_WORD_FILE_RE = new RegExp(String.raw`^(${PICTURE_WORD_BASENAMES.join('|')})-[\w-]+\.webp$`)
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f) && !VILLAGE_KIT_FILE_RE.test(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f) && !VILLAGE_KIT_FILE_RE.test(f) && !PICTURE_WORD_FILE_RE.test(f),
 )
 check(
   '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',
@@ -534,7 +537,8 @@ if (check('Proto25DScreen 청크가 별도 파일로 존재(React.lazy 분할, p
 section('5. JS 원본(raw) 크기 — 핵심 시작 경로')
 // 관리자 전용 대용량 서드파티(성적표 PDF/엑셀 내보내기, Town 도입 이전부터
 // 존재, 실제로 그 화면을 열 때만 지연 로드) — 파일 헤더의 스코프 결정 참고.
-const ADMIN_ONLY_HEAVY_RE = /^pdf\.worker[-.]|^pdf-|^xlsx-/
+// 2026-10-11 PictureWordReviewPanel(관리자 전용 lazy 청크, 분류 데이터 JSON 포함)도 학생 시작 경로가 아니므로 제외.
+const ADMIN_ONLY_HEAVY_RE = /^pdf\.worker[-.]|^pdf-|^xlsx-|^PictureWordReviewPanel-/
 let totalRaw = 0
 let coreRaw = 0
 const sizeRows = []

@@ -86,7 +86,20 @@ ok(!/localStorage|from 'react'/.test(dataSrc), 'data module is pure (no storage/
 const importers = walk(path.join(ROOT, 'src')).filter((f) => /\.(jsx?|mjs)$/.test(f)).filter((f) => /assets\/pictureWords/.test(fs.readFileSync(f, 'utf8'))).map(rel)
 ok(importers.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx'), `assets/pictureWords referenced only by the panel: ${importers.join(', ')}`)
 
-//PANEL_PINS
+// ---- panel source pins
+const panel = fs.readFileSync(path.join(ROOT, 'src/components/admin/PictureWordReviewPanel.jsx'), 'utf8')
+const admin = fs.readFileSync(path.join(ROOT, 'src/components/AdminScreen.jsx'), 'utf8')
+ok(!FORBID.test(panel), 'panel has no fetch/supabase/api/grantReward')
+ok(!/window\.confirm|[^.\w]confirm\(|alert\(/.test(panel), 'panel has no window.confirm/alert')
+ok(panel.includes("'paulEasyVoca_pictureWordReview'"), 'localStorage key literal')
+ok((panel.match(/localStorage\./g) || []).length === 2, 'localStorage touched only by load+save')
+ok(/const PictureWordReviewPanel = React\.lazy\(\(\) => import\('\.\/admin\/PictureWordReviewPanel'\)\)/.test(admin), 'AdminScreen lazy-loads the panel')
+ok(!/import PictureWordReviewPanel/.test(admin) && admin.includes('<React.Suspense') && admin.includes("tab === 'picturewords'"), 'panel rendered only under Suspense + tab')
+for (const id of ['pwr-root', 'pwr-tab-', 'pwr-card-', 'pwr-img-', 'pwr-approve-', 'pwr-edit-', 'pwr-en-', 'pwr-ko-', 'pwr-exclude-', 'pwr-reset-', 'pwr-count-approved', 'pwr-count-excluded', 'pwr-count-pending', 'pwr-export', 'pwr-export-text', 'pwr-clear', 'pwr-phonics-group-', 'pwr-shop-', 'pwr-local-notice', 'pwr-phonics-order-notice']) {
+  ok(panel.includes(id), `testid ${id}`)
+}
+ok(panel.includes('학습 순서 미확정') && panel.includes('이 브라우저에만 저장됩니다') && panel.includes('설계 — 미구현'), 'required notices present')
+ok(!/pictureWords/.test(fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8')), 'App.jsx (student shell) does not reference pictureWords')
 
 console.log(fail ? `FAIL ${fail}/${n}` : `PASS ${n}/${n} picture-word checks`)
 process.exit(fail ? 1 : 0)
