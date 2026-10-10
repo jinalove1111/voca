@@ -2097,3 +2097,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 
 - `scripts/testPictureWordGames.mjs`(100단언, registry 등록): 레벨(phonics=길이만), 전 학습 가능 단어 x 시드 3개로 망치(타일=글자 순열·순서가 다름·정답 스크립트 wrong 0·오답은 wrong/last만 변경·중복 글자 호환)와 숨은 글자(난이도별 개수·전부 숨김 없음·보기 4개 정답 1·스크립트 완주·오답은 진행 안 함) 검증, 결정 샘플 fixture를 메모리에서 validator/`applyDecisions`에 적용(119→123, pending 26), 컴포넌트/선반 소스 핀(네트워크·저장·보상·정답 속성 없음, 조건부 마운트).
 - `tests/e2e/pictureWordGames.spec.mjs`(`[picture-games]`, 66 PASS/0 FAIL 1회 실행): 망치/숨은 글자/연결 진입/가게 선반/360x640 터치/일반 학생 제한. 단어는 그림 src 슬러그로만 파악.
+
+### 251차 추가 (2026-10-11): 그림 단어 카드 한 장 녹음 흐름
+- `scripts/testPictureWords.mjs`(754): practice.js 단계 상수(`card,end,quiz,review,summary`)·시험 시작 단계·복습 루프(`reviewNext`) 단위 + 소스 핀(카드에 듣기+녹음기 같이 마운트, `useLocalRecorder` 사용, 단어 변경 시 reset, 새 라벨 객체, pictureWords 폴더에 네트워크/저장/보상/MediaRecorder 직접 사용/점수 문구 0, 시험 문제에 녹음기 없음, Phonics 라벨에 소리 순서 주장 없음). `testPictureWordGames.mjs`(106).
+- 브라우저 `tests/e2e/pictureWordPractice.spec.mjs`(106): 진짜 MediaRecorder + 합성 마이크(`speaking.spec.mjs`와 같은 방식)로 듣기→녹음→내 목소리→다시→다음, 마이크 거부, 360x640 터치, 시험→복습, 연습→게임→시험→복습 전 흐름, 묶음 선택, 녹음 데이터가 기기를 떠나지 않음(로그인 이후 GET 아닌 요청·오디오 페이로드 0; 앱 자체 `/api/grant-xp`는 허용 목록). 단독 실행: 스크래치 `runOne.mjs`(vite preview 4193). `pictureWordGames.spec.mjs`(68)는 내비게이션만 수정.
+
