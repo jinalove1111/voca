@@ -2,13 +2,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { gameWords } from '../../utils/pictureWords/games.js'
 import { stopSpeaking } from '../../utils/speech'
-import { GameStyle, W } from './pictureImg.jsx'
+import { BTN, GameStyle, W } from './pictureImg.jsx'
 import AlphabetHammer from './AlphabetHammer.jsx'
 import HiddenLetters from './HiddenLetters.jsx'
 import ShopShelf from './ShopShelf.jsx'
 import SfxControl from './SfxControl.jsx'
 
-const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 const newSeed = () => Date.now() % 2147483647
 
 function GameSession({ mode: first, level, from, onPractice, onTest, onMenu, onExit }) {
