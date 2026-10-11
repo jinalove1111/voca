@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import { BOOKS } from '../../data/phonics/curriculum.js'
 import { SAMPLE_CLASS_NAME, SAMPLE_NOTICE_KO, SAMPLE_STUDENTS } from '../../data/phonics/sampleProgress.js'
-import { classOverview, classWeakPhonemes, parentSummary, recommendations, unitName, unitTestResults } from '../../utils/phonics/progress.js'
+import { classOverview, emptyState, parentSummary, phonemeErrorTable, recommendations, studentWeakAreas, unitName, unitTestResults } from '../../utils/phonics/progress.js'
 import ProgressViews, { Bar, Empty, slash } from '../phonics/ProgressViews.jsx'
 
 const BOX = 'min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3'
@@ -18,15 +18,16 @@ export default function PhonicsProgressPanel() {
     const unitKeys = BOOKS.flatMap((b) => b.units.map((u) => [b.id, u.id]))
     const results = SAMPLE_STUDENTS.map((s) => new Map(unitTestResults(s.records).map((t) => [`${t.bookId}/${t.unitId}`, t])))
     return {
-      overview: classOverview(SAMPLE_STUDENTS), weak: classWeakPhonemes(SAMPLE_STUDENTS), results,
+      overview: classOverview(SAMPLE_STUDENTS), ph: phonemeErrorTable(SAMPLE_STUDENTS), results,
       cols: unitKeys.filter(([b, u]) => results.some((m) => m.has(`${b}/${u}`))),
       recs: SAMPLE_STUDENTS.map((s) => recommendations(s.records)),
     }
   }, [])
   const sel = SAMPLE_STUDENTS.find((s) => s.id === selected) || null
+  const wa = sel && studentWeakAreas(sel)
   return (
     <div data-testid="ppa-root" className="min-w-0 space-y-4">
-      <p data-testid="ppa-sample-notice" className="rounded-2xl bg-amber-100 p-3 text-center text-sm font-black text-amber-900">{SAMPLE_NOTICE_KO} — 읽기 전용 미리보기</p>
+      <p data-testid="ppa-sample-notice" className="rounded-2xl bg-amber-100 p-3 text-center text-sm font-black text-amber-900">{SAMPLE_NOTICE_KO} — 읽기 전용 미리보기. 실제 학생 기록이 아니며 저장 기능은 아직 없습니다</p>
 
       <section data-testid="ppa-class" className={BOX}>
         <p className={H}>반별 학생 목록 · {SAMPLE_CLASS_NAME}</p>
@@ -34,10 +35,10 @@ export default function PhonicsProgressPanel() {
           <table className="min-w-[32rem] border-collapse">
             <thead><tr>{['학생', '진도', '최근 시험', '취약 소리'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
             <tbody>
-              {d.overview.map((o) => (
+              {d.overview.map((o, n) => (
                 <tr key={o.id} data-testid="ppa-class-row" data-id={o.id} data-selected={selected === o.id ? 'true' : 'false'} onClick={() => setSelected(o.id)} className={`cursor-pointer ${selected === o.id ? 'bg-purple-50' : ''}`}>
                   <td className={`${TD} whitespace-nowrap font-black text-gray-900`}>{o.name}</td>
-                  <td className={`${TD} min-w-[7rem]`}>{o.percent}% ({o.completed}/43)<Bar percent={o.percent} color="bg-pink-400" /></td>
+                  <td className={`${TD} min-w-[7rem]`}>{emptyState(SAMPLE_STUDENTS[n].records).empty ? '기록 없음' : <>{o.percent}% ({o.completed}/43)<Bar percent={o.percent} color="bg-pink-400" /></>}</td>
                   <td className={`${TD} whitespace-nowrap`}>{testText(o.latestTest)}</td>
                   <td className={TD}>{o.weakest.length ? o.weakest.map(slash).join(' ') : '—'}</td>
                 </tr>
@@ -49,7 +50,7 @@ export default function PhonicsProgressPanel() {
 
       <section data-testid="ppa-student" className={BOX}>
         <p className={H}>학생별 학습 현황{sel ? ` · ${sel.name}` : ''}</p>
-        {sel ? <div className="mt-2"><ProgressViews records={sel.records} prefix="ppa-student" /></div> : <Empty>위 표에서 학생을 선택하세요.</Empty>}
+        {sel ? <div className="mt-2 space-y-3"><div data-testid="ppa-weak-areas" className="text-xs font-bold text-gray-700">취약 영역: {wa.reason}{wa.units.length ? ` · ${wa.units.join(', ')}` : ''}</div><ProgressViews records={sel.records} prefix="ppa-student" /></div> : <Empty>위 표에서 학생을 선택하세요.</Empty>}
       </section>
 
       <section data-testid="ppa-compare" className={BOX}>
@@ -69,13 +70,10 @@ export default function PhonicsProgressPanel() {
         </div>
       </section>
 
-      <section data-testid="ppa-weak" className={BOX}>
-        <p className={H}>취약 음소 분석 (반 전체)</p>
-        {d.weak.length ? (
-          <ul className="mt-2 space-y-1">
-            {d.weak.map((w) => <li key={w.phoneme} data-testid="ppa-weak-item" className="text-xs font-bold text-gray-700">{slash(w.phoneme)} · 취약 학생 {w.students}명 · 반 전체 오답률 {w.rate}% ({w.attempts}번 중 {w.wrong}번)</li>)}
-          </ul>
-        ) : <Empty>취약 소리가 없어요.</Empty>}
+      <section data-testid="ppa-phoneme-table" className={BOX}>
+        <p className={H}>음소별 오답 분석</p>
+        <div className="mt-2 max-h-72 overflow-auto"><table className="border-collapse"><thead><tr>{['소리', '시도', '오답', '오답률', '학생 수'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+          <tbody>{d.ph.map((w) => <tr key={w.phoneme} data-testid="ppa-phoneme-row">{[slash(w.phoneme), w.attempts, w.wrong, `${w.rate}%`, w.students].map((c, i) => <td key={i} className={TD}>{c}</td>)}</tr>)}</tbody></table></div>
       </section>
 
       <section data-testid="ppa-recommend" className={BOX}>

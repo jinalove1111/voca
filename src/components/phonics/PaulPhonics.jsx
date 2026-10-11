@@ -96,12 +96,14 @@ function Book({ bookId, onOpen, onBack }) {
 export default function PaulPhonics({ studentId, onExit, onPractice, onTest, onGame }) {
   const [nav, setNav] = useState({ screen: 'main' }) // main | book | unit | session | progress
   const [records, setRecords] = useState([])
+  const [seen, setSeen] = useState([]) // 이 방문에서 열어 본 단계(소개·연습 등) — 기록이 남지 않는 단계의 "오늘 했어요" 표시용
   const toUnit = () => setNav({ screen: 'unit', bookId: nav.bookId, unitId: nav.unitId })
   let body
   if (nav.screen === 'session') {
-    body = <PhonicsAdventure key={nav.key} game={nav.game} items={nav.items} ctx={nav.ctx} studentId={studentId} onRecord={(r) => setRecords((x) => [...x, r])} onBack={toUnit} />
+    body = <PhonicsAdventure key={nav.key} game={nav.game} items={nav.items} ctx={nav.ctx} studentId={studentId} onRecord={(r) => setRecords((x) => [...x, r])} onBack={toUnit}
+      onStart={(game, items, ctx) => setNav({ ...nav, game, items, ctx, key: Date.now() })} onNext={(run) => { toUnit(); run() }} />
   } else if (nav.screen === 'unit') {
-    body = <UnitHub bookId={nav.bookId} unitId={nav.unitId} records={records} onBack={() => setNav({ screen: 'book', bookId: nav.bookId })}
+    body = <UnitHub bookId={nav.bookId} unitId={nav.unitId} records={records} seen={seen} onSeen={(k) => setSeen((s) => (s.includes(k) ? s : [...s, k]))} onBack={() => setNav({ screen: 'book', bookId: nav.bookId })}
       onSession={(game, items, ctx) => setNav({ ...nav, screen: 'session', game, items, ctx, key: Date.now() })} onPractice={onPractice} onTest={onTest} onGame={onGame} />
   } else if (nav.screen === 'book') {
     body = <Book bookId={nav.bookId} onOpen={(unitId) => setNav({ screen: 'unit', bookId: nav.bookId, unitId })} onBack={() => setNav({ screen: 'main' })} />

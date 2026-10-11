@@ -81,7 +81,14 @@ console.log('\n3. App.jsx — isPilotTownStudent/townV1Enabled 배선 + 기존 �
   )
   check('isPilotTownStudent(studentId) 호출 존재', /isPilotTownStudent\(studentId\)/.test(appJsx))
   check('townV1Enabled 변수 정의 존재', /const townV1Enabled\s*=/.test(appJsx))
-  check("onGoTown={townV1Enabled ? 배선 존재", /onGoTown=\{townV1Enabled\s*\?/.test(appJsx))
+  // 2026-10-11 (258차): 66047a57이 2.5D 진입을 의도적으로 앞에 추가해 기존 핀
+  // `onGoTown={townV1Enabled ?`가 낡았다. Pilot A 의미(townV1Enabled → Town V1,
+  // 둘 다 꺼지면 null)는 유지되므로 식 전체를 더 엄격하게 고정한다.
+  const onGoTownExpr = (appJsx.match(/onGoTown=\{([^\n]*?)\}\s*\/>/) || [])[1] || ''
+  check(
+    'onGoTown: paulTown2_5dEnabled(2.5D) 분기가 먼저, 그 다음 townV1Enabled → town, 마지막 : null',
+    /^paulTown2_5dEnabled\s*\?\s*\(\)\s*=>\s*setScreen\('proto25d'\)\s*:\s*townV1Enabled\s*\?\s*\(\)\s*=>\s*setScreen\('town'\)\s*:\s*null$/.test(onGoTownExpr.trim())
+  )
   check(
     "기존 isFeatureEnabled('paulTownV1') useSyncExternalStore 게이트 유지",
     /useSyncExternalStore\(subscribeFeatures,\s*\(\)\s*=>\s*isFeatureEnabled\('paulTownV1'\)/.test(appJsx)

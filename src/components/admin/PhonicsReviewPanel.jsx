@@ -1,11 +1,12 @@
 // 관리자 전용 — PAUL PHONICS 검토 자료 (255차, 읽기 전용). 43개 Unit은 구조만 승인됐고 전부 임시다.
 // 운영 DB·학생 기록·저장소·네트워크를 쓰지 않는다. 숫자는 데이터에서 그때그때 계산한다(하드코딩 없음).
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BOOKS, DIALECT_NOTES, GAME_NAME, STATUS_LABEL_KO, objectiveKo, prereqKo, recordableTargets, unitLabel } from '../../data/phonics/curriculum.js'
 import { PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
 import { PHONEME_CLIPS, RECORDING_LIST, recordingStatus } from '../../data/phonics/phonemeClips.js'
 import { RECORDINGS, recordingStatuses } from '../../data/phonics/recordings.js'
 import { CANDIDATE_NOTE_KO, IMAGE_CANDIDATES } from '../../data/phonics/imageCandidates.js'
+import { validateUpload } from '../../utils/phonics/recordingUpload.js'
 import { learnedPairs, pairOf, reusedIpas, unitWords, wordDifficulty } from '../../utils/phonics/curriculum.js'
 
 const MARK = { ready: '🖼', needed: '⏳', 'not-needed': '🔤' }
@@ -16,6 +17,7 @@ const REC_STATE = { missing: '파일 없음', uploaded: '승인 대기', approve
 const FILTERS = [['all', '전체'], ['ready', '그림 준비'], ['needed', '제작 대기'], ['candidate', '기존 후보'], ['free', '그림 없이'], ['review', '검토 필요']]
 const CAND_WORDS = new Set(IMAGE_CANDIDATES.map((c) => c.word))
 const CHIP = 'rounded-full bg-purple-100 px-2 py-1 text-xs font-black text-purple-800'
+const BTN = 'mr-1 min-h-[32px] rounded-full bg-purple-100 px-2 font-black text-purple-800 disabled:opacity-40'
 const TH = 'whitespace-nowrap border-b-2 border-gray-200 bg-gray-50 px-2 py-1 text-left text-xs font-black text-gray-600'
 const TD = 'border-b border-gray-100 px-2 py-2 align-top text-xs text-gray-700'
 
@@ -87,7 +89,7 @@ function CandidateSection({ list }) {
       <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {IMAGE_CANDIDATES.map((c) => (
           <li key={c.word} data-testid="phr-candidate" data-word={c.word} className="min-w-0 rounded-xl bg-gray-50 p-2 text-center text-xs text-gray-700">
-            <img src={c.url} alt={c.word} draggable={false} className="mx-auto h-24 w-24 bg-white object-contain" />
+            {c.url ? <img src={c.url} alt={c.word} draggable={false} className="mx-auto h-24 w-24 bg-white object-contain" /> : <p className="mx-auto flex h-24 w-24 items-center justify-center bg-white text-[10px] font-bold text-gray-500">마을 kit 그림 — 파일 경로만 표시</p>}
             <p className="mt-1 font-black text-gray-900">{c.word}</p>
             <p className="break-all text-[10px] text-gray-500">{c.source}</p>
             <p className="font-black text-rose-700">승인 필요 — 학생 화면에 사용 안 함</p>
@@ -131,6 +133,61 @@ function WordTable({ stats }) {
 }
 
 const recs = recordingStatuses([])
+// Preview only: a chosen file lives in memory as an object URL (revoked on replace/unmount). Nothing is saved, uploaded or played for students.
+const VERDICT = { pending: '검수 대기', approved: '승인(미리보기)', rejected: '반려(미리보기)' }
+function RecordingPreview() {
+  const [f, setF] = useState({})
+  const urls = useRef({})
+  useEffect(() => () => Object.values(urls.current).forEach((u) => URL.revokeObjectURL(u)), [])
+  const set = (id, patch) => setF((o) => ({ ...o, [id]: { ...o[id], ...patch } }))
+  const pick = (id, file) => {
+    if (urls.current[id]) URL.revokeObjectURL(urls.current[id])
+    if (!file) { delete urls.current[id]; setF((o) => ({ ...o, [id]: undefined })); return }
+    urls.current[id] = URL.createObjectURL(file)
+    set(id, { url: urls.current[id], name: file.name, size: file.size, type: file.type, duration: undefined, verdict: 'pending' })
+  }
+  const res = (r) => (f[r.id] ? validateUpload(f[r.id], r) : null)
+  const all = RECORDINGS.map((r) => ({ r, v: res(r) }))
+  const chosen = all.filter((x) => x.v)
+  return (
+    <div data-testid="phr-rec-preview" className="mt-2">
+      <p data-testid="phr-rec-notice" className="rounded-xl bg-rose-50 p-2 text-xs font-black text-rose-800">Preview 전용 — 선택한 파일은 이 브라우저 메모리에만 있고 저장·업로드되지 않습니다. 새로고침하면 사라지며 학생 화면에는 적용되지 않습니다.</p>
+      <p className="mt-2 text-xs font-bold text-gray-700"><span data-testid="phr-rec-real">실제 등록 0 / 42 · 승인 0 / 42</span> · <span data-testid="phr-rec-preview-summary">선택 {chosen.length} · 검증 통과 {chosen.filter((x) => x.v.ok).length} · 승인(미리보기) {chosen.filter((x) => x.v.ok && f[x.r.id].verdict === 'approved').length}</span></p>
+      <div className="mt-2 max-h-96 max-w-full overflow-auto">
+        <table data-testid="phr-recordings" className="min-w-[56rem] border-collapse">
+          <thead><tr>{['no', 'id', '소리', '대표 철자', '예시 단어', '파일 이름 규칙', '상태', '미리보기'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+          <tbody>
+            {all.map(({ r, v }, n) => {
+              const x = f[r.id]
+              return (
+                <tr key={r.id} data-testid="phr-recording" data-ipa={r.ipa} data-status={recs[n].status}>
+                  <td className={TD}>{r.no}</td><td className={`${TD} font-mono`}>{r.id}</td><td className={`${TD} font-black text-gray-900`}>/{r.ipa}/</td>
+                  <td className={TD}>{r.grapheme}</td><td className={TD}>{r.exampleWord}</td>
+                  <td className={`${TD} font-mono`}>{r.fileBase}.mp3</td>
+                  <td className={`${TD} whitespace-nowrap`}><span className="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">{REC_STATE[recs[n].status]}</span></td>
+                  <td data-testid="phr-rec-row" className={TD}>
+                    <input type="file" data-testid={`phr-rec-file-${r.id}`} accept=".mp3,.m4a,.wav" aria-label={`${r.id} 파일`} onChange={(e) => pick(r.id, e.target.files[0])} className="max-w-[10rem] text-xs" />
+                    {x ? (
+                      <div data-testid={`phr-rec-result-${r.id}`} data-ok={v.ok} className="mt-1 space-y-1">
+                        <audio src={x.url} preload="metadata" onLoadedMetadata={(e) => set(r.id, { duration: e.currentTarget.duration })} onError={() => set(r.id, { duration: null })} />
+                        {v.errors.map((m) => <p key={m} className="font-black text-rose-700">{m}</p>)}
+                        {v.warnings.map((m) => <p key={m} className="font-black text-amber-700">{m}</p>)}
+                        <button type="button" data-testid={`phr-rec-play-${r.id}`} disabled={!v.ok} onClick={(e) => e.currentTarget.parentNode.querySelector('audio').play()} className={BTN}>재생</button>
+                        <span data-testid={`phr-rec-verdict-${r.id}`} className="mx-1 font-black">{VERDICT[v.ok ? x.verdict : 'pending']}</span>
+                        {['approved', 'rejected'].map((k) => <button key={k} type="button" data-testid={`phr-rec-${k}-${r.id}`} disabled={!v.ok} onClick={() => set(r.id, { verdict: k })} className={BTN}>{VERDICT[k]}</button>)}
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 
 export default function PhonicsReviewPanel() {
   const s = useStats()
@@ -171,21 +228,7 @@ export default function PhonicsReviewPanel() {
 
       <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
         <p className="text-sm font-black text-gray-800">녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className="text-xs font-bold text-gray-500">(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
-        <div className="mt-2 max-w-full overflow-x-auto">
-          <table data-testid="phr-recordings" className="min-w-[36rem] border-collapse">
-            <thead><tr>{['no', 'id', '소리', '대표 철자', '예시 단어', '파일 이름 규칙', '상태'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
-            <tbody>
-              {recs.map((r, i) => (
-                <tr key={r.id} data-testid="phr-recording" data-ipa={r.ipa} data-status={r.status}>
-                  <td className={TD}>{r.no}</td><td className={`${TD} font-mono`}>{r.id}</td><td className={`${TD} font-black text-gray-900`}>/{r.ipa}/</td>
-                  <td className={TD}>{RECORDINGS[i].grapheme}</td><td className={TD}>{RECORDINGS[i].exampleWord}</td>
-                  <td className={`${TD} font-mono`}>{RECORDINGS[i].fileBase}.mp3</td>
-                  <td className={`${TD} whitespace-nowrap`}><span className="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">{REC_STATE[r.status]}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <RecordingPreview />
       </section>
 
       <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">

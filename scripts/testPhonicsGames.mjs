@@ -62,7 +62,7 @@ ok(C.BOOKS.every((x) => C.unitsOf(x.id, { includeDraft: false }).length === 0 &&
 ok(C.STATUS_LABEL_KO.draft === '임시' && C.STATUS_LABEL_KO.approved === '승인', 'status labels')
 ok(ALL_UNITS.every(({ u }) => u.difficulty >= 1 && u.difficulty <= 3 && /^[BTHL]+$/.test(u.games) && u.words.length >= 5), 'difficulty 1-3, games letters, >= 5 words')
 ok(ALL_UNITS.every(({ u }) => u.targets.every((tg) => tg.pair === `${tg.grapheme}|${tg.ipa}`)), 'target pair shape')
-ok(C.BOOKS[0].focus === 'vowel-recognition' && C.BOOKS[0].units.map((u) => u.difficulty).join() === '2,2,2,2,3' && C.BOOKS[0].units.every((u) => u.games === 'B'), 'Book 1: vowel recognition, bubble only')
+ok(C.BOOKS[0].focus === 'vowel-recognition' && C.BOOKS[0].units.map((u) => u.difficulty).join() === '2,2,2,2,3' && C.BOOKS[0].units.every((u) => u.games === 'BT'), 'Book 1: vowel recognition, Sound Bubble Pop + vowel Word Train (259차)')
 ok(C.BOOKS[3].units.slice(0, 7).every((u) => u.kind === 'digraph') && C.BOOKS[3].units.slice(7).every((u) => u.kind === 'cluster' && u.targets.length === 0 && u.games === 'THL' && u.labels.length >= 5), 'Book 4: units 1-7 digraphs, 8-11 clusters (no target, THL, labels only)')
 ok(C.BOOKS[3].groups.length === 2 && C.BOOKS[3].groups[0].unitIds.length === 7 && C.BOOKS[3].groups[1].unitIds.join() === 'u8,u9,u10,u11', 'Book 4 groups A/B')
 const bk = (b, u) => C.BOOKS.find((x) => x.id === b).units.find((x) => x.id === u)
@@ -95,7 +95,7 @@ for (const { b, u } of ALL_UNITS) {
   const ws = wordsOf(b, u)
   ok(ws.every((w) => w.games === u.games || (u.games.replace('B', '') === w.games && w.targetIndex >= 0 && u.targets.find((x) => x.pair === U.pairOf(w, w.targetIndex)).twoSounds)), `${b.id}${u.id} words carry the unit games (two-sound words lose B)`)
   if (!isBubbleUnit(u)) ok(ws.every((w) => !U.hasGame(w, 'B')), `${b.id}${u.id} not bubble-offered`)
-  if (b.id === 'b1') ok(ws.every((w) => w.games === 'B'), `${b.id}${u.id} Book 1 bubble only`)
+  if (b.id === 'b1') ok(ws.every((w) => w.games === 'BT'), `${b.id}${u.id} Book 1 bubble + vowel train`)
 }
 ok(['b2u6', 'b2u7', 'b4u8', 'b4u9', 'b4u10', 'b4u11', 'b5u12'].every((k) => !isBubbleUnit(bk(k.slice(0, 2), k.slice(2)))), 'cluster / doubles / qu-x / er-ending are not bubble-offered')
 {
@@ -129,7 +129,7 @@ for (const { b, u } of ALL_UNITS) {
         s = G.bubblePick(s, ri)
         if (!s.done || s.last !== 'right' || s.wrong !== 1) sweep.flow = false
       }
-      if (U.hasGame(w, 'T')) {
+      if (U.hasGame(w, 'T') && b.id !== 'b1') { // Book 1 uses trainRoundVowel (checked below)
         const tr = G.trainRound(w, seed, { learned: ctx.learned })
         if (!tr.tiles.every((x) => lg.has(x.grapheme)) || tr.tiles.length > w.graphemes.length + 1) sweep.tile = false
         if (u.kind === 'cluster' && tr.tiles.some((x) => (u.labels || []).includes(x.grapheme))) sweep.tile = false // clusters stay separate single-letter tiles
@@ -294,15 +294,16 @@ ok(U.unitTestLock(C.BOOKS[0]) === 'Book 1은 소리 풍선으로 확인해요' &
       const rev = ses.filter((w) => w.origin)
       const graphemes = new Set(ses.map((w) => w.graphemes[w.targetIndex]))
       if (!isFirst && graphemes.size < 2) v.ge2 = false
-      if (isFirst && rev.length) v.first = false
-      if (!own.every((w) => ses.some((x) => x.id === w.id)) || ses.length !== own.length + rev.length) v.own = false
+      const far = ses.filter((w) => w.detect && !own.some((x) => x.id === w.id))
+      if (isFirst && (rev.length || far.length !== 3)) v.first = false // 259차: the first unit mixes in 3 detection items instead of earlier-unit review
+      if (!own.every((w) => ses.some((x) => x.id === w.id)) || ses.length !== own.length + rev.length + far.length) v.own = false
       if (rev.length > 3 || (!isFirst && rev.length === 0)) v.cap = false
       if (JSON.stringify(ses.map((w) => w.id)) !== JSON.stringify(U.bubbleSession(b.id, u.id, seed).map((w) => w.id))) v.det = false
       if (new Set(ses.map((w) => w.id)).size !== ses.length) v.uniq = false
       for (const w of ses) {
-        const r = G.bubbleRound(w, seed, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctx.optionPairs })
-        if (!r || !r.options.includes(w.graphemes[w.targetIndex])) v.valid = false
-        if (b.id === 'b1' && r && !r.options.every((o) => 'aeiou'.includes(o))) v.b1 = false
+        const r = G.bubbleRound(w, seed, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctx.optionPairs, detect: w.detect, vowel: w.vowel })
+        if (!r || !r.options.includes(r.target.grapheme)) v.valid = false
+        if (b.id === 'b1' && r && !w.detect && !r.options.every((o) => 'aeiou'.includes(o))) v.b1 = false
         if (w.origin) {
           const ob = C.bookById(w.origin.bookId)
           const idx = ob.units.findIndex((x) => x.id === w.origin.unitId)
@@ -314,7 +315,7 @@ ok(U.unitTestLock(C.BOOKS[0]) === 'Book 1은 소리 풍선으로 확인해요' &
   }
   ok(ran > 700, `interleave sweep ran (${ran} sessions)`)
   for (const [k, val] of Object.entries(v)) ok(val, `bubbleSession ${k}`)
-  ok(U.bubbleSession('b1', 'u1', 4).length === 5 && U.bubbleSession('b1', 'review', 1).length === 0 && U.bubbleSession('zz', 'u1', 1).length === 0, 'first unit of Book 1 has no review items; review node and unknown nodes have no session')
+  ok(U.bubbleSession('b1', 'u1', 4).length === 8 && U.bubbleSession('b1', 'review', 1).length === 0 && U.bubbleSession('zz', 'u1', 1).length === 0, 'first unit of Book 1 has no review items; review node and unknown nodes have no session')
 }
 // Word Train tiles in a cluster unit: single-letter tiles
 {
@@ -367,6 +368,99 @@ ok(U.unitTestLock(C.BOOKS[0]) === 'Book 1은 소리 풍선으로 확인해요' &
   ok(/clip && <button[^>]*data-testid="pbp-listen-sound"/.test(bubble) && /phonemeClip\(round\.target\.ipa\)/.test(bubble), 'pbp-listen-sound is mounted only when an approved clip exists')
   ok(/data-testid="pwt-result"/.test(train) && /pwt-depart\{animation:pwt-go[^}]*forwards/.test(css) && /\.pwt-result\{/.test(css) && /@keyframes pwt-go\{[^}]*\}[^}]*visibility:hidden/.test(css), 'Word Train: the departed train stays gone (fill-mode forwards) and pwt-result takes its place')
   ok(/playPhonemes\(\[item\.phonemes\[cur\.placed\]\]\)/.test(train) && /allApproved\(item\.phonemes\)/.test(train), 'Word Train plays tile / sequence phoneme clips only through playPhonemes')
+}
+
+// ---- 259차 Book 1: detection task, vowel Word Train, sound test, tips, skill tags
+{
+  const b1 = C.BOOKS[0]
+  ok(b1.skill === 'sound' && C.BOOKS.slice(1).every((x) => x.skill === 'reading'), 'skill tags: Book 1 = sound, Books 2-5 = reading')
+  const TIP_VOWELS = ['a', 'e', 'i', 'o', 'u']
+  ok(b1.units.every((u, i) => u.intro && u.intro.tipNeedsReview === true && typeof u.intro.tipKo === 'string' && u.intro.tipKo.length > 5 && u.targets[0].grapheme === TIP_VOWELS[i]), 'Book 1 intro tips: one per unit, flagged tipNeedsReview')
+  ok(b1.units.every((u) => !/["'"'][가-힣]["'"']/.test(u.intro.tipKo) && !/[a-z/]/i.test(u.intro.tipKo)), 'Book 1 tips: no quoted single Hangul syllable, no Latin letters / IPA (no transliterated sounds)')
+  ok(C.BOOKS.slice(1).every((x) => x.units.every((u) => !u.intro)), 'only Book 1 units carry an intro tip')
+  // detection rounds: options exactly [vowel, other], right = vowel iff the word has it, seeds 0..19
+  let det = true
+  const both = new Set()
+  const d = U.detectWords('b1', 'u1')
+  ok(d.own.length === 5 && d.far.length >= 15 && d.far.every((w) => !w.graphemes.includes('a')) && d.own.every((w) => w.graphemes.includes('a')), 'detect pool: 5 own words with a, many far words without a')
+  for (const w of [...d.own, ...d.far]) {
+    for (let seed = 0; seed < 20; seed++) {
+      const o = { targetIndex: w.targetIndex, detect: true, vowel: 'a' }
+      const r = G.bubbleRound(w, seed, undefined, o)
+      const exp = w.graphemes.includes('a') ? 'a' : G.OTHER_SOUND_KO
+      if (!r || r.options.length !== 2 || r.options.slice().sort().join() !== ['a', G.OTHER_SOUND_KO].sort().join() || r.target.grapheme !== exp) det = false
+      if (JSON.stringify(r) !== JSON.stringify(G.bubbleRound(w, seed, undefined, o))) det = false
+      both.add(r.options.indexOf(exp))
+      const right = r.options.indexOf(exp)
+      if (G.bubblePick(G.bubbleStart(r), right).last !== 'right' || G.bubblePick(G.bubbleStart(r), 1 - right).last !== 'wrong') det = false
+    }
+  }
+  ok(det && both.size === 2, 'detect rounds: options exactly [a, other sound], correct both ways, deterministic, both positions occur')
+  ok(U.detectUnit('b1', 'u1') && !U.detectUnit('b1', 'u2') && !U.detectUnit('b2', 'u1') && !U.detectUnit('b1', 'review'), 'only Book 1 Unit 1 is a detection unit')
+  let mix = true
+  for (let seed = 0; seed < 20; seed++) {
+    const ses = U.bubbleSession('b1', 'u1', seed)
+    const far = ses.filter((w) => !w.graphemes.includes('a'))
+    if (ses.length !== 8 || far.length !== 3 || new Set(far.map((w) => w.graphemes[w.targetIndex])).size !== 3 || ses.some((w) => !w.detect || w.vowel !== 'a')) mix = false
+  }
+  ok(mix, 'Book 1 Unit 1 session = 5 words with a + 3 contrast words of different vowels, all tagged detect')
+  const sample = ITEMS.find((i) => i.word === 'cat')
+  ok(JSON.stringify(G.bubbleRound(sample, 3, undefined, { targetIndex: 1, optionPairs: U.BOOK1_VOWELS })) === JSON.stringify(G.bubbleRound(sample, 3, undefined, { targetIndex: 1, optionPairs: U.BOOK1_VOWELS, detect: false })), 'bubbleRound without detect is unchanged')
+  // Book 1 Word Train: consonants are helpers, one empty slot, five vowel tiles
+  let tv = true
+  for (const w of b1.units.flatMap((u) => U.unitWords('b1', u.id))) {
+    for (let seed = 0; seed < 20; seed++) {
+      const r = G.trainRoundVowel(w, seed)
+      const vi = w.graphemes.findIndex((g) => G.VOWELS.includes(g))
+      if (!r || r.target.slot !== vi || r.target.vowel !== w.graphemes[vi] || r.tiles.length !== 5 || r.tiles.map((t) => t.grapheme).sort().join('') !== 'aeiou' || new Set(r.tiles.map((t) => t.id)).size !== 5) { tv = false; continue }
+      const helpers = w.graphemes.filter((_, i) => i !== vi)
+      if (helpers.some((g) => G.VOWELS.includes(g)) || helpers.length !== w.graphemes.length - 1) tv = false
+      let s = G.trainStart(r)
+      s = G.vowelTap(s, r.tiles.find((t) => t.grapheme !== r.target.vowel).id)
+      if (s.wrong !== 1 || s.done || s.last !== 'wrong') tv = false
+      s = G.vowelTap(s, r.tiles.find((t) => t.grapheme === r.target.vowel).id)
+      if (!s.done || s.wrong !== 1 || s.last !== 'right') tv = false
+      if (JSON.stringify(r) !== JSON.stringify(G.trainRoundVowel(w, seed))) tv = false
+    }
+  }
+  ok(tv, 'trainRoundVowel: helpers = all non-vowel graphemes, one empty slot, 5 vowel tiles, answer = the word vowel, wrong tap no reveal, deterministic (every Book 1 word x seeds 0..19)')
+  ok(G.trainRoundVowel(ITEMS.find((i) => i.word === 'milk'), 1).target.vowel === 'i' && G.trainRoundVowel(ITEMS.find((i) => i.word === 'egg'), 1).target.slot === 0, 'trainRoundVowel: milk -> i, egg -> e (slot 0)')
+  // sound test: 5 items, one pick each, score math
+  let st = true
+  for (const u of b1.units) {
+    const own = U.unitWords('b1', u.id)
+    for (let seed = 0; seed < 20; seed++) {
+      const ses = U.testSession('b1', u.id, seed)
+      if (ses.length !== 5 || new Set(ses.map((w) => w.id)).size !== 5 || ses.filter((w) => own.some((x) => x.id === w.id)).length < 3) { st = false; continue }
+      if (JSON.stringify(ses.map((w) => w.id)) !== JSON.stringify(U.testSession('b1', u.id, seed).map((w) => w.id))) st = false
+      if (u.id === 'u1' && !ses.every((w) => w.detect)) st = false
+      let score = 0
+      for (const w of ses) {
+        const r = G.bubbleRound(w, seed, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || U.BOOK1_VOWELS, detect: w.detect, vowel: w.vowel })
+        const right = r.options.indexOf(r.target.grapheme)
+        const wrong = r.options.findIndex((_, i) => i !== right)
+        const hit = G.bubblePick(G.bubbleStart(r), right, { once: true })
+        const miss = G.bubblePick(G.bubbleStart(r), wrong, { once: true })
+        if (!hit.done || hit.wrong !== 0 || !miss.done || miss.wrong !== 1 || miss.last !== 'wrong' || G.bubblePick(miss, right, { once: true }) !== miss) st = false
+        if (hit.wrong === 0) score++
+      }
+      if (score !== 5) st = false
+    }
+  }
+  ok(st, 'sound test: 5 distinct items (>= 3 own), deterministic, one pick each (a miss ends the item, no retry), score math 5/5 (Book 1 units x seeds 0..19)')
+  const recs = [
+    { bookId: 'b1', unitId: 'u2', step: 'test', itemId: 'word:pen', correct: false, retries: 1, targetPhonemes: ['e'] },
+    { bookId: 'b1', unitId: 'u2', step: 'test', itemId: 'word:red', correct: true, retries: 0, targetPhonemes: ['e'] },
+    { bookId: 'b1', unitId: 'u2', unitTest: { score: 4, total: 5 }, studentId: 'x', at: 1 },
+  ]
+  ok(U.missedItems(recs, 'b1', 'u2').join() === 'word:pen', 'missedItems: a missed sound-test item is owed a review; the unitTest summary record is ignored')
+  ok(Object.keys(G.summarisePhonemes(recs)).join() === 'e', 'summarisePhonemes ignores unitTest summary records')
+  ok(U.unitTestLock(b1) !== null && U.unitTestLock(C.BOOKS[1]) === null, 'Book 1 picture reading test stays locked (the sound test replaces it)')
+}
+// source pin (259차): letters / sounds never reach speech
+{
+  const srcs = ['SoundBubblePop', 'WordTrain', 'UnitHub', 'PhonicsAdventure', 'PhonemeListen', 'PaulPhonics'].map((nm) => read('src/components/phonics/' + nm + '.jsx')).join('\n')
+  ok(!/speakText|speechSynthesis\.speak|translate_tts/.test(srcs), 'phonics components never call a TTS primitive directly (only playEn on a whole word)')
 }
 
 // ---- source pins

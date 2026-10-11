@@ -98,7 +98,8 @@ ok(!/Math\.random|fetch\(|localStorage|sessionStorage|document\.|window\.|from '
 if (exists('src/components/pictureWords/AlphabetHammer.jsx')) {
   const hs = read('src/components/pictureWords/AlphabetHammer.jsx'), imgSrc = read('src/components/pictureWords/pictureImg.jsx')
   ok(!FORBID.test(hs + imgSrc), 'hammer: no network/storage/reward/analytics')
-  ok(!/data-correct|data-answer|data-right|aria-label/.test(hs + imgSrc), 'hammer: no answer-bearing attributes / aria-label')
+  // 259차: a tile may carry aria-label="글자 <its own letter>" (the letter is already its visible text — it says nothing about the answer order); any other aria-label is still forbidden
+  ok(!/data-correct|data-answer|data-right/.test(hs + imgSrc) && (hs.match(/aria-label=/g) || []).length === 1 && hs.includes('aria-label={`글자 ${t.ch}`}') && !/aria-label/.test(imgSrc), 'hammer: no answer-bearing attributes; the only aria-label is the tile letter itself (259차)')
   ok(/alt="그림"/.test(imgSrc) && /GamePicture/.test(hs), 'hammer: neutral picture alt')
   ok(/\{st\.done && \([\s\S]{0,300}data-testid="pwh-word"/.test(hs), 'hammer: pwh-word mounted only after completion')
   ok(/prefers-reduced-motion/.test(imgSrc) && /useReducedMotion\(\)/.test(hs), 'hammer: reduced-motion branch')
@@ -231,6 +232,23 @@ if (exists('src/components/pictureWords/PictureGames.jsx')) {
   ok(/Math\.min\(100/.test(img) && /pw-card-sm/.test(read(`${dir}/ShopShelf.jsx`)), 'design: progress bar clamps, shelf items use the card')
   // rule modules untouched by this round
   ok(!/sfx|Sfx/.test(read('src/utils/pictureWords/games.js') + read('src/utils/pictureWords/practice.js')), 'rules: games.js/practice.js know nothing about sound')
+}
+
+// ---- 259차: hiddenRound prefer (a phonics unit's target letters hide first); the default round is byte-identical
+{
+  const w = LEARN.find((x) => x.en === 'cake') || { id: 'x', en: 'cake' }
+  let same = true, pref = true
+  for (const d of ['easy', 'normal', 'hard']) {
+    for (let seed = 0; seed < 20; seed++) {
+      const base = G.hiddenRound(w, { difficulty: d, seed })
+      if (JSON.stringify(base) !== JSON.stringify(G.hiddenRound(w, { difficulty: d, seed, prefer: undefined }))) same = false
+      const p = G.hiddenRound(w, { difficulty: d, seed, prefer: [1] })
+      if (!p.hidden.includes(1) || p.hidden.length !== base.hidden.length || JSON.stringify(p) !== JSON.stringify(G.hiddenRound(w, { difficulty: d, seed, prefer: [1] }))) pref = false
+      if (G.hiddenRound(w, { difficulty: d, seed, prefer: [99] }).hidden.length !== base.hidden.length) pref = false
+    }
+  }
+  ok(same, 'hiddenRound: prefer undefined = unchanged default round (3 difficulties x seeds 0..19)')
+  ok(pref, 'hiddenRound: prefer [1] always hides cell 1 first (same count, deterministic); unknown indexes are ignored')
 }
 
 console.log(fail ? `FAIL ${fail}/${n}` : `PASS ${n}/${n} picture-word game checks`)

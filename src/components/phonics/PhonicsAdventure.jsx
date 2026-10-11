@@ -1,8 +1,9 @@
-// PAUL PHONICS 게임 세션(253차 시제품, 254차 Unit 연결, 테스터 전용): 항목 최대 6개 → 요약. 기록(phonicsAttempt)은 React state에만 쌓는다 — 저장·전송 0.
-// 항목·게임·맥락(ctx: bookId/unitId/step/learned/optionPairs)은 Unit 허브가 정해서 넘긴다. 교재 순서는 임시이므로 "임시 구성"이라고만 말한다.
+// PAUL PHONICS 게임 세션(253차 시제품, 254차 Unit 연결, 259차 Book 1, 테스터 전용): 항목 최대 6개(소리 확인은 5개) → 요약. 기록(phonicsAttempt)은 React state에만 쌓는다 — 저장·전송 0.
+// 항목·게임·맥락(ctx: bookId/unitId/step/learned/optionPairs/next)은 Unit 허브가 정해서 넘긴다. 교재 순서는 임시이므로 "임시 구성"이라고만 말한다.
+// 소리 확인(ctx.step === 'test')의 결과는 { studentId, bookId, unitId, unitTest: { score, total }, at } 한 건으로 상위 state에만 남는다.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { sessionItems } from '../../utils/phonics/games.js'
-import { bubbleSession } from '../../utils/phonics/curriculum.js'
+import { bubbleSession, testSession } from '../../utils/phonics/curriculum.js'
 import { stopSpeaking } from '../../utils/speech'
 import { GameStyle } from '../pictureWords/pictureImg.jsx'
 import SfxControl from '../pictureWords/SfxControl.jsx'
@@ -13,28 +14,40 @@ const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press dis
 const newSeed = () => Date.now() % 2147483647
 const SESSION_SIZE = 6
 
-export default function PhonicsAdventure({ game, items: pool, ctx, studentId, onRecord, onBack }) {
+export default function PhonicsAdventure({ game, items: pool, ctx, studentId, onRecord, onBack, onStart, onNext }) {
   const [seed, setSeed] = useState(newSeed)
   const [i, setI] = useState(0)
   const [records, setRecords] = useState([])
-  const [mode, setMode] = useState('practice') // 풍선 터뜨리기: 연습(힌트 있음) | 도전
   const heard = useRef(false) // 세션에서 첫 듣기 탭 이후에만 다음 문제를 자동 재생
-  // Unit 풍선 세션 = 그 Unit의 풍선 단어 + 이전 Unit 복습 문제 최대 3개(정답이 계속 같은 글자가 되지 않게). 그 밖의 세션은 최대 6개.
-  const items = useMemo(() => (game === 'bubble' && ctx?.interleave ? bubbleSession(ctx.bookId, ctx.unitId, seed) : sessionItems(seed, SESSION_SIZE, pool)), [seed, pool, game, ctx])
+  const sentTest = useRef(false)
+  const test = ctx?.step === 'test'
+  // 소리 확인 = 5문제. Unit 풍선 세션 = 그 Unit의 풍선 단어 + 이전 Unit 복습 문제 최대 3개(정답이 계속 같은 글자가 되지 않게). 그 밖의 세션은 최대 6개.
+  const items = useMemo(() => (test ? testSession(ctx.bookId, ctx.unitId, seed) : game === 'bubble' && ctx?.interleave ? bubbleSession(ctx.bookId, ctx.unitId, seed) : sessionItems(seed, SESSION_SIZE, pool)), [seed, pool, game, ctx, test])
   useEffect(() => stopSpeaking, [])
+  const finished = i >= items.length
+  const firstTry = records.filter((r) => r.correct).length
+  useEffect(() => {
+    if (!finished || !test || sentTest.current) return
+    sentTest.current = true
+    onRecord?.({ studentId, bookId: ctx.bookId, unitId: ctx.unitId, unitTest: { score: firstTry, total: items.length }, at: Date.now() })
+  }, [finished]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const restart = () => { stopSpeaking(); setSeed(newSeed()); setI(0); setRecords([]) }
+  const restart = () => { stopSpeaking(); sentTest.current = false; setSeed(newSeed()); setI(0); setRecords([]) }
   const next = () => { stopSpeaking(); setI((n) => n + 1) }
   const record = (r) => { setRecords((x) => [...x, r]); onRecord?.(r) }
 
-  if (i >= items.length) {
-    const firstTry = records.filter((r) => r.correct).length
+  if (finished) {
+    const missedIds = records.filter((r) => !r.correct).map((r) => r.itemId)
+    const nxt = ctx?.next
+    const noun = test ? '소리' : game === 'train' ? '단어' : '풍선'
     return (
-      <div data-testid="pha-summary" data-records={records.length} className="space-y-3 text-center">
+      <div data-testid="pha-summary" data-records={records.length} data-score={`${firstTry}/${items.length}`} className="space-y-3 text-center">
         <GameStyle />
-        <p className="text-2xl font-black text-gray-900">게임을 마쳤어요</p>
-        <p className="text-lg text-gray-700">처음에 맞힌 것 <span data-testid="pha-first-try" className="font-black text-purple-700">{firstTry} / {items.length}</span></p>
-        <button type="button" data-testid="pha-again" onClick={restart} className={`${BTN} w-full bg-purple-600 text-white`}>다시 하기</button>
+        <p className="text-2xl font-black text-gray-900">{test ? '소리 확인을 마쳤어요' : '게임을 마쳤어요'}</p>
+        <p className="text-lg text-gray-700">한 번에 {game === 'train' ? '만든' : '맞힌'} {noun} <span data-testid="pha-first-try" data-score={`${firstTry} / ${items.length}`} className="font-black text-purple-700">{firstTry}개</span></p>
+        {nxt && <button type="button" data-testid="pha-next-step" onClick={() => onNext(nxt.run)} className={`${BTN} w-full bg-purple-600 text-white`}>{nxt.label}</button>}
+        {test && missedIds.length > 0 && <button type="button" data-testid="pha-review" onClick={() => onStart('bubble', items.filter((it) => missedIds.includes(it.id)), { ...ctx, step: 'review', interleave: false, next: null })} className={`${BTN} w-full bg-amber-100 text-amber-800`}>다시 만나기</button>}
+        <button type="button" data-testid="pha-again" onClick={restart} className={`${BTN} w-full ${nxt ? 'bg-sky-100 text-sky-800' : 'bg-purple-600 text-white'}`}>다시 하기</button>
         <button type="button" data-testid="pha-exit" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-gray-700`}>돌아가기</button>
       </div>
     )
@@ -42,11 +55,11 @@ export default function PhonicsAdventure({ game, items: pool, ctx, studentId, on
   const item = items[i]
   const common = { item, index: i, total: items.length, studentId, onRecord: record, onNext: next, ctx }
   return (
-    <div data-testid="pha-root" data-game={game} data-step={ctx?.step} className="space-y-3">
+    <div data-testid="pha-root" data-game={game} data-step={ctx?.step} data-skill={ctx?.skill} className="space-y-3">
       <GameStyle />
       <SfxControl />
       {game === 'bubble'
-        ? <SoundBubblePop key={`${item.id}-${i}-${seed}`} {...common} seed={seed + 101 * i} mode={mode} onMode={setMode} autoplay={heard.current} onHeard={() => { heard.current = true }} />
+        ? <SoundBubblePop key={`${item.id}-${i}-${seed}`} {...common} seed={seed + 101 * i} autoplay={heard.current} onHeard={() => { heard.current = true }} />
         : <WordTrain key={`${item.id}-${i}-${seed}`} {...common} seed={seed + 101 * i} />}
       <button type="button" data-testid="pha-quit" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-sm text-gray-700`}>그만하기</button>
     </div>

@@ -2130,3 +2130,15 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 257차 추가 (2026-10-11): PAUL PHONICS 이미지 감사·학습 발달 설계
 - `scripts/testPhonicsProgress.mjs`(60, 신규, `tests/harness/registry.mjs` extra:false): `progress.js` 순수 함수 전부를 손계산 fixture로 검증, 가상 샘플 데이터(6명·결정적·UUID 아님·30~80건·실제 Unit/음소), 이미지 후보 격리(105/7/98, 관리자 패널만 import), SQL 초안(파괴 문구 0·if not exists·RLS·src/api 참조 0), 소스 핀(네트워크·저장소·시계·랜덤 없음).
 - `tests/e2e/phonicsReview.spec.mjs`(33)·`phonicsProgress.spec.mjs`(53, 신규)·`phonicsGames.spec.mjs`(158, 글자 카드 확인 추가): 필터별 행 수, 후보 썸네일 로드, 녹음 42행, 샘플 화면 학생/관리자(360·768·1280), 쓰기 0·저장소 키 0. 실행은 `runOne` 방식으로 한 번에 하나씩.
+
+### 258차 추가 (2026-10-11): 안정성
+- `testPilotTownAllowlist`: onGoTown 핀을 2.5D 우선 3분기 식 전체로 교체(32단언). `testTownKitAssets`: kitSizes.js 동기 핀 1단언 추가(`testGrammarVillage`의 villageArt 핀은 kitSizes로 갱신).
+
+### 259차 추가 (2026-10-11): PAUL PHONICS Book 1
+- `scripts/testPhonicsGames.mjs`(368): Book 1 `skill`/입 모양 문구(`tipNeedsReview`, 따옴표 한글 한 음절·라틴 글자 0), 감지 라운드(옵션 정확히 [a, 다른 소리], 양쪽 정답, 시드 0..19, 기본 `bubbleRound` 불변), `trainRoundVowel`/`vowelTap`(도우미 = 비모음 전부, 빈 칸 1, 모음 타일 5), 소리 확인 세션(5문항·한 번 고름·점수), `missedItems`·`summarisePhonemes`가 `unitTest` 요약 기록을 무시, TTS 원시 호출 0 핀. `testPictureWordGames.mjs`(142): `hiddenRound` prefer(기본 불변), 망치 aria-label 핀을 "타일 자기 글자만"으로 좁힘.
+- `tests/e2e/phonicsGames.spec.mjs`(197): Book 1 허브 3묶음·next 1개·오늘 했어요·조용한 잠금·발음 기호 0, 소개 카드·갤러리·3–5, 감지 과제, 모음 Word Train, 소리 확인과 "다시 만나기", 360×640 `pbp-next` 화면 안(그림·글자 카드), 발음 겹침 0, Books 2~5 회귀. 듣기 버튼은 맥박(애니메이션)이라 마우스 클릭은 `force`(풍선과 같은 이유).
+- `pictureWordGames.spec.mjs`(150)·`pictureWordPractice.spec.mjs`(107): 망치 aria-label·완성 포커스 추가, 나머지 불변. 세 스펙 모두 `scripts/testBrowserE2E.mjs` 미등록(기존과 같음).
+
+### 260차 추가 (2026-10-11): 녹음 미리보기·이미지 우선순위·학습 발달 v2
+- `scripts/testPhonicsProgress.mjs`(94): `validateUpload` 경계값(2 KB / 500 KB, 0.2 / 3.0초, 이름 경고), 이미지 우선순위 13/14/78, 진도 v2 함수 손계산 고정값, NaN/Infinity 속성 검사(샘플 7명 + 빈 기록), 미리보기 격리 핀(학생 코드 import 0, 네트워크·저장소 0), kit 후보는 import 없이 경로만.
+- `tests/e2e/phonicsReview.spec.mjs`(44): 런타임에 만든 wav로 미리보기 흐름, 같은 컨텍스트 학생 화면 2단계 잠김. `phonicsProgress.spec.mjs`(62): Unit 상태 칸·변화 문구·샘플 G 빈 상태·관리자 기록 없음/오답 표 정렬. 번들 한도 때문에 Book별 시험 표·반복 오답 UI는 아직 없어 그 부분 브라우저 검사는 없다(함수는 정적 테스트).

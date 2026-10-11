@@ -58,12 +58,12 @@ ok(JSON.stringify(F1) === before, 'views do not mutate their input')
 // ---- the FICTIONAL sample
 const ST = S.SAMPLE_STUDENTS
 ok(S.SAMPLE_NOTICE_KO === '샘플 데이터 — 실제 학생 기록이 아닙니다', 'sample notice text')
-ok(S.SAMPLE_CLASS_NAME === '샘플반' && ST.length === 6, 'class 샘플반 with six students')
-eq(ST.map((s) => s.name), ['A', 'B', 'C', 'D', 'E', 'F'].map((x) => `샘플 학생 ${x}`), 'sample names')
-eq(ST.map((s) => s.id), [1, 2, 3, 4, 5, 6].map((x) => `sample-000${x}`), 'sample ids')
+ok(S.SAMPLE_CLASS_NAME === '샘플반' && ST.length === 7, 'class 샘플반 with seven students (G has no records)')
+eq(ST.map((s) => s.name), ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((x) => `샘플 학생 ${x}`), 'sample names')
+eq(ST.map((s) => s.id), [1, 2, 3, 4, 5, 6, 7].map((x) => `sample-000${x}`), 'sample ids')
 ok(ST.every((s) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id) && s.name.startsWith('샘플')), 'no id is UUID-shaped; names start with 샘플')
 ok(JSON.stringify(ST) === JSON.stringify(S2.SAMPLE_STUDENTS), 'sample data is deterministic (two imports equal)')
-ok(ST.every((s) => s.records.length >= 30 && s.records.length <= 80), `30-80 records each: ${ST.map((s) => s.records.length)}`)
+ok(ST.slice(0, 6).every((s) => s.records.length >= 30 && s.records.length <= 80) && ST[6].records.length === 0, `30-80 records each, G none: ${ST.map((s) => s.records.length)}`)
 const UNIT_IDS = new Set(C.BOOKS.flatMap((b) => b.units.map((u) => `${b.id}/${u.id}`)))
 const PHONEMES = new Set(D.PHONICS_ITEMS.flatMap((i) => i.phonemes))
 const ITEM_IDS = new Set(D.PHONICS_ITEMS.map((i) => i.id))
@@ -86,6 +86,35 @@ for (const f of ['src/utils/phonics/progress.js', 'src/data/phonics/sampleProgre
   ok(!NO_IO.test(read(f)), `${f}: no network, storage, clock or random`)
 }
 
+// ---- 260차 progress v2 functions on hand-computed fixtures
+const att2 = (at, ph, correct, b, u, itemId) => ({ v: 1, studentId: 'fx', gameId: 'bubble', bookId: b, unitId: u, step: 'bubble', targetPhonemes: [ph], itemId, correct, retries: 0, completed: true, at })
+const D1 = 86400000
+const F2 = [
+  att2(1, 'æ', false, 'b1', 'u1', 'word:hat'), att2(D1 + 1, 'æ', false, 'b1', 'u1', 'word:hat'), att2(D1 + 2, 'æ', false, 'b1', 'u1', 'word:hat'), att2(2 * D1, 'e', false, 'b1', 'u2', 'word:bed'),
+  att2(3, 'æ', true, 'b1', 'u1', 'word:map'),
+  test(10, 'b2', 'u1', 3, 5), test(20, 'b2', 'u1', 4, 5), test(30, 'b2', 'u2', 2, 5),
+]
+eq(P.repeatedMisses(F2), [{ itemId: 'word:hat', word: 'hat', sessions: 2, wrong: 3 }], 'repeatedMisses: hat missed on 2 days (3 wrong); bed only 1 day')
+const st = Object.fromEntries(P.unitStates(F2).map((x) => [`${x.bookId}/${x.unitId}`, x.state]))
+eq([st['b1/u1'], st['b1/u2'], st['b2/u1'], st['b2/u2'], st['b3/u1']], ['done', 'in-progress', 'done', 'needs-review', 'not-started'], 'unitStates: Book 1 u1 done (4 finished items >= 3), in-progress, done (test 4/5), needs-review (2/5 < 60 %), not-started')
+eq(P.latestTests(F2, 2).map((t) => [t.unitId, t.score, t.percent]), [['u2', 2, 40], ['u1', 4, 80]], 'latestTests newest first')
+const tt = P.testTrend(F2)
+eq([tt.overall.delta, tt.overall.first, tt.overall.latest.score, tt.overall.previous.score], [-2, false, 2, 4], 'overall trend: last test 2/5 vs previous 4/5 = -2')
+eq(tt.units.map((u) => [u.unitId, u.delta, u.first]), [['u1', 1, false], ['u2', null, true]], 'per-unit trend: b2/u1 +1, b2/u2 first test')
+eq(P.testTrend([]), { overall: null, units: [] }, 'trend of no records')
+const cls = [{ id: 'x1', name: 'x1', records: F2 }, { id: 'x2', name: 'x2', records: [test(1, 'b2', 'u1', 5, 5), test(2, 'b3', 'u1', 1, 5)] }, { id: 'x3', name: 'x3', records: [] }]
+eq(P.bookTestSummary(cls), [{ bookId: 'b2', no: 2, count: 4, avg: 70, min: 40, max: 100 }, { bookId: 'b3', no: 3, count: 1, avg: 20, min: 20, max: 20 }], 'bookTestSummary: b2 = (60+80+40+100)/4 = 70, b3 = 20')
+eq(P.phonemeErrorTable(cls).map((x) => [x.phoneme, x.attempts, x.wrong, x.rate, x.students]), [['e', 1, 1, 100, 1], ['æ', 4, 3, 75, 1]], 'phonemeErrorTable sorted by error rate')
+const wk = P.studentWeakAreas({ records: F2 })
+eq([wk.sounds, wk.units, wk.reason], [['æ'], ['Book 1 Unit 1', 'Book 1 Unit 2'], '/æ/ 3/4번 틀림'], 'studentWeakAreas')
+eq(P.studentWeakAreas({ records: [] }), { sounds: [], units: [], reason: '기록 없음' }, 'weak areas of an empty student')
+eq([P.emptyState([]).empty, P.emptyState([]).message, P.emptyState(F2)], [true, '아직 학습 기록이 없어요 — 첫 Unit을 시작해 볼까요?', { empty: false, message: null }], 'emptyState')
+// sample: G is empty, two students have two tests on one unit, no NaN/Infinity anywhere in the derived views
+ok(ST[6].records.length === 0 && P.emptyState(ST[6].records).empty, 'sample G has no records -> empty state')
+ok(ST.filter((s) => P.testTrend(s.records).units.some((u) => u.previous)).length >= 2, 'at least two sample students have two tests on the same unit')
+const bad = (v) => /NaN|Infinity/.test(JSON.stringify(v, (k, x) => (typeof x === 'number' && !Number.isFinite(x) ? 'NaN' : x)))
+ok(![...ST.map((s) => s.records), []].some((r) => [P.unitStates(r), P.latestTests(r), P.testTrend(r), P.repeatedMisses(r), P.bookProgress(r), P.recommendations(r), P.studentWeakAreas({ records: r })].some(bad)) && !bad([P.bookTestSummary(ST), P.phonemeErrorTable(ST), P.bookTestSummary([]), P.phonemeErrorTable([])]), 'no NaN/Infinity in any derived view (all samples + empty)')
+
 // ---- 257차 image audit numbers and the candidate isolation
 const needed = D.PHONICS_ITEMS.filter((i) => i.image === 'needed')
 const CANDS = ['cat', 'tree', 'lamp', 'duck', 'fox', 'tent', 'gate']
@@ -94,11 +123,50 @@ ok(needed.length === 105, `105 words need an image (got ${needed.length})`)
 ok(CANDS.every((w) => needed.some((i) => i.word === w) && new RegExp(`row\\('${w}'`).test(candSrc)), 'the 7 candidate words all still need an image and are listed')
 ok((candSrc.match(/row\('/g) || []).length === 7 && needed.length - CANDS.length === 98, '7 candidates, 98 new productions')
 const candPaths = [...candSrc.matchAll(/'(\.\.\/\.\.\/assets\/town\/[^']+)'/g)].map((m) => m[1])
-ok(candPaths.length === 7 && candPaths.every((p) => exists(`src/${p.slice(6)}`)), 'every candidate asset file exists')
+ok(candPaths.length === 3 && candPaths.every((p) => exists(`src/${p.slice(6)}`)), 'the 3 non-kit candidates import an existing asset')
+const srcPaths = [...candSrc.matchAll(/'(src\/assets\/town\/|town kit: )([^']+)'/g)].map((m) => (m[1] === 'town kit: ' ? 'src/assets/town/kit/' : m[1]) + m[2])
+ok(srcPaths.length === 7 && srcPaths.every((p) => exists(p)) && !/import .*town\/kit/.test(candSrc) && (candSrc.match(/row\('\w+', null,/g) || []).length === 4, 'all 7 source files exist; the 4 kit candidates are path-text only (no kit import)')
 ok(/학습용 승인 필요/.test(candSrc) && /UNCERTAIN/.test(candSrc) && /MISMATCH/.test(candSrc), 'candidate note and rejected look-alikes recorded')
+// ---- 260차 image production priority
+const PC = await import('../src/utils/phonics/curriculum.js')
+const firstBook = new Map()
+for (const b of C.BOOKS) for (const u of b.units) for (const w of PC.unitWords(b.id, u.id)) if (!firstBook.has(w.word)) firstBook.set(w.word, b.no)
+const prio = needed.map((i) => [i.word, PC.imagePriority(firstBook.get(i.word))])
+ok(prio.every(([w, p]) => firstBook.has(w) && /^P[123]$/.test(p)), 'every needed word has a first Book and P1/P2/P3')
+eq([1, 2, 3, 4, 5].map(PC.imagePriority), ['P1', 'P2', 'P3', 'P3', 'P3'], 'imagePriority maps Book 1/2/3-5')
+const p1 = prio.filter(([, p]) => p === 'P1').map(([w]) => w)
+eq(p1.sort(), needed.filter((i) => firstBook.get(i.word) === 1).map((i) => i.word).sort(), 'P1 = exactly the needed words first appearing in Book 1')
+eq(['P1', 'P2', 'P3'].map((k) => prio.filter(([, p]) => p === k).length), [13, 14, 78], 'P1/P2/P3 counts 13/14/78')
+const imgDoc = read('docs/design/PHONICS_IMAGE_SPEC_2026-10-11.md')
+ok(p1.every((w) => new RegExp(`^- ${w} — [^\x60]`, 'm').test(imgDoc.slice(imgDoc.indexOf('## 우선순위')))), 'the doc appendix has a drawing brief for every P1 word')
+// ---- 260차 recording upload preview check
+const RU = await import('../src/utils/phonics/recordingUpload.js')
+const R1 = (await import('../src/data/phonics/recordings.js')).RECORDINGS[0]
+const good = { name: 'ph-01-a.mp3', size: 50000, type: 'audio/mpeg', duration: 1 }
+const vu = (o) => RU.validateUpload({ ...good, ...o }, R1)
+eq(vu({}), { errors: [], warnings: [], ok: true }, 'valid upload')
+ok(!vu({ name: 'notes.txt', type: 'text/plain' }).ok, '.txt is a type error')
+ok(!vu({ type: 'video/mp4' }).ok, 'non-audio MIME is an error')
+ok(vu({ type: '' }).ok, 'empty MIME is accepted when the extension is allowed')
+ok(vu({ name: 'ph-01-a.WAV' }).ok && vu({ name: 'ph-01-a.m4a' }).ok, 'wav (any case) and m4a are allowed')
+ok(!vu({ size: 1024 }).ok && !vu({ size: 2047 }).ok && vu({ size: 2048 }).ok, 'size lower bound 2 KB')
+ok(vu({ size: 512000 }).ok && !vu({ size: 512001 }).ok, 'size upper bound 500 KB')
+ok(!vu({ duration: 0.19 }).ok && vu({ duration: 0.2 }).ok && vu({ duration: 3 }).ok && !vu({ duration: 3.01 }).ok, 'duration bounds 0.2-3.0 s')
+eq(vu({ duration: null }).errors, ['재생할 수 없는 파일'], 'unreadable audio')
+ok(!vu({ duration: NaN }).ok && vu({ duration: undefined }).ok, 'NaN duration is unreadable; undefined = not read yet')
+const wrong = vu({ name: 'my-voice.mp3' })
+ok(wrong.ok && wrong.warnings.length === 1 && wrong.warnings[0].includes('ph-01-a.mp3'), 'wrong file name only warns and shows the expected name')
+const badUp = vu({ name: 'x.txt', size: 5, duration: null })
+ok(badUp.errors.length === 3, 'each error reported')
+const upSrc = read('src/utils/phonics/recordingUpload.js')
+ok(!/fetch|XMLHttpRequest|localStorage|sessionStorage|indexedDB/.test(upSrc), 'recordingUpload.js has no network or storage')
 const walk = (d) => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${d}/${e.name}`) : [`${d}/${e.name}`]))
 const importers = walk('src').filter((f) => /\.(jsx?|mjs)$/.test(f) && f !== 'src/data/phonics/imageCandidates.js' && read(f).includes('imageCandidates'))
 eq(importers, ['src/components/admin/PhonicsReviewPanel.jsx'], 'imageCandidates is imported ONLY by the admin review panel')
+const upImp = walk('src').filter((f) => /\.(jsx?|mjs)$/.test(f) && read(f).includes('recordingUpload'))
+eq(upImp, ['src/components/admin/PhonicsReviewPanel.jsx'], 'recordingUpload is imported ONLY by the admin review panel (not phonics/pictureWords student code)')
+const panelSrc = read('src/components/admin/PhonicsReviewPanel.jsx')
+ok(!/fetch\(|XMLHttpRequest|localStorage|sessionStorage|indexedDB|supabase/.test(panelSrc) && panelSrc.includes('revokeObjectURL') && /RECORDINGS\.map\(\(r\) => \(\{ r, v:/.test(panelSrc), 'review panel: no network/storage, object URLs revoked, 42-row preview built from RECORDINGS')
 ok(D.PHONICS_ITEMS.filter((i) => CANDS.includes(i.word)).every((i) => i.image === 'needed' && !i.asset && !i.picture), 'student data: candidate words keep image needed, no asset')
 ok(exists('docs/design/PHONICS_IMAGE_SPEC_2026-10-11.md') && read('docs/design/PHONICS_IMAGE_SPEC_2026-10-11.md').includes('98개'), 'image spec doc exists and mentions the 98')
 

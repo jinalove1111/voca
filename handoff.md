@@ -1,4 +1,35 @@
 # Paul Easy Voca — Handoff
+## 260차 리드 검증 메모 (2026-10-11, 258~260차 통합)
+- **리드가 직접 실행해 본 것**: dummy-env build OK. 정적: `testPhonicsGames` 371, `testPhonicsProgress` 94, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 33, `testLazyChunkGuards` 104, `testRegistryCoverage` 8, `testQaGate` 17, `testPilotTownAllowlist` 32, `testTownKitAssets` 1421/1421, `testTownWorldWiring`, `testStudentPathContracts` 61, `testGrammarVillage` 1608 — 전부 PASS. `verify:quiz` 16개 PASS, `verify:audio-tts` 11개 PASS. `validateRecordings`: 파일 0 / 42 · 승인 0 / 42.
+- **리드가 직접 못 본 것**: 통합 브라우저 검사 16종은 첫 spec 실행 중 메모리 부족(여유 1.3 GB)으로 세션이 프로세스를 종료 → 재시작하지 않음. 259·260차의 브라우저 수치(`phonicsGames` 197, `phonicsReview` 44, `phonicsProgress` 62, `pictureWordGames` 150, `pictureWordPractice` 107, `pictureWordReview` 29)는 구현 담당 보고. Speaking·Writing·Unit·학생 홈·관리자·마을 spec은 258차 이후 재실행 없음(해당 화면 소스는 a8a37b65 이후 변경 0, 마을은 `worldArt.js`·`villageArt.js`의 크기 표 교체만).
+- **리드 수정 1건**: 260차가 kit 가드를 지나가려고 경로를 문자열 조합(`TOWN + 'kit/...'`)으로 적은 것을 평범한 표기(`town kit: animals/duck.webp`)로 교체. import 없음·썸네일 없음은 동일, 핀은 실제 파일 존재를 계속 확인.
+- **번들**: 합계 2.200 MB, 여유 수십 바이트. 다음 기능은 실제 절감 또는 운영자의 측정 기준 결정이 먼저. 260차에서 용량 때문에 뺀 UI: 이미지 우선순위 열·필터, Book별 시험 표, 반복 오답 표, 음소 표 정렬, 상담 요약 추세 문장(함수·검사·문서는 있음).
+- **남은 임시 파일(추적 안 됨)**: `dist-r15/`, `tests/e2e/_r15.spec.mjs` — 훅이 삭제를 막아 그대로 둠. 운영자가 지워도 됨.
+
+## 260차 (2026-10-11): 녹음 등록 미리보기 + 이미지 우선순위 + 학습 발달 샘플 화면 v2
+- **먼저 고친 것**: `testTownKitAssets`가 `imageCandidates.js`의 kit 참조 때문에 FAIL이던 것(257차 도입). 허용 목록은 건드리지 않고, kit 후보 4개(duck·fox·tent·gate)는 import 없이 경로 글자만 보인다("마을 kit 그림 — 파일 경로만 표시", 경로는 `TOWN + 'kit/...'`로 조합 — 가드가 소스 글자를 검색하므로). 썸네일은 cat·tree·lamp 3개. `testTownKitAssets` 1421/1421.
+- **이미지 우선순위**: `imagePriority(bookNo)`(P1 = Book 1, P2 = Book 2, P3 = Book 3~5), 제작 대기 105개 = P1 13 / P2 14 / P3 78. `PHONICS_IMAGE_SPEC` 부록에 P1 그리기 지시. **이미지는 만들지 않았다**(생성 도구 없음). 재확인에서 진짜 중복 0 — `dog`/`rope`/`boot`는 dog bowl·hot dog / skipping rope / wellington boot와 다른 그림이라 계속 제작 대기. **관리자 표의 P1/P2/P3 열·필터 UI는 번들 한도 때문에 못 붙였다**(약 0.4 KB 필요).
+- **녹음 등록 미리보기(관리자, 메모리 전용)**: `utils/phonics/recordingUpload.js`의 `validateUpload`, 기존 42행 녹음 표에 "미리보기" 열을 합쳤다(표를 둘로 두지 않아 -774 B). 실제 등록 줄은 0 / 42 · 0 / 42 그대로, 학생 화면 누출 없음(정적 핀 + 같은 컨텍스트 학생 화면에서 2단계 잠김 확인).
+- **학습 발달 v2**: `progress.js`에 8개 순수 함수 + 빈 샘플 학생 G + 두 번 시험 본 샘플(A·B). 학생 화면: 단원 상태 칸 · 변화 문구 · 복습 추천 · 철자+대표 단어(발음 기호 없음) · 샘플 전환/빈 상태 · "지금은 점수가 저장되지 않아요". 관리자: 기록 없음 행 · 취약 영역 · 음소별 오답 표(`ppa-weak`를 대체). **번들 때문에 못 붙인 관리자 UI**: Book별 시험 표(≈0.9 KB), 반복해서 틀리는 문제(≈0.7 KB), 오답 표 정렬 버튼(≈0.3 KB), 학부모 요약 변화 문장(≈0.1 KB). 함수·정적 테스트·문서는 완료.
+- **검증**: dummy-env build OK; `testPhonicsProgress` 94, `testPhonicsGames` 371, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 33, `testLazyChunkGuards`, `testRegistryCoverage` 8, `testQaGate` 17, `testTownKitAssets` 1421, `validateRecordings` 오류 없음. 브라우저: phonicsReview 44/44, phonicsProgress 62/62, phonicsGames 197/197, pictureWordReview 29/29.
+- **번들**: 핵심 JS 합계 2,191,846 → 2,199,984 B(예산 2.2 MB, 남은 여유 16 B). 예산·제외 규칙은 건드리지 않았다. 다음 작업은 번들을 먼저 줄여야 한다.
+- 설계 문서 `PHONICS_PROGRESS` 8절(접근 권한 검토; SQL 초안 불변), `PHONICS_ADVENTURE`에 실제 등록 절차. SQL·push·DB·네트워크·새 저장소 키 0. `dist-r15/`, `tests/e2e/_r15.spec.mjs`는 이전 에이전트 산출물이라 그대로 두었다.
+
+## 259차 (2026-10-11): PAUL PHONICS Book 1 — 소리 알아듣기와 단어 읽기를 나누고 10단계 흐름·게임 다듬기
+- **무엇**: Book 1(단모음)은 자음 전이라 `skill: 'sound'`(자음은 회색 도우미 글자), Book 2~5는 `'reading'`. 허브는 10단계를 3묶음(만나요·말해요·놀아요)으로 보이고 purple "시작하기"는 다음 1개뿐, 한 행은 "✓ 오늘 했어요"(메모리 기록에서만 파생 — 저장·완료 아님), 잠긴 행은 버튼 없는 한 줄, 발음 기호 숨김. 2단계 "선생님 소리 듣기"는 녹음 0개라 조용히 잠김("선생님 목소리는 곧 만나요", 발음·오디오 0).
+- **게임**: Unit 1 Bubble Pop은 감지 과제(두 풍선 [a, 다른 소리], 8문제 = a 있는 단어 5 + 없는 단어 3) — **교육학 판단이라 needsReview**. 모든 풍선은 단어를 한 번 듣기 전에는 잠김, 정답 뒤 작은 카드로 `다음`이 360×640에 보임, 칭찬 3문구 순환, 연습/도전 토글 제거(소리 확인만 힌트 없음·한 번만 고름). Book 1 Word Train = 회색 도우미 칸 + 빈 모음 칸 1개 + 모음 타일 5개. 소리 확인 5문제 → `unitTest { score, total }` 메모리 기록 1건, "다시 만나기". 망치: 글자 이름/소리 음성을 넣지 않음(이유는 설계 문서), `aria-label`·완성 시 포커스. 숨은 글자: Unit 목표 글자 칸 먼저 가림. 그림 시험 오답은 amber.
+- **규칙 15**: 256차 이전 WordTrain/CSS로 임시 빌드해 256차 단언을 돌림 → FAIL이지만 이유는 결과 칸(`pwt-result`) 부재뿐, "기차가 돌아온다"는 재현 안 됨(원인 미확정은 그대로).
+- **검증**: dummy-env build OK, `testPhonicsGames` 368, `testPictureWordGames` 142, `testPhonicsProgress` 59, `testPictureWords` 754, `testBundleBudget` 33, `testLazyChunkGuards` 104, `testRegistryCoverage` 8, `testQaGate` 17 전부 PASS. 브라우저: `phonicsGames.spec` 197, `pictureWordGames.spec` 150, `pictureWordPractice.spec` 107.
+- **번들**: 핵심 JS 합계 2,182 KB → 2,192 KB(예산 2.2 MB, 남은 여유 ≈ 8.0 KB; PaulPhonics 청크 +8 KB). 예산·제외 규칙은 건드리지 않음.
+- **하지 않은 것**: 소리 녹음/이미지 생성 0, 관리자 파일·`progress.js` 등 소유 파일 수정 0, SQL 0, push 0. `SfxControl` 위치 이동(이미 화면당 한 번)·잘못 누른 타일의 클립 재생(녹음 0개)은 보류.
+- **정리 필요**: 저장소 훅이 재귀 강제 삭제 명령을 막아 임시 산출물이 남았다 — 안 쓰는 `dist-r15/`(빌드 산출물)와 `tests/e2e/_r15.spec.mjs`(규칙 15 탐침)는 추적되지 않은 채 있다. 사람이 지워도 된다.
+
+## 258차 (2026-10-11): 안정성 — 낡은 onGoTown 핀 재고정 + 번들 -16.5 KB
+- **핀 드리프트 원인**: 66047a57이 `onGoTown`을 `paulTown2_5dEnabled ? proto25d : townV1Enabled ? town : null`로 의도적으로 확장해 `testPilotTownAllowlist`의 `onGoTown={townV1Enabled ?` 리터럴 핀이 낡음(verify:quiz FAIL). 제품 코드는 그대로, 핀을 식 전체(2.5D 분기 먼저 → townV1Enabled → town → `: null`)로 더 엄격히 교체. 변이 검증: `townV1Enabled ?`를 `true ?`로 바꾸면 32중 1 FAIL(원복함). verify:quiz 16개 스크립트 전부 PASS.
+- **번들**: 핵심 JS 합계 2.198 → 2.182 MB(-16.5 KB). `manifest-*.js`(19.6 KB)는 town kit manifest.json 전체(출처/품질 필드)를 런타임이 w/h만 쓰려고 번들한 것 → `scripts/town/buildKitSizes.mjs`가 만든 슬림 `kit/kitSizes.js`(2.9 KB)로 교체(worldArt/villageArt). `testTownKitAssets`가 동기 고정, `testGrammarVillage` 핀을 kitSizes로 갱신. 예산/제외 불변.
+- **하지 않은 것**: pictureWords.json 미사용 필드(suggested/autoLink/newCandidate ≈ 11 KB) 제거는 testPictureWords가 해당 필드를 핀으로 쓰므로 보류. `signpost@2x-*.js`는 이미지가 아니라 공유 모듈 청크 이름일 뿐. 헤드룸 확대는 "start path" 합계가 AdminScreen(346 KB)·lazy 청크를 포함하는 정의 자체를 운영자가 재검토해야 함(미적용).
+- 기존 FAIL(내 변경 아님): `testTownKitAssets`의 `src/data/phonics/imageCandidates.js`가 kit을 허용 디렉터리 밖에서 참조(Phonics 작업 소관).
+
 _257차 갱신: 2026-10-11 (257차 — **PAUL PHONICS 이미지 감사 + 관리자 검토 패널 확장 + 글자 카드 + 학습 발달 설계(샘플 화면)**: 이미지 필요 105개 중 7개는 Paul Town 기존 그림 후보(승인 전), 새 제작 98개는 사양 문서로. 그림 없는 단어는 `pw-card--text` 카드. 학습 발달은 순수 함수 + 가상 `샘플반` + 샘플 화면 2개 + 실행 안 한 SQL 초안. 학생 기록 저장·DB 실행·네트워크 0)_
 _256차 갱신: 2026-10-11 (256차 — **PAUL PHONICS 품질 개선**: 검수 반영 단어 210개·Unit 정리, Bubble Pop 복습 섞기(정답이 계속 같은 글자이던 문제), Word Train 출발 기차 고정 + 완성 단어 칸, 선생님 녹음 42개 등록·승인·검증 구조(녹음 파일 0개, 모든 Unit 임시). 아래 256차 섹션 참고.)
 _255차 갱신: 2026-10-11 (255차 — **PAUL PHONICS 43 Unit(구조 승인, 전부 임시) 적용 + 관리자 읽기 전용 검토 탭**: 24 Unit 초안을 운영자가 구조만 승인한 43 Unit(5/7/6/11/14)으로 교체. Sound Bubble Pop·Word Train은 그림 없는 단어도 처리, 그림이 필요한 단계는 그림 준비된 단어만. 녹음 42개는 모두 대기. 정적 테스트·브라우저 스펙 갱신. 단어·소리·이미지·음성은 승인 전.)

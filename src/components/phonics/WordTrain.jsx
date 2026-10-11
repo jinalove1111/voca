@@ -1,8 +1,9 @@
 // Word Train (253차 시제품, 254차 Unit 연결): 소리 블록(글자 묶음) 타일을 차례로 눌러 기차 칸을 채워 단어를 만든다. 상태는 React state뿐 — 저장·네트워크·보상 0.
 // 영어 철자는 완성하기 전에는 보여 주지 않는다(조건부 마운트, 그림 alt는 중립). 발음은 단어 전체만(finish → playEn).
 // 소리 하나는 선생님이 승인한 녹음이 있을 때만 들려준다(playPhonemes는 승인 없으면 아무것도 안 함). 출발한 기차는 다시 돌아오지 않고, 같은 자리에 완성한 단어(pwt-result)가 남는다.
+// Book 1(ctx.vowelTrain): 자음 칸은 회색 도우미 글자로 미리 채워져 있고 모음 칸 하나만 비어 있다 — 아이는 들리는 모음 타일(a e i o u) 하나를 고른다. 틀려도 정답을 알려 주지 않는다.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { phonicsAttempt, trainRound, trainStart, trainTap } from '../../utils/phonics/games.js'
+import { phonicsAttempt, trainRound, trainRoundVowel, trainStart, trainTap, vowelTap } from '../../utils/phonics/games.js'
 import { playPhonemes, allApproved } from '../../utils/phonics/playPhonemes.js'
 import { getSfxSettings, playSfx, SUCCESS_MS } from '../../utils/pictureWords/sfx.js'
 import { GamePicture, PwProgress, playEn, useReducedMotion } from '../pictureWords/pictureImg.jsx'
@@ -26,7 +27,10 @@ function Fly({ text, dx, dy, from, onEnd }) {
 }
 
 export default function WordTrain({ item, seed, index, total, studentId, onRecord, onNext, ctx }) {
-  const round = useMemo(() => trainRound(item, seed, { learned: ctx?.learned }), [item, seed]) // eslint-disable-line react-hooks/exhaustive-deps
+  const vowelMode = !!ctx?.vowelTrain
+  const round = useMemo(() => (vowelMode ? trainRoundVowel(item, seed) : trainRound(item, seed, { learned: ctx?.learned })), [item, seed]) // eslint-disable-line react-hooks/exhaustive-deps
+  const slot = vowelMode ? round.target.slot : -1
+  const nextBtn = useRef(null)
   const [st, setSt] = useState(() => trainStart(round))
   const [fx, setFx] = useState(null) // 방금 틀린 타일 id (흔들림 효과용)
   const [flies, setFlies] = useState([])
@@ -38,6 +42,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
   const timers = useRef([])
   const reduced = useReducedMotion()
   const graphemes = round.target.graphemes
+  useEffect(() => { if (st.done) nextBtn.current?.focus({ preventScroll: true }) }, [st.done])
 
   const stopAll = () => { stopPh.current?.(); stopPh.current = null; timers.current.forEach(clearTimeout); timers.current = []; cancel() }
   useEffect(() => stopAll, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -51,7 +56,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
   const tap = (tile, el) => {
     const cur = stRef.current
     if (cur.done || cur.usedTileIds.includes(tile.id)) return
-    const next = trainTap(cur, tile.id)
+    const next = vowelMode ? vowelTap(cur, tile.id) : trainTap(cur, tile.id)
     stRef.current = next
     setSt(next)
     if (next.last === 'wrong') {
@@ -61,9 +66,9 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
     }
     if (!next.done) { playSfx('right'); playPhonemes([item.phonemes[cur.placed]]) } // 마지막 칸의 성공음은 finish()가 낸다
     if (!reduced && el) {
-      const to = carRefs.current[cur.placed]?.getBoundingClientRect()
+      const to = carRefs.current[vowelMode ? slot : cur.placed]?.getBoundingClientRect()
       const b = el.getBoundingClientRect()
-      if (to) setFlies((f) => [...f, { key: ++flyKey.current, text: tile.grapheme, car: cur.placed, from: { x: b.left, y: b.top, w: b.width, h: b.height }, dx: to.left + (to.width - b.width) / 2 - b.left, dy: to.top + (to.height - b.height) / 2 - b.top }])
+      if (to) setFlies((f) => [...f, { key: ++flyKey.current, text: tile.grapheme, car: vowelMode ? slot : cur.placed, from: { x: b.left, y: b.top, w: b.width, h: b.height }, dx: to.left + (to.width - b.width) / 2 - b.left, dy: to.top + (to.height - b.height) / 2 - b.top }])
     }
     if (next.done) {
       if (allApproved(item.phonemes)) { // 성공음 → 소리 하나씩(350ms 간격) → 단어 전체
@@ -91,22 +96,24 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
         <div className="relative">
           <div data-testid="pwt-text-card" className="pw-card pw-card--text">
             <span className="pw-card-tag">듣기 단어</span>
-            <p data-testid="pwt-listen-only" className="text-base font-black text-gray-800">잘 듣고 소리 블록을 이어 보세요</p>
+            <p data-testid="pwt-listen-only" className="text-base font-black text-gray-800">{vowelMode ? '잘 듣고 빈 칸에 들어갈 모음을 골라요' : '잘 듣고 소리 블록을 이어 보세요'}</p>
           </div>
           {st.done && !reduced && <Sparkles />}
         </div>
       )}
       {item.ko && <p data-testid="pwt-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>}
       <button type="button" data-testid="pwt-listen" onClick={() => playEn(item.word)} className={`${BTN} w-full bg-sky-100 text-sky-700`}>🔊 듣기</button>
-      <p className="text-center text-sm font-bold text-gray-600">소리 블록을 차례로 이어 보세요</p>
+      <p className="text-center text-sm font-bold text-gray-600">{vowelMode ? '회색 글자는 도우미예요. 빈 칸의 모음을 골라요' : '소리 블록을 차례로 이어 보세요'}</p>
       <div className="pwt-track">
         <div data-testid="pwt-train" className={`pwt-train ${st.done ? 'pwt-depart' : ''}`}>
           <span className="pwt-engine" aria-hidden="true">🚂</span>
           {graphemes.map((g, i) => {
-            const filled = i < st.placed
+            const helper = vowelMode && i !== slot
+            const filled = helper || (vowelMode ? st.done : i < st.placed)
+            const now = vowelMode ? i === slot : i === st.placed
             return (
-              <span key={i} ref={(e) => { carRefs.current[i] = e }} data-testid={`pwt-car-${i}`} data-filled={filled ? 'true' : 'false'}
-                className={`pw-cell flex items-center justify-center rounded-lg px-1 text-2xl font-black ${filled ? 'pw-slot-on' : i === st.placed ? 'pw-slot pw-slot-now' : 'pw-slot'}`}>
+              <span key={i} ref={(e) => { carRefs.current[i] = e }} data-testid={`pwt-car-${i}`} data-filled={filled ? 'true' : 'false'} data-helper={helper ? 'true' : undefined}
+                className={`pw-cell flex items-center justify-center rounded-lg px-1 text-2xl font-black ${helper ? 'border-2 border-gray-300 bg-gray-100 text-gray-400' : filled ? 'pw-slot-on' : now ? 'pw-slot pw-slot-now' : 'pw-slot'}`}>
                 {filled ? <span style={flies.some((f) => f.car === i) ? { visibility: 'hidden' } : undefined}>{g}</span> : ''}
               </span>
             )
@@ -134,7 +141,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
           <p data-testid="pwt-word" className="break-words text-3xl font-black text-gray-900">{graphemes.join(' · ')}</p>
           <p data-testid="pwt-spelled" className="break-words text-xl font-bold text-gray-600">{item.display}</p>
           <p data-testid="pwt-feedback" data-result="right" className="rounded-2xl bg-green-50 p-2 text-base font-black text-green-700">기차가 출발해요!</p>
-          <button type="button" data-testid="pwt-next" onClick={next} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
+          <button ref={nextBtn} type="button" data-testid="pwt-next" onClick={next} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
         </div>
       )}
     </div>

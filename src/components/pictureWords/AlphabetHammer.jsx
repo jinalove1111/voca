@@ -34,6 +34,8 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
   const slotRefs = useRef({})
   const flyKey = useRef(0)
   const reduced = useReducedMotion()
+  const nextBtn = useRef(null)
+  useEffect(() => { if (st.done) nextBtn.current?.focus({ preventScroll: true }) }, [st.done])
 
   useEffect(() => {
     if (!fx) return undefined
@@ -92,7 +94,7 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
           const shake = fx && fx.id === t.id && !fx.ok
           return (
             <span key={t.id} className="relative inline-block">
-              <button type="button" data-testid={`pwh-tile-${i}`} data-used={used ? 'true' : 'false'} disabled={used || st.done} onClick={(e) => tap(t, e.currentTarget)}
+              <button type="button" aria-label={`글자 ${t.ch}`} data-testid={`pwh-tile-${i}`} data-used={used ? 'true' : 'false'} disabled={used || st.done} onClick={(e) => tap(t, e.currentTarget)}
                 className={`pw-cell pw-tile pw-letter pw-c${i % 4} rounded-2xl px-3 text-3xl font-black btn-press disabled:opacity-40 ${used ? 'scale-75 opacity-30' : ''} ${shake ? 'pw-shake' : ''}`}>{t.ch}</button>
               {fx && fx.id === t.id && (
                 <span className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-3"><span data-testid="pwh-hammer" className="pw-swing block text-6xl leading-none">🔨</span></span>
@@ -110,7 +112,7 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
       {st.done && (
         <div className="space-y-2 text-center">
           <p data-testid="pwh-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
-          <button type="button" data-testid="pwh-next" onClick={() => { cancel(); onNext(st.wrong) }} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
+          <button ref={nextBtn} type="button" data-testid="pwh-next" onClick={() => { cancel(); onNext(st.wrong) }} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
         </div>
       )}
     </div>
