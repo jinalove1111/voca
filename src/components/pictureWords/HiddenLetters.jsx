@@ -5,8 +5,8 @@ import { hiddenRound, hiddenStart, hiddenPick } from '../../utils/pictureWords/g
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { GamePicture, PwProgress, playEn, T3, useReducedMotion, W } from './pictureImg.jsx'
 import { Sparkles, useSuccessThenSpeak } from './gameFx.jsx'
+import { BTN } from './AlphabetHammer.jsx'
 
-const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-xl btn-press disabled:opacity-40'
 const DIFFS = [['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움']]
 
 // 난이도가 바뀌면 호출한 쪽이 key를 바꿔 라운드를 새로 시작한다.

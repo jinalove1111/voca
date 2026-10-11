@@ -6,9 +6,8 @@ import { unitWords } from '../../utils/phonics/curriculum.js'
 import { GameStyle, MUTED, T2, W } from '../pictureWords/pictureImg.jsx'
 import PhonicsAdventure from './PhonicsAdventure.jsx'
 import PhonicsProgress from './PhonicsProgress.jsx'
-import UnitHub from './UnitHub.jsx'
+import UnitHub, { BTN } from './UnitHub.jsx'
 
-const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
 const GRAY = `${BTN} ${W.gray}`
 export const DRAFT_NOTICE_KO = '기본 구조만 승인된 임시 교육과정입니다 — 단어·소리·그림·녹음은 승인 전입니다'
 // 책 표지 색(분홍/민트/하늘/노랑/연보라) — 순수 CSS로 그린 표지와 책등

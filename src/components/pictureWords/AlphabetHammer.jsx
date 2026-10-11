@@ -6,7 +6,7 @@ import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { GamePicture, PwProgress, playEn, T3, useReducedMotion, W } from './pictureImg.jsx'
 import { Sparkles, useSuccessThenSpeak } from './gameFx.jsx'
 
-const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-xl btn-press disabled:opacity-40'
+export const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-xl btn-press disabled:opacity-40'
 
 // 맞은 글자가 타일 자리에서 칸으로 날아간다(FLIP: 타일/칸 rect를 재서 transform 전환). 순수 장식 — 상태는 이미 갱신돼 있다.
 const SWING_MS = 120, FLY_MS = 180 // the tile hops (CSS pw-hop) while the hammer swings, then travels: 300 ms in total

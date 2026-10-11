@@ -10,7 +10,7 @@ import { phonemeClip } from '../../data/phonics/phonemeClips.js'
 import { imgUrl, MUTED, playEn, T2, W } from '../pictureWords/pictureImg.jsx'
 import PhonemeListen, { LOCKED_TEXT_KO } from './PhonemeListen.jsx'
 
-const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
+export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
 const MIN_TEST_WORDS = 4
 const NONE = '단어 준비 중'
 const TEACHER_SOON = '선생님 목소리는 곧 만나요'
@@ -75,8 +75,9 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
   const after = (step) => { const r = rows.slice(rows.findIndex((x) => x.key === step) + 1).find((x) => x.chain && x.state !== 'locked'); return r ? { label: `다음: ${r.title}`, run: r.run } : null }
   const played = attempts.length > 0
   const reviewWhy = missed.length ? `다시 볼 단어 ${missed.length}개` : played ? '틀린 소리가 없어요' : '게임을 하면 열려요'
-  const bubbleLock = !unit.games.includes('B') ? (unit.games.includes('T') ? '이 Unit은 Word Train으로 연습해요' : '철자 게임으로 연습해요') : NONE
-  const trainLock = !unit.games.includes('T') ? (unit.games.includes('B') ? '이 Unit은 Sound Bubble Pop으로 연습해요' : '철자 게임으로 연습해요') : NONE
+  const lock = (g, o, via) => (unit.games.includes(g) ? NONE : unit.games.includes(o) ? `이 Unit은 ${via}으로 연습해요` : '철자 게임으로 연습해요')
+  const bubbleLock = lock('B', 'T', 'Word Train')
+  const trainLock = lock('T', 'B', 'Sound Bubble Pop')
   const testLock = unitTestLock(book)
   const doneBy = (step) => attempts.some((r) => r.step === step)
   const bubble = { key: 'bubble', chain: true, title: 'Sound Bubble Pop', ok: bubbleWords.length > 0, why: bubbleLock, go: true, done: doneBy('bubble') }
