@@ -1,11 +1,12 @@
 // 관리자 전용 — PAUL PHONICS 검토 자료 (255차, 읽기 전용). 43개 Unit은 구조만 승인됐고 전부 임시다.
 // 운영 DB·학생 기록·저장소·네트워크를 쓰지 않는다. 숫자는 데이터에서 그때그때 계산한다(하드코딩 없음).
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BOOKS, DIALECT_NOTES, GAME_NAME, STATUS_LABEL_KO, objectiveKo, prereqKo, recordableTargets, unitLabel } from '../../data/phonics/curriculum.js'
 import { PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
 import { PHONEME_CLIPS, RECORDING_LIST, recordingStatus } from '../../data/phonics/phonemeClips.js'
 import { RECORDINGS, recordingStatuses } from '../../data/phonics/recordings.js'
 import { CANDIDATE_NOTE_KO, IMAGE_CANDIDATES } from '../../data/phonics/imageCandidates.js'
+import { validateUpload } from '../../utils/phonics/recordingUpload.js'
 import { learnedPairs, pairOf, reusedIpas, unitWords, wordDifficulty } from '../../utils/phonics/curriculum.js'
 
 const MARK = { ready: '🖼', needed: '⏳', 'not-needed': '🔤' }
@@ -130,6 +131,59 @@ function WordTable({ stats }) {
   )
 }
 
+// Preview only: a chosen file lives in memory as an object URL (revoked on replace/unmount). Nothing is saved, uploaded or played for students.
+const VERDICT = { pending: '검수 대기', approved: '승인(미리보기)', rejected: '반려(미리보기)' }
+function RecordingPreview() {
+  const [f, setF] = useState({})
+  const urls = useRef({})
+  useEffect(() => () => Object.values(urls.current).forEach((u) => URL.revokeObjectURL(u)), [])
+  const set = (id, patch) => setF((o) => ({ ...o, [id]: { ...o[id], ...patch } }))
+  const pick = (id, file) => {
+    if (urls.current[id]) URL.revokeObjectURL(urls.current[id])
+    if (!file) { delete urls.current[id]; setF((o) => ({ ...o, [id]: undefined })); return }
+    urls.current[id] = URL.createObjectURL(file)
+    set(id, { url: urls.current[id], name: file.name, size: file.size, type: file.type, duration: undefined, verdict: 'pending' })
+  }
+  const res = (r) => (f[r.id] ? validateUpload(f[r.id], r) : null)
+  const all = RECORDINGS.map((r) => ({ r, v: res(r) }))
+  const chosen = all.filter((x) => x.v)
+  return (
+    <div data-testid="phr-rec-preview" className="mt-3 border-t-2 border-gray-100 pt-3">
+      <p data-testid="phr-rec-notice" className="rounded-xl bg-rose-50 p-2 text-xs font-black text-rose-800">Preview 전용 — 선택한 파일은 이 브라우저 메모리에만 있고 저장·업로드되지 않습니다. 새로고침하면 사라지며 학생 화면에는 적용되지 않습니다.</p>
+      <p className="mt-2 text-xs font-bold text-gray-700"><span data-testid="phr-rec-real">실제 등록 0 / 42 · 승인 0 / 42</span> · <span data-testid="phr-rec-preview-summary">선택 {chosen.length} · 검증 통과 {chosen.filter((x) => x.v.ok).length} · 승인(미리보기) {chosen.filter((x) => x.v.ok && f[x.r.id].verdict === 'approved').length}</span></p>
+      <div className="mt-2 max-h-96 max-w-full overflow-auto">
+        <table data-testid="phr-rec-table" className="min-w-[48rem] border-collapse">
+          <thead><tr>{['no', 'id', '철자', '예시', '기대 파일', '실제 상태', '미리보기'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+          <tbody>
+            {all.map(({ r, v }) => {
+              const x = f[r.id]
+              return (
+                <tr key={r.id} data-testid="phr-rec-row" data-id={r.id}>
+                  <td className={TD}>{r.no}</td><td className={`${TD} font-mono`}>{r.id}</td><td className={TD}>{r.grapheme}</td><td className={TD}>{r.exampleWord}</td>
+                  <td className={`${TD} font-mono`}>{r.fileBase}.mp3</td><td className={`${TD} whitespace-nowrap`}>{REC_STATE.missing}</td>
+                  <td className={TD}>
+                    <input type="file" data-testid={`phr-rec-file-${r.id}`} accept=".mp3,.m4a,.wav" aria-label={`${r.id} 파일`} onChange={(e) => pick(r.id, e.target.files[0])} className="max-w-[10rem] text-xs" />
+                    {x ? (
+                      <div data-testid={`phr-rec-result-${r.id}`} data-ok={v.ok} className="mt-1 space-y-1">
+                        <audio src={x.url} preload="metadata" onLoadedMetadata={(e) => set(r.id, { duration: e.currentTarget.duration })} onError={() => set(r.id, { duration: null })} />
+                        {v.errors.map((m) => <p key={m} className="font-black text-rose-700">{m}</p>)}
+                        {v.warnings.map((m) => <p key={m} className="font-black text-amber-700">{m}</p>)}
+                        <button type="button" data-testid={`phr-rec-play-${r.id}`} disabled={!v.ok} onClick={(e) => e.currentTarget.parentNode.querySelector('audio').play()} className="min-h-[32px] rounded-full bg-purple-100 px-3 font-black text-purple-800 disabled:opacity-40">재생</button>
+                        <span data-testid={`phr-rec-verdict-${r.id}`} className="mx-1 font-black">{VERDICT[v.ok ? x.verdict : 'pending']}</span>
+                        {['approved', 'rejected'].map((k) => <button key={k} type="button" data-testid={`phr-rec-${k}-${r.id}`} disabled={!v.ok} onClick={() => set(r.id, { verdict: k })} className="mr-1 min-h-[32px] rounded-full bg-gray-100 px-2 font-black text-gray-700 disabled:opacity-40">{VERDICT[k]}</button>)}
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 const recs = recordingStatuses([])
 
 export default function PhonicsReviewPanel() {
@@ -186,6 +240,7 @@ export default function PhonicsReviewPanel() {
             </tbody>
           </table>
         </div>
+        <RecordingPreview />
       </section>
 
       <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
