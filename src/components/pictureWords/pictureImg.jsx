@@ -6,8 +6,8 @@ const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, 
 export const imgUrl = (asset) => IMG[`../../assets/pictureWords/${asset}.webp`]
 
 // Picture card (252차): rounded pink-border card around the picture. alt is always the neutral "그림" (the word never appears in the DOM before the child finds it).
-export const GamePicture = ({ word, testid, glow = false }) => (
-  <div data-testid={testid ? `${testid}-card` : undefined} className={`pw-card${glow ? ' pw-glow' : ''}`}>
+export const GamePicture = ({ word, testid, glow = false, small = false }) => (
+  <div data-testid={testid ? `${testid}-card` : undefined} className={`pw-card${small ? ' pw-card-sm' : ''}${glow ? ' pw-glow' : ''}`}>
     <img data-testid={testid} src={imgUrl(word.asset)} alt="그림" draggable={false} className="pw-pic" />
   </div>
 )
@@ -70,7 +70,7 @@ const CSS = `
 @keyframes pbp-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 @keyframes pbp-wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-7deg)}75%{transform:rotate(7deg)}}
 @keyframes pbp-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
-.pbp-float{animation:pbp-float 3s ease-in-out infinite}.pbp-wobble{animation:pbp-wobble .25s ease-in-out}.pbp-pulse{animation:pbp-pulse .5s ease-in-out 2}
+.pbp-float{animation:pbp-float 3s ease-in-out infinite}.pbp-wobble{animation:pbp-wobble .25s ease-in-out}.pbp-pulse{animation:pbp-pulse .8s ease-in-out infinite}
 .pbp-bubble{width:7rem;height:7rem;border-radius:9999px;font-size:3rem;font-weight:900;line-height:1;border:3px solid var(--pw-edge);background:radial-gradient(circle at 30% 28%,#fff 0,var(--pw-bg) 62%);color:#1F2937;box-shadow:0 4px 0 var(--pw-edge);transition:transform .28s ease-out,opacity .28s ease-out}
 .pbp-bubble[data-tried=true]{opacity:.35}
 .pbp-bubble.pbp-pop{transform:scale(1.5);opacity:0;pointer-events:none}
