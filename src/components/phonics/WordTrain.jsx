@@ -7,9 +7,9 @@ import { phonicsAttempt, trainRound, trainRoundVowel, trainStart, trainTap, vowe
 import { playPhonemes, allApproved } from '../../utils/phonics/playPhonemes.js'
 import { getSfxSettings, playSfx, SUCCESS_MS } from '../../utils/pictureWords/sfx.js'
 import { GamePicture, PwProgress, playEn, useReducedMotion } from '../pictureWords/pictureImg.jsx'
+import { BTN, KO, PUR, WRONG } from './SoundBubblePop.jsx'
 import { Sparkles, useSuccessThenSpeak } from '../pictureWords/gameFx.jsx'
 
-const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 
 // 맞은 타일이 제자리에서 기차 칸으로 날아간다(FLIP). 순수 장식 — 상태는 이미 갱신돼 있다.
 const FLY_MS = 200
@@ -101,7 +101,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
           {st.done && !reduced && <Sparkles />}
         </div>
       )}
-      {item.ko && <p data-testid="pwt-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>}
+      {item.ko && <p data-testid="pwt-ko" className={KO}>{item.ko}</p>}
       <button type="button" data-testid="pwt-listen" onClick={() => playEn(item.word)} className={`${BTN} w-full bg-sky-100 text-sky-700`}>🔊 듣기</button>
       <p className="text-center text-sm font-bold text-gray-600">{vowelMode ? '회색 글자는 도우미예요. 빈 칸의 모음을 골라요' : '소리 블록을 차례로 이어 보세요'}</p>
       <div className="pwt-track">
@@ -135,13 +135,13 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
         })}
       </div>
       {flies.map((f) => <Fly key={f.key} text={f.text} dx={f.dx} dy={f.dy} from={f.from} onEnd={() => setFlies((x) => x.filter((y) => y.key !== f.key))} />)}
-      {st.last === 'wrong' && !st.done && <p data-testid="pwt-feedback" data-result="wrong" className="rounded-2xl bg-amber-50 p-2 text-center text-base font-black text-amber-700">다시 해 볼까요?</p>}
+      {st.last === 'wrong' && !st.done && <p data-testid="pwt-feedback" data-result="wrong" className={WRONG}>다시 해 볼까요?</p>}
       {st.done && (
         <div className="space-y-2 text-center">
           <p data-testid="pwt-word" className="break-words text-3xl font-black text-gray-900">{graphemes.join(' · ')}</p>
           <p data-testid="pwt-spelled" className="break-words text-xl font-bold text-gray-600">{item.display}</p>
           <p data-testid="pwt-feedback" data-result="right" className="rounded-2xl bg-green-50 p-2 text-base font-black text-green-700">기차가 출발해요!</p>
-          <button ref={nextBtn} type="button" data-testid="pwt-next" onClick={next} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
+          <button ref={nextBtn} type="button" data-testid="pwt-next" onClick={next} className={PUR}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
         </div>
       )}
     </div>

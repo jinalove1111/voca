@@ -16,10 +16,16 @@ const REVIEW_DEFAULT = '희귀·확인 필요 단어'
 const REC_STATE = { missing: '파일 없음', uploaded: '승인 대기', approved: '승인' }
 const FILTERS = [['all', '전체'], ['ready', '그림 준비'], ['needed', '제작 대기'], ['candidate', '기존 후보'], ['free', '그림 없이'], ['review', '검토 필요']]
 const CAND_WORDS = new Set(IMAGE_CANDIDATES.map((c) => c.word))
+const SCROLL = 'mt-2 max-h-96 max-w-full overflow-auto'
+const H = 'text-sm font-black text-gray-800'
+const SEC = 'min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3'
+const AMBER = 'rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800'
+const ROSE = 'rounded bg-rose-100 px-1 font-black text-rose-700'
 const CHIP = 'rounded-full bg-purple-100 px-2 py-1 text-xs font-black text-purple-800'
 const BTN = 'mr-1 min-h-[32px] rounded-full bg-purple-100 px-2 font-black text-purple-800 disabled:opacity-40'
 const TH = 'whitespace-nowrap border-b-2 border-gray-200 bg-gray-50 px-2 py-1 text-left text-xs font-black text-gray-600'
 const TD = 'border-b border-gray-100 px-2 py-2 align-top text-xs text-gray-700'
+const TDN = TD + ' whitespace-nowrap'
 
 function useStats() {
   return useMemo(() => {
@@ -35,7 +41,7 @@ function useStats() {
     const by = (s) => PHONICS_ITEMS.filter((i) => i.image === s)
     const approved = RECORDING_LIST.filter((r) => recordingStatus(r.ipa) === 'approved').length
     const needed = by('needed')
-    return { units, unlearned, where, review: PHONICS_ITEMS.filter((i) => i.needsReview), candidates: needed.filter((i) => CAND_WORDS.has(i.word)), newImages: needed.filter((i) => !CAND_WORDS.has(i.word)).length, ready: by('ready'), needed: by('needed').map((i) => i.word).sort(), free: by('not-needed').map((i) => i.word).sort(), approved }
+    return { units, unlearned, where, review: PHONICS_ITEMS.filter((i) => i.needsReview), candidates: needed.filter((i) => CAND_WORDS.has(i.word)), newImages: needed.filter((i) => !CAND_WORDS.has(i.word)).length, ready: by('ready'), needed: needed.map((i) => i.word).sort(), free: by('not-needed').map((i) => i.word).sort(), approved }
   }, [])
 }
 
@@ -53,18 +59,18 @@ function UnitRow({ b, u }) {
   return (
     <tr data-testid={`phr-unit-${b.id}-${u.id}`} data-status={u.status}>
       <td className={`${TD} whitespace-nowrap font-black`}>Unit {u.id.slice(1)}</td>
-      <td className={`${TD} whitespace-nowrap`}><span className="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">{STATUS_LABEL_KO[u.status]}</span></td>
+      <td className={TDN}><span className={AMBER}>{STATUS_LABEL_KO[u.status]}</span></td>
       <td className={TD}>{u.targets.length ? [...new Set(u.targets.map((x) => `/${x.ipa}/`))].join(' ') : '—'}</td>
       <td className={`${TD} font-black text-pink-600`}>{unitLabel(u)}</td>
       <td className={TD}>
         <div className="flex min-w-[10rem] flex-wrap gap-x-2 gap-y-1">
-          {words.map((w) => <span key={w.id} data-image={w.image} title={MARK_TITLE[w.image]} className="whitespace-nowrap">{MARK[w.image]} {w.word}{w.needsReview ? <span data-testid="phr-unit-review" title={REVIEW_REASON[w.word] || REVIEW_DEFAULT} className="ml-0.5 rounded bg-rose-100 px-1 font-black text-rose-700">⚠</span> : null}</span>)}
+          {words.map((w) => <span key={w.id} data-image={w.image} title={MARK_TITLE[w.image]} className="whitespace-nowrap">{MARK[w.image]} {w.word}{w.needsReview ? <span data-testid="phr-unit-review" title={REVIEW_REASON[w.word] || REVIEW_DEFAULT} className={`ml-0.5 ${ROSE}`}>⚠</span> : null}</span>)}
         </div>
       </td>
       <td className={TD}>{u.games.split('').map((g) => GAME_NAME[g]).join(' · ')}</td>
-      <td className={`${TD} whitespace-nowrap`}>{rec.length ? `승인 0 / 필요 ${rec.length}` : '녹음 불필요'}</td>
-      <td className={`${TD} whitespace-nowrap`}>{ready} / {words.length}</td>
-      <td className={`${TD} whitespace-nowrap`}>{u.difficulty}</td>
+      <td className={TDN}>{rec.length ? `승인 0 / 필요 ${rec.length}` : '녹음 불필요'}</td>
+      <td className={TDN}>{ready} / {words.length}</td>
+      <td className={TDN}>{u.difficulty}</td>
       <td className={TD}>{prereqKo(b.id, u.id)}</td>
       <td className={TD}>{objectiveKo(b, u)}{notes.length ? ` · ${notes.join(' · ')}` : ''}</td>
     </tr>
@@ -73,8 +79,8 @@ function UnitRow({ b, u }) {
 
 function WordList({ testid, title, words }) {
   return (
-    <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
-      <p className="text-sm font-black text-gray-800">{title} <span data-testid={`${testid}-count`}>{words.length}</span></p>
+    <section className={SEC}>
+      <p className={H}>{title} <span data-testid={`${testid}-count`}>{words.length}</span></p>
       <ul data-testid={testid} className="mt-2 flex flex-wrap gap-1">
         {words.map((w) => <li key={w} data-testid={`${testid}-item`} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-700">{w}</li>)}
       </ul>
@@ -84,8 +90,8 @@ function WordList({ testid, title, words }) {
 
 function CandidateSection({ list }) {
   return (
-    <section data-testid="phr-candidates" className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
-      <p className="text-sm font-black text-gray-800">기존 에셋 후보 <span data-testid="phr-candidates-count">{list.length}</span> <span className="text-xs font-bold text-gray-500">({CANDIDATE_NOTE_KO})</span></p>
+    <section data-testid="phr-candidates" className={SEC}>
+      <p className={H}>기존 에셋 후보 <span data-testid="phr-candidates-count">{list.length}</span> <span className="text-xs font-bold text-gray-500">({CANDIDATE_NOTE_KO})</span></p>
       <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {IMAGE_CANDIDATES.map((c) => (
           <li key={c.word} data-testid="phr-candidate" data-word={c.word} className="min-w-0 rounded-xl bg-gray-50 p-2 text-center text-xs text-gray-700">
@@ -105,24 +111,24 @@ function WordTable({ stats }) {
   const pass = { all: () => true, ready: (i) => i.image === 'ready', needed: (i) => i.image === 'needed', candidate: (i) => CAND_WORDS.has(i.word) && i.image === 'needed', free: (i) => i.image === 'not-needed', review: (i) => i.needsReview }[filter]
   const rows = PHONICS_ITEMS.filter(pass)
   return (
-    <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
-      <p className="text-sm font-black text-gray-800">단어 표 <span data-testid="phr-words-count">{rows.length}</span></p>
+    <section className={SEC}>
+      <p className={H}>단어 표 <span data-testid="phr-words-count">{rows.length}</span></p>
       <div data-testid="phr-filter" className="mt-2 flex flex-wrap gap-1">
         {FILTERS.map(([k, t]) => <button key={k} type="button" data-testid={`phr-filter-${k}`} aria-pressed={filter === k} onClick={() => setFilter(k)} className={`min-h-[36px] rounded-full px-3 text-xs font-black ${filter === k ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-800'}`}>{t}</button>)}
       </div>
-      <div className="mt-2 max-h-96 max-w-full overflow-auto">
+      <div className={SCROLL}>
         <table data-testid="phr-words" className="min-w-[44rem] border-collapse">
           <thead><tr>{['단어', 'Book·Unit', '철자 분해', '음가', '난이도', '그림 상태', '검토'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.word} data-testid="phr-word" data-word={i.word} data-image={i.image}>
                 <td className={`${TD} font-black text-gray-900`}>{i.word}</td>
-                <td className={`${TD} whitespace-nowrap`}>{stats.where.get(i.word)}</td>
+                <td className={TDN}>{stats.where.get(i.word)}</td>
                 <td className={TD}>{i.graphemes.join(' · ')}</td>
                 <td className={TD}>{i.phonemes.map((p) => `/${p}/`).join(' ')}</td>
                 <td className={TD}>{wordDifficulty(i)}</td>
-                <td className={`${TD} whitespace-nowrap`}>{MARK[i.image]} {MARK_TITLE[i.image]}{CAND_WORDS.has(i.word) && i.image === 'needed' ? ' (기존 후보)' : ''}</td>
-                <td className={TD}>{i.needsReview ? <span data-testid="phr-word-review" className="rounded bg-rose-100 px-1 font-black text-rose-700">검토 필요 · {REVIEW_REASON[i.word] || REVIEW_DEFAULT}</span> : ''}</td>
+                <td className={TDN}>{MARK[i.image]} {MARK_TITLE[i.image]}{CAND_WORDS.has(i.word) && i.image === 'needed' ? ' (기존 후보)' : ''}</td>
+                <td className={TD}>{i.needsReview ? <span data-testid="phr-word-review" className={ROSE}>검토 필요 · {REVIEW_REASON[i.word] || REVIEW_DEFAULT}</span> : ''}</td>
               </tr>
             ))}
           </tbody>
@@ -153,7 +159,7 @@ function RecordingPreview() {
     <div data-testid="phr-rec-preview" className="mt-2">
       <p data-testid="phr-rec-notice" className="rounded-xl bg-rose-50 p-2 text-xs font-black text-rose-800">Preview 전용 — 선택한 파일은 이 브라우저 메모리에만 있고 저장·업로드되지 않습니다. 새로고침하면 사라지며 학생 화면에는 적용되지 않습니다.</p>
       <p className="mt-2 text-xs font-bold text-gray-700"><span data-testid="phr-rec-real">실제 등록 0 / 42 · 승인 0 / 42</span> · <span data-testid="phr-rec-preview-summary">선택 {chosen.length} · 검증 통과 {chosen.filter((x) => x.v.ok).length} · 승인(미리보기) {chosen.filter((x) => x.v.ok && f[x.r.id].verdict === 'approved').length}</span></p>
-      <div className="mt-2 max-h-96 max-w-full overflow-auto">
+      <div className={SCROLL}>
         <table data-testid="phr-recordings" className="min-w-[56rem] border-collapse">
           <thead><tr>{['no', 'id', '소리', '대표 철자', '예시 단어', '파일 이름 규칙', '상태', '미리보기'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
           <tbody>
@@ -164,7 +170,7 @@ function RecordingPreview() {
                   <td className={TD}>{r.no}</td><td className={`${TD} font-mono`}>{r.id}</td><td className={`${TD} font-black text-gray-900`}>/{r.ipa}/</td>
                   <td className={TD}>{r.grapheme}</td><td className={TD}>{r.exampleWord}</td>
                   <td className={`${TD} font-mono`}>{r.fileBase}.mp3</td>
-                  <td className={`${TD} whitespace-nowrap`}><span className="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">{REC_STATE[recs[n].status]}</span></td>
+                  <td className={TDN}><span className={AMBER}>{REC_STATE[recs[n].status]}</span></td>
                   <td data-testid="phr-rec-row" className={TD}>
                     <input type="file" data-testid={`phr-rec-file-${r.id}`} accept=".mp3,.m4a,.wav" aria-label={`${r.id} 파일`} onChange={(e) => pick(r.id, e.target.files[0])} className="max-w-[10rem] text-xs" />
                     {x ? (
@@ -208,7 +214,7 @@ export default function PhonicsReviewPanel() {
 
       {BOOKS.map((b) => (
         <section key={b.id} className="min-w-0 space-y-2">
-          <p className="text-sm font-black text-gray-800">Book {b.no} · {b.titleEn} · {b.titleKo} <span className="text-xs font-bold text-gray-500">(Unit {b.units.length})</span></p>
+          <p className={H}>Book {b.no} · {b.titleEn} · {b.titleKo} <span className="text-xs font-bold text-gray-500">(Unit {b.units.length})</span></p>
           <div className="max-w-full overflow-x-auto rounded-2xl border-2 border-gray-200 bg-white">
             <table data-testid={`phr-book-${b.id}`} className="min-w-[64rem] border-collapse">
               <thead>
@@ -226,13 +232,13 @@ export default function PhonicsReviewPanel() {
       <CandidateSection list={s.candidates} />
       <WordTable stats={s} />
 
-      <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
-        <p className="text-sm font-black text-gray-800">녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className="text-xs font-bold text-gray-500">(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
+      <section className={SEC}>
+        <p className={H}>녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className="text-xs font-bold text-gray-500">(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
         <RecordingPreview />
       </section>
 
-      <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
-        <p className="text-sm font-black text-gray-800">방언 메모 <span className="text-xs font-bold text-gray-500">(영국식 RP 기준)</span></p>
+      <section className={SEC}>
+        <p className={H}>방언 메모 <span className="text-xs font-bold text-gray-500">(영국식 RP 기준)</span></p>
         <ul data-testid="phr-dialect" className="mt-2 list-disc space-y-1 pl-5 text-xs text-gray-700">
           {DIALECT_NOTES.map((t) => <li key={t} className="break-words">{t}</li>)}
         </ul>
