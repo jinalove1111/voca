@@ -183,3 +183,42 @@ bell, can, duck, fan, fox, gum, hill, kid, leg, mat, tap, van, vet, zip
 ### P3 (Book 3~5)
 
 bike, bird, bone, boot, boy, brick, cap, cape, chick, chin, chip, cloth, cloud, coat, coin, cone, corn, cow, crab, cub, cube, dish, drum, farm, fish, flag, flute, food, foot, fork, frog, gate, globe, hair, hand, head, horn, king, lamp, leaf, light, moon, moth, mule, neck, nest, night, oil, park, plum, prune, rain, ring, road, rock, rope, sea, shell, ship, shop, snail, snow, spoon, stair, star, storm, tent, thread, town, toy, tree, truck, tube, whale, whip, wing, wood, zoo
+
+## Book 1 제작 목록 (262차, 2026-10-12)
+
+운영자 요청 "Book 1 실제 수업 준비". Book 1 단어 25개 중 그림이 준비된 것은 9개, **새로 만들어야 하는 것은 13개**, 그림 없이 배우는 것은 3개다(관리자 검토 탭 맨 위 "Book 1 수업 준비"에서 데이터로 계산해 보인다). **이 단계에서도 그림은 만들지 않았고 추가하지 않았다** — 기존 승인 그림 파일·매핑·`pictureWords.json`은 변경 0.
+
+정정 한 줄: 위 260차 절에서 말한 "관리자 단어 표의 P1/P2/P3 필터"는 **번들 예산 때문에 만들지 않았다**. Book 1에 대해서는 이 절의 "Book 1 수업 준비" 화면이 그 역할을 대신한다(Book 2~5 우선순위 필터는 아직 없음).
+
+### 13개 제작 목록
+
+중복 재확인(262차): 13개 단어를 승인·보류를 포함한 그림 단어 151개 전부(`learnableWords()`와 전체 `pictureWords.json`)와 Paul Town 에셋 파일 이름에 대해 단어 그대로·복수형·합성어(`dog bowl`, `hot dog`, `sun hat`, `bus stop`, `flower pot` 등)·한국어 뜻으로 대조했다. **같은 그림인 승인 중복은 0건**이다.
+
+| Unit | 단어 | 뜻 | 그릴 것 | 피할 것 | 확인한 비슷한 항목 (판정) |
+|---|---|---|---|---|---|
+| 1 | cat | 고양이 | 앉아 있는 고양이 한 마리(옆모습) | 호랑이·사자처럼 보이는 줄무늬 | 마을 `animals/cat.webp` — 같은 사물이지만 **승인 전 후보**(학습용 아님). 쓰려면 운영자 승인 필요 |
+| 1 | hat | 모자 | 챙이 있는 모자 하나 | 야구 모자(cap과 구별), 사람 얼굴이 같이 나오는 그림 | 일치 항목 없음 |
+| 1 | map | 지도 | 접힌 종이 지도 한 장 | 글자·지명·지도 앱 화면 | 일치 항목 없음 |
+| 2 | bed | 침대 | 침대 한 개(옆에서, 베개 포함) | 사람이 누운 모습 | 마을 `flower-bed-border`, `vegetable-bed` = 화단(다른 그림) |
+| 3 | pig | 돼지 | 분홍색 돼지 한 마리 | 저금통 돼지(piggy bank) | 일치 항목 없음 |
+| 3 | lip | 입술 | 입술(얼굴 아래쪽) | 립스틱 상표·성인 화장 | `tulips`(flower, MULTIPLE·보류) = 이름만 겹침, 다른 그림 |
+| 4 | dog | 개 | 서 있는 강아지 한 마리 | 그릇이 같이 나오는 그림, 핫도그 | `dog bowl`(승인, 그릇) · `hot dog`(승인, 음식) = **다른 그림**. 마을 `dog-house`(kit) = 개집, 다른 그림 |
+| 4 | box | 상자 | 뚜껑 열린 골판지 상자 | 우체통·선물 상자 | `lunchbox`, `sandbox`(sandpit)(승인) · 마을 `post-box`, `gift-box`, `compost-box`, `phone-box` = **모두 다른 그림** |
+| 4 | pot | 냄비 | 손잡이 둘 달린 요리용 냄비 | 화분, 찻주전자 | `teapot`(승인 `teapot1`) · `teacup`(파일 teapot, MISMATCH, 보류) · 마을 `flower-pot`, `strawberry-pot`, `sunflower-pot` = **다른 그림**(화분·주전자) |
+| 5 | sun | 해 | 단순한 해 | 해바라기, 선글라스 낀 해 | `sunflower`(승인) = 다른 그림. 마을 `sundial`(kit) = 해시계, 다른 그림 |
+| 5 | bus | 버스 | 2층 버스(옆모습) | 글자 번호판, 버스 정류장 | 마을 `bus-stop`(kit 건물) = 정류장, 다른 그림. `rose bush`(UNCERTAIN, 보류) = 이름만 겹침 |
+| 5 | mug | 머그컵 | 손잡이 달린 머그컵 | 찻잔 접시 세트, 상표·글자 | 일치 항목 없음 |
+| 5 | nut | 견과(호두) | 껍질째 호두 한 알 | 볼트·너트(나사) | `coconut`, `doughnut`(승인) = **다른 그림** |
+
+### 공통 제작 사양 (기존 승인 그림 151장을 실측한 값)
+
+- 형식·크기(실측): WebP 151개 전부 **투명 배경(알파)**, 긴 변이 최대 256 px(가로 96~256, 세로 136~256 — 정사각 파일은 없음, 비율은 사물마다 다름), 파일당 최대 33,708 B(예산 40 KB), 평균 약 16 KB.
+- 만드는 법: 정사각 캔버스(예: 1024 × 1024 PNG, 투명 또는 순백 배경)에 사물 하나를 가운데 두고 그린다. `scripts/pictureWords/buildPictureWords.py`가 알파 트림 → 2% 여백 → 긴 변 256 px → WebP(q82, 40 KB 이하)로 줄인다. 카드는 이 그림을 **정사각 흰 매트 안에 `contain`**으로 보여 주므로 잘리지도 늘어나지도 않는다.
+- 파일 이름: 영어 단어 그대로 소문자(`cat.png` → `cat.webp`). 같은 단어에 그림이 둘 이상이면 번호를 붙이는 기존 규칙(`apple1`)을 따른다.
+- 스타일(기존 그림에서 본 것): 부드럽게 광택 있는 반(半)사실풍 일러스트, 검은 윤곽선 없이 은은한 명암, 채도 높고 밝은 색, 사물 하나·화면 가운데·그림자 없는 투명 배경. 기존 세트와 한 줄에 놓였을 때 튀지 않게 맞춘다.
+- 그림 안에 글자·숫자·상표·사람 얼굴 없음(그림을 먼저 보고 단어를 맞히는 게임이 있다). 아이에게 안전한 내용만(무기·폭력·성인 소재 없음).
+- 영국식 사물·어휘를 따른다.
+
+### 승인 경로
+
+위 (d) 승인 경로와 같다: 원본 PNG를 운영자가 검토 → `buildPictureWords.py`로 WebP 생성 → 그림단어 관리자 탭에서 승인(`decisions.json` 반입) → 같은 영어 단어의 승인 그림이 생기면 단어 표가 자동으로 `image: 'ready'`로 바뀌고 Book 1 수업 준비 화면의 숫자도 데이터에서 다시 계산된다(코드 변경 없음). 승인 전에는 해당 단어가 "듣기 단어" 카드로 학습된다.

@@ -222,7 +222,8 @@ if (exists('src/components/pictureWords/PictureGames.jsx')) {
   ok(['pw-c0', 'pw-c1', 'pw-c2', 'pw-c3', 'pw-slot', 'pw-slot-on', 'pw-progress', 'pw-bar-fill'].every((c) => css.includes(`.${c}`)), 'design: pastel letter colours, slots, progress classes')
   const reduce = css.slice(css.indexOf('@media (prefers-reduced-motion'))
   const anims = [...new Set([...css.slice(0, css.indexOf('@media (prefers-reduced-motion')).matchAll(/\.(pw-[a-z-]+)\{animation:/g)].map((m) => m[1]))]
-  ok(anims.length >= 8 && anims.every((a) => reduce.includes(`.${a}`)), `design: reduced-motion covers every animation class (${anims.join(',')})`)
+  // 262차: one attribute rule per prefix replaces the per-class list (pw-pop was dead CSS and is gone, so 7 animated classes remain)
+  ok(anims.length >= 7 && /animation:none!important/.test(reduce) && ['pw', 'pbp', 'pwt'].every((x) => reduce.includes(`[class*=${x}-]`)), `design: reduced-motion covers every animation class (${anims.join(',')})`)
   ok(/\.pw-spark-star\{display:none\}/.test(reduce) && /useReducedMotion\(\)/.test(read(`${dir}/AlphabetHammer.jsx`)) && /!reduced/.test(read(`${dir}/HiddenLetters.jsx`)), 'design: reduced motion hides sparkle and skips glow/fly')
   const durs = [...css.matchAll(/\.(pw-[a-z-]+)\{animation:[a-z-]+ ([\d.]+)s/g)].map((m) => [m[1], Number(m[2])])
   ok(durs.length === anims.length && durs.every(([c, d]) => (c === 'pw-spark' ? d <= 0.6 : d >= 0.15 && d <= 0.3)), `design: animation durations 150-300 ms (sparkle <= 600): ${durs.map((x) => x.join('=')).join(' ')}`)

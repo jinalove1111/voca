@@ -1,12 +1,12 @@
 {
   "agent_name": "implementer",
-  "role": "소리 확인 통과 기준 80% + 틀린 소리 복습 (261차)",
-  "task_id": "paul-phonics-pass-mark-2026-10-11",
-  "task": "PHONICS_SETTINGS.testPassRatio(0.8), passMark/testPassed, 통과/아직 표시, reviewForMisses, pha-retest, 허브 9단계 결과",
+  "role": "Book 1 실제 수업 준비 (262차)",
+  "task_id": "paul-phonics-book1-class-prep-2026-10-12",
+  "task": "관리자 Book 1 수업 준비 섹션, validateRecordings --book1, 해제 로직·녹음기 동일성 정적 핀, 13개 제작 목록, 그림 카드 CSS",
   "status": "completed",
   "progress": 100,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T18:00:00.000Z",
+  "updated_at": "2026-10-12T12:00:00.000Z",
   "files_owned": [
     "DATABASE.md",
     "TESTING.md",
@@ -14,6 +14,7 @@
     "docs/design/PHONICS_IMAGE_SPEC_2026-10-11.md",
     "docs/design/PHONICS_PROGRESS_2026-10-11.md",
     "handoff.md",
+    "scripts/phonics/validateRecordings.mjs",
     "scripts/testPhonicsGames.mjs",
     "scripts/testPhonicsProgress.mjs",
     "scripts/testPictureWordGames.mjs",
@@ -30,11 +31,15 @@
     "src/components/phonics/WordTrain.jsx",
     "src/components/pictureWords/AlphabetHammer.jsx",
     "src/components/pictureWords/HiddenLetters.jsx",
+    "src/components/pictureWords/PictureGames.jsx",
     "src/components/pictureWords/PictureWordPractice.jsx",
+    "src/components/pictureWords/ShopShelf.jsx",
     "src/components/pictureWords/pictureImg.jsx",
     "src/data/phonics/curriculum.js",
     "src/data/phonics/imageCandidates.js",
+    "src/data/phonics/recordings.js",
     "src/data/phonics/sampleProgress.js",
+    "src/data/phonics/settings.js",
     "src/utils/phonics/curriculum.js",
     "src/utils/phonics/games.js",
     "src/utils/phonics/progress.js",
@@ -45,15 +50,15 @@
     "tests/e2e/phonicsProgress.spec.mjs",
     "tests/e2e/phonicsReview.spec.mjs",
     "tests/e2e/pictureWordGames.spec.mjs",
-    "tests/harness/registry.mjs",
-    "src/data/phonics/settings.js"
+    "tests/e2e/pictureWordPractice.spec.mjs",
+    "tests/harness/registry.mjs"
   ],
   "files_read": [
     "src/components/pictureWords/*",
     "src/utils/pictureWords/*",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "260차: kit 가드 수정, 녹음 미리보기, P1/P2/P3 함수+문서, 진도 v2 함수·학생 화면·관리자 일부. 번들 여유 16 B. 못 붙인 UI: 우선순위 열, Book 시험 표, 반복 오답, 정렬, 학부모 변화 문장.",
+  "summary": "262차: 번들 +55 B(2,199,999 / 2,200,000)로 동결. 절감 = curriculum unit() 기본값·순차 id·dg, recordings 행 압축, W 버튼 색 상수, dead pw-pop CSS, reduced-motion 규칙 통합. 이미지 0개 추가, 녹음 0개 추가, 승인 그림 매핑 변경 0.",
   "blocker": null,
-  "checkpoint": "commit 7: docs; all verification green"
+  "checkpoint": "262차 commits done; static + 5 browser specs green"
 }

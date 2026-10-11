@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { gameWords } from '../../utils/pictureWords/games.js'
 import { stopSpeaking } from '../../utils/speech'
-import { GameStyle } from './pictureImg.jsx'
+import { GameStyle, W } from './pictureImg.jsx'
 import AlphabetHammer from './AlphabetHammer.jsx'
 import HiddenLetters from './HiddenLetters.jsx'
 import ShopShelf from './ShopShelf.jsx'
@@ -28,7 +28,7 @@ function GameSession({ mode: first, level, from, onPractice, onTest, onMenu, onE
     return (
       <div data-testid="pwg-summary" data-empty="true" className="space-y-3 text-center">
         <p className="text-lg font-black text-gray-700">아직 준비 중이에요</p>
-        <button type="button" onClick={onMenu} className={`${BTN} w-full bg-gray-200 text-gray-700`}>뒤로</button>
+        <button type="button" onClick={onMenu} className={`${BTN} ${W.gray}`}>뒤로</button>
       </div>
     )
   }
@@ -38,11 +38,11 @@ function GameSession({ mode: first, level, from, onPractice, onTest, onMenu, onE
       <div data-testid="pwg-summary" className="space-y-3 text-center">
         <p className="text-2xl font-black text-gray-900">게임을 마쳤어요</p>
         <p className="text-lg text-gray-700">처음에 맞힌 단어 <span data-testid="pwg-first-try" className="font-black text-purple-700">{first} / {words.length}</span></p>
-        <button type="button" data-testid="pwg-again" onClick={() => restart(mode)} className={`${BTN} w-full bg-purple-600 text-white`}>다시 하기</button>
-        <button type="button" data-testid="pwg-other" onClick={() => restart(mode === 'hammer' ? 'hidden' : 'hammer')} className={`${BTN} w-full bg-sky-100 text-sky-700`}>다른 게임</button>
-        <button type="button" data-testid="pwg-to-test" onClick={() => onTest(from || words)} className={`${BTN} w-full bg-purple-600 text-white`}>시험 보기</button>
-        <button type="button" data-testid="pwg-to-practice" onClick={() => onPractice(words)} className={`${BTN} w-full bg-sky-100 text-sky-700`}>단어 연습으로</button>
-        <button type="button" data-testid="pwg-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
+        <button type="button" data-testid="pwg-again" onClick={() => restart(mode)} className={`${BTN} ${W.purple}`}>다시 하기</button>
+        <button type="button" data-testid="pwg-other" onClick={() => restart(mode === 'hammer' ? 'hidden' : 'hammer')} className={`${BTN} ${W.sky}`}>다른 게임</button>
+        <button type="button" data-testid="pwg-to-test" onClick={() => onTest(from || words)} className={`${BTN} ${W.purple}`}>시험 보기</button>
+        <button type="button" data-testid="pwg-to-practice" onClick={() => onPractice(words)} className={`${BTN} ${W.sky}`}>단어 연습으로</button>
+        <button type="button" data-testid="pwg-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
       </div>
     )
   }

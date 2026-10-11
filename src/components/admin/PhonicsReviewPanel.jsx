@@ -45,6 +45,8 @@ function useStats() {
   }, [])
 }
 
+const chip = (w, tid, extra) => <span key={w.id} data-testid={tid} data-image={w.image} title={MARK_TITLE[w.image]} className="whitespace-nowrap">{MARK[w.image]} {w.word}{extra}</span>
+
 function UnitRow({ b, u }) {
   const words = unitWords(b.id, u.id)
   const rec = [...new Set(recordableTargets(u).map((x) => x.ipa))]
@@ -64,7 +66,7 @@ function UnitRow({ b, u }) {
       <td className={`${TD} font-black text-pink-600`}>{unitLabel(u)}</td>
       <td className={TD}>
         <div className="flex min-w-[10rem] flex-wrap gap-x-2 gap-y-1">
-          {words.map((w) => <span key={w.id} data-image={w.image} title={MARK_TITLE[w.image]} className="whitespace-nowrap">{MARK[w.image]} {w.word}{w.needsReview ? <span data-testid="phr-unit-review" title={REVIEW_REASON[w.word] || REVIEW_DEFAULT} className={`ml-0.5 ${ROSE}`}>⚠</span> : null}</span>)}
+          {words.map((w) => chip(w, undefined, w.needsReview ? <span data-testid="phr-unit-review" title={REVIEW_REASON[w.word] || REVIEW_DEFAULT} className={`ml-0.5 ${ROSE}`}>⚠</span> : null))}
         </div>
       </td>
       <td className={TD}>{u.games.split('').map((g) => GAME_NAME[g]).join(' · ')}</td>
@@ -194,6 +196,35 @@ function RecordingPreview() {
   )
 }
 
+// Book 1 수업 준비(262차): 5 Unit · 25단어 · 단모음 녹음 5개(RECORDINGS 앞 5개). 실제 상태는 recs(파일 AND 승인)에서만 온다 — 미리보기와 무관.
+function Book1() {
+  const b = BOOKS[0]
+  const us = b.units.map((u) => ({ u, w: unitWords(b.id, u.id) }))
+  const all = us.flatMap((x) => x.w)
+  const n = (s) => all.filter((w) => w.image === s).length
+  const five = RECORDINGS.slice(0, us.length)
+  const jump = (ipa) => document.querySelector(`[data-ipa="${ipa}"]`)?.scrollIntoView({ block: 'center' })
+  return (
+    <section data-testid="phr-book1" className={SEC}>
+      <p className={H}>Book 1 수업 준비</p>
+      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 준비 ${n('ready')} · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length}`}</p>
+      {us.map(({ u, w }) => (
+        <div key={u.id} data-testid="phr-b1-unit" className="mt-2 text-xs text-gray-700">
+          <b className="text-gray-900">Unit {u.id.slice(1)} · {unitLabel(u)} /{u.targets[0].ipa}/</b> <span className={AMBER}>{STATUS_LABEL_KO[u.status]}</span>
+          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>))}</div>
+          {u.intro.tipKo} <span className={ROSE}>검토 필요</span>
+        </div>
+      ))}
+      <ul className="mt-2 text-xs text-gray-700">
+        {five.map((r, i) => (
+          <li key={r.id} data-testid="phr-b1-rec" data-status={recs[i].status}>
+            /{r.ipa}/ <span className="font-mono">{r.fileBase}.mp3</span> <span className={AMBER}>{REC_STATE[recs[i].status]}</span> <button type="button" onClick={() => jump(r.ipa)} className={BTN}>표에서 보기</button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
 
 export default function PhonicsReviewPanel() {
   const s = useStats()
@@ -211,6 +242,8 @@ export default function PhonicsReviewPanel() {
           {chips.map(([k, t]) => <span key={k} data-testid={`phr-chip-${k}`} className={CHIP}>{t}</span>)}
         </div>
       </div>
+
+      <Book1 />
 
       {BOOKS.map((b) => (
         <section key={b.id} className="min-w-0 space-y-2">

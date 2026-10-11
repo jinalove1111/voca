@@ -186,5 +186,44 @@ ok(AS.includes("['phonicsprogress','📈 파닉스 발달 (샘플)']") && AS.inc
 ok(read('src/components/phonics/PhonicsProgress.jsx').includes('SAMPLE_NOTICE_KO') && read('src/components/admin/PhonicsProgressPanel.jsx').includes('SAMPLE_NOTICE_KO'), 'both screens show the sample notice')
 ok(!/studentId|studentName|currentStudent/.test(read('src/components/phonics/PhonicsProgress.jsx')), 'the student screen never reads the logged-in student')
 
+// ---- 262차 Book 1 수업 준비: counts from data, per-unit unlock with in-memory fake lists, recorder parity, approved image mapping untouched
+{
+  const U = await import('../src/utils/phonics/curriculum.js')
+  const R = await import('../src/data/phonics/recordings.js')
+  const CL = await import('../src/data/phonics/phonemeClips.js')
+  const PP = await import('../src/utils/phonics/playPhonemes.js')
+  const b1 = C.BOOKS[0]
+  const words = b1.units.flatMap((u) => U.unitWords(b1.id, u.id))
+  const by = (st) => words.filter((w) => w.image === st)
+  eq([b1.units.length, words.length, by('ready').length, by('needed').length, by('not-needed').length], [5, 25, 9, 13, 3], 'Book 1 counts derived from data: 5 units, 25 words = 9 ready + 13 needed + 3 without a picture')
+  eq(by('needed').map((w) => w.word).sort(), ['bed', 'box', 'bus', 'cat', 'dog', 'hat', 'lip', 'map', 'mug', 'nut', 'pig', 'pot', 'sun'], 'the 13 Book 1 words that still need a picture')
+  eq(R.RECORDINGS.slice(0, 5).map((r) => [r.id, r.fileBase + '.mp3']), [['a', 'ph-01-a.mp3'], ['e', 'ph-02-e.mp3'], ['i', 'ph-03-i.mp3'], ['o', 'ph-04-o.mp3'], ['u', 'ph-05-u.mp3']], 'the 5 short vowels are the first 5 recordings with the documented file names')
+  eq(R.RECORDINGS.slice(0, 5).map((r) => r.ipa), b1.units.map((u) => u.targets[0].ipa), 'recording i belongs to Book 1 unit i (the admin Book 1 section relies on this order)')
+  ok(Object.keys(R.PHONEME_APPROVALS).length === 0 && R.recordingStatuses([]).slice(0, 5).every((x) => x.status === 'missing'), 'real status today: 5 / 5 missing, no approval')
+
+  // per-unit step 2 unlock: the lists are PARAMETERS (nothing is written to the repo)
+  const ap = { approvedBy: 'Teacher', approvedOn: '2026-10-12' }
+  const open = (urls, approvals) => b1.units.map((u) => PP.allApproved(C.recordableTargets(u).map((x) => x.ipa), CL.buildClips(urls, approvals)))
+  const f = { 'ph-01-a.mp3': 'blob:a' }
+  eq(open(f, {}), [false, false, false, false, false], 'unlock: file only -> every unit still locked')
+  eq(open({}, { a: ap }), [false, false, false, false, false], 'unlock: approval only -> locked')
+  eq(R.validateRecordings([], { a: ap }).map((e) => e.code), ['approval-without-file'], 'approval without a file is a validation error')
+  eq(open(f, { a: ap }), [true, false, false, false, false], 'unlock: file AND approval for a -> only Unit 1 opens')
+  eq(open({ ...f, 'ph-03-i.mp3': 'blob:i' }, { a: ap, i: { approvedBy: 'Teacher' } }), [true, false, false, false, false], 'unlock: an incomplete approval (no date) does not open its unit')
+  eq(open({ ...f, 'ph-03-i.m4a': 'blob:i' }, { a: ap, i: ap }), [true, false, true, false, false], 'unlock: m4a counts too, other units stay locked')
+  eq(R.validateRecordings(['ph-01-a.mp3', 'a.mp3', 'ph-02-a.mp3', 'ph-01-a.ogg'], {}).map((e) => e.code), ['unknown-file', 'pairing', 'wrong-extension'], 'bad names / pairing / format are errors')
+  eq(R.validateRecordings(['ph-01-a.mp3'], { a: ap }, { 'ph-01-a.mp3': 10 }).map((e) => e.code), ['size'], 'a too-small file is a size error')
+
+  // recorder parity: the picture-word card and the phoneme card use the shared Speaking recorder hook and controls (no forked recorder)
+  const pwp = read('src/components/pictureWords/PictureWordPractice.jsx'), pl = read('src/components/phonics/PhonemeListen.jsx')
+  ok([pwp, pl].every((t) => t.includes("import useLocalRecorder from '../../hooks/useLocalRecorder'") && t.includes("import { RecorderControls } from '../SpeakingPracticeItem'") && /const rec = useLocalRecorder\(\)/.test(t) && /<RecorderControls rec=\{rec\}/.test(t)), 'recorder parity: picture-word and phoneme cards use useLocalRecorder + RecorderControls from Speaking practice')
+  ok([...walk('src/components/pictureWords'), ...walk('src/components/phonics')].every((f2) => !/MediaRecorder|getUserMedia/.test(read(f2))), 'no forked recorder in picture-word / phonics components')
+
+  // approved picture mapping untouched: every Book 1 ready word still points at its own approved asset
+  ok(by('ready').every((w) => w.asset && w.picture && w.picture.learn === true && w.picture.en.toLowerCase() === w.word), 'Book 1 ready words map to their own learnable picture entries')
+  const admin = read('src/components/admin/PhonicsReviewPanel.jsx')
+  ok(admin.includes('phr-book1') && admin.includes('phr-b1-unit') && admin.includes('phr-b1-word') && admin.includes('phr-b1-summary') && admin.includes('phr-b1-rec') && !/fetch\(|localStorage|sessionStorage|indexedDB/.test(admin), 'admin Book 1 section exists and adds no network or storage')
+}
+
 console.log(`[testPhonicsProgress] ${n - fail}/${n} passed`)
 process.exit(fail ? 1 : 0)

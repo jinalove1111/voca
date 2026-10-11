@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react'
 import { shopSets } from '../../data/pictureWords/index.js'
 import { rng, shuffled } from '../../utils/pictureWords/practice.js'
-import { imgUrl } from './pictureImg.jsx'
+import { imgUrl, W } from './pictureImg.jsx'
 
 const BTN = 'min-h-[44px] px-3 rounded-2xl font-black btn-press disabled:opacity-40'
 
@@ -27,7 +27,7 @@ export default function ShopShelf({ onPractice, onBack }) {
       {cur && (
         <div className="space-y-2 rounded-2xl bg-white p-3 card-shadow">
           <p className="font-black text-gray-800">{cur.labelKo} · {cur.labelEn}{cur.ready ? '' : ' (준비 중)'}</p>
-          <button type="button" data-testid="pws-practice-all" disabled={!cur.ready} onClick={() => onPractice(cur.words)} className={`${BTN} w-full bg-purple-600 text-white`}>이 가게 전체 연습</button>
+          <button type="button" data-testid="pws-practice-all" disabled={!cur.ready} onClick={() => onPractice(cur.words)} className={`${BTN} ${W.purple}`}>이 가게 전체 연습</button>
           <ul className="grid grid-cols-2 gap-2">
             {cur.words.map((w) => (
               <li key={w.id} data-testid={`pws-item-${w.asset}`} className="pw-card pw-card-sm min-w-0 space-y-1 text-center">
@@ -40,7 +40,7 @@ export default function ShopShelf({ onPractice, onBack }) {
           </ul>
         </div>
       )}
-      <button type="button" data-testid="pws-back" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-gray-700`}>뒤로</button>
+      <button type="button" data-testid="pws-back" onClick={onBack} className={`${BTN} ${W.gray}`}>뒤로</button>
     </div>
   )
 }

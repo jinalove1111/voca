@@ -91,8 +91,19 @@ export async function run(browser, baseURL) {
     const unitRv = await page.locator('[data-testid="phr-unit-review"]').count()
     r.check('Unit 표 단어에 검토 배지(⚠)가 보임', unitRv > 0, String(unitRv))
     r.check('방언 메모 11개', (await page.locator('[data-testid="phr-dialect"] li').count()) === 11)
-    r.check('편집 컨트롤 없음(미리보기 파일 입력 42개 외 input/textarea/select 0, 필터 버튼 6개 외 승인·저장 버튼 0)', (await T(page, 'phr-root').locator('input:not([data-testid^="phr-rec-file-"]), textarea, select').count()) === 0 && (await T(page, 'phr-root').locator('input[type=file]').count()) === 42 && (await T(page, 'phr-root').locator('button').count()) === 6 && (await T(page, 'phr-filter').locator('button').count()) === 6)
+    r.check('편집 컨트롤 없음(미리보기 파일 입력 42개 외 input/textarea/select 0, 필터 버튼 6개 외 승인·저장 버튼 0)', (await T(page, 'phr-root').locator('input:not([data-testid^="phr-rec-file-"]), textarea, select').count()) === 0 && (await T(page, 'phr-root').locator('input[type=file]').count()) === 42 && (await T(page, 'phr-root').locator('button').count()) === 6 + 5 && (await T(page, 'phr-book1').locator('button').count()) === 5 && (await T(page, 'phr-filter').locator('button').count()) === 6)
 
+    // ---- 262차 Book 1 수업 준비 (데이터에서 계산한 숫자, 읽기 전용)
+    const b1 = await T(page, 'phr-b1-unit').allInnerTexts()
+    const b1w = await T(page, 'phr-b1-word').evaluateAll((els) => els.map((e) => e.dataset.image))
+    const b1y = async (id) => (await T(page, id).first().boundingBox()).y
+    r.check('Book 1 수업 준비: 맨 위 섹션(Book 1 표보다 위), Unit 5개 · 단어 25개 · 각 Unit 단어 5개 · 임시 · 검토 필요 · 입 모양 문장', (await T(page, 'phr-book1').count()) === 1 && (await b1y('phr-book1')) < (await b1y('phr-book-b1')) && b1.length === 5 && b1w.length === 25 && (await T(page, 'phr-b1-unit').evaluateAll((els) => els.map((e) => e.querySelectorAll('[data-testid="phr-b1-word"]').length))).every((n) => n === 5) && b1.every((t) => t.includes('임시') && t.includes('검토 필요')) && b1[0].includes('/æ/') && b1[0].includes('입을 크게 벌리고'), JSON.stringify(b1.map((t) => t.slice(0, 40))))
+    r.check('Book 1 요약: 단어 25 · 그림 준비 9 · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5 = 단어 칩 상태 수와 같음', (await txt(page, 'phr-b1-summary')) === '단어 25 · 그림 준비 9 · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5' && ['ready', 'needed', 'not-needed'].map((k) => b1w.filter((x) => x === k).length).join() === '9,13,3', await txt(page, 'phr-b1-summary'))
+    const b1r = await T(page, 'phr-b1-rec').evaluateAll((els) => els.map((e) => [e.dataset.status, e.innerText]))
+    r.check('Book 1 녹음 5줄: 예상 파일 이름 ph-01-a.mp3 ~ ph-05-u.mp3, 모두 실제 상태 "파일 없음"', b1r.length === 5 && b1r.every(([st, t], i) => st === 'missing' && t.includes('파일 없음') && t.includes(`ph-0${i + 1}-${'aeiou'[i]}.mp3`)), JSON.stringify(b1r))
+    await T(page, 'phr-b1-rec').nth(4).locator('button').click()
+    const jumped = await T(page, 'phr-recording').nth(4).evaluate((row) => { const b = row.getBoundingClientRect(), c = row.closest('div.overflow-auto').getBoundingClientRect(); return b.top >= c.top - 1 && b.bottom <= c.bottom + 1 && b.top >= 0 && b.bottom <= innerHeight })
+    r.check('"표에서 보기"(u): 42행 녹음 표의 5번째 행(ph-05-u)이 보이는 위치로 이동', jumped)
     // ---- 260차 녹음 등록 미리보기 (메모리 전용)
     await page.setViewportSize({ width: 1280, height: 900 })
     const netBefore = net.length
@@ -108,6 +119,7 @@ export async function run(browser, baseURL) {
     r.check('재생 버튼: audio currentTime 증가 또는 ended', played)
     await T(page, 'phr-rec-approved-a').click()
     r.check('승인(미리보기) → 카운터 선택 1 · 검증 통과 1 · 승인(미리보기) 1, 실제 줄은 그대로 0 / 42, 행 상태는 계속 "파일 없음"', (await txt(page, 'phr-rec-preview-summary')) === '선택 1 · 검증 통과 1 · 승인(미리보기) 1' && (await txt(page, 'phr-rec-real')) === '실제 등록 0 / 42 · 승인 0 / 42' && (await txt(page, 'phr-rec-verdict-a')) === '승인(미리보기)' && (await T(page, 'phr-recording').first().getAttribute('data-status')) === 'missing')
+    r.check('미리보기 승인은 Book 1 실제 상태에 영향 없음: 녹음 등록 0 / 5, a 줄 계속 "파일 없음"', (await txt(page, 'phr-b1-summary')).endsWith('녹음 등록 0 / 5') && (await T(page, 'phr-b1-rec').first().getAttribute('data-status')) === 'missing')
     await T(page, 'phr-rec-rejected-a').click()
     r.check('반려(미리보기)로 바꾸면 승인 카운터 0', (await txt(page, 'phr-rec-preview-summary')) === '선택 1 · 검증 통과 1 · 승인(미리보기) 0' && (await txt(page, 'phr-rec-verdict-a')) === '반려(미리보기)')
     await T(page, 'phr-rec-file-e').setInputFiles({ name: 'ph-02-e.wav', mimeType: 'audio/wav', buffer: Buffer.alloc(1024) })

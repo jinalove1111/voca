@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { hiddenRound, hiddenStart, hiddenPick } from '../../utils/pictureWords/games.js'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
-import { GamePicture, PwProgress, playEn, useReducedMotion } from './pictureImg.jsx'
+import { GamePicture, PwProgress, playEn, useReducedMotion, W } from './pictureImg.jsx'
 import { Sparkles, useSuccessThenSpeak } from './gameFx.jsx'
 
 const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-xl btn-press disabled:opacity-40'
@@ -48,7 +48,7 @@ export default function HiddenLetters({ word, seed, difficulty, onDifficulty, in
         {celebrate && !reduced && <Sparkles />}
       </div>
       <p className="text-center text-lg font-bold text-gray-700 break-words">{word.ko}</p>
-      <button type="button" data-testid="pwl-listen" onClick={() => playEn(word.en)} className={`${BTN} w-full bg-sky-100 text-sky-700`}>🔊 듣기</button>
+      <button type="button" data-testid="pwl-listen" onClick={() => playEn(word.en)} className={`${BTN} ${W.sky}`}>🔊 듣기</button>
       <div className="flex flex-wrap justify-center gap-1.5">
         {round.cells.map((c, i) => {
           const h = round.hidden.indexOf(i)
@@ -78,7 +78,7 @@ export default function HiddenLetters({ word, seed, difficulty, onDifficulty, in
       {st.done && (
         <div className="space-y-2 text-center">
           <p data-testid="pwl-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
-          <button type="button" data-testid="pwl-next" onClick={() => { cancel(); onNext(st.wrong) }} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
+          <button type="button" data-testid="pwl-next" onClick={() => { cancel(); onNext(st.wrong) }} className={`${BTN} ${W.purple}`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
         </div>
       )}
     </div>

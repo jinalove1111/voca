@@ -1,4 +1,24 @@
 # Paul Easy Voca — Handoff
+## 262차 리드 검증 메모 (2026-10-12, Book 1 수업 준비)
+- **리드 직접 확인**: build OK; 정적 `testPhonicsGames` 389, `testPhonicsProgress` 111, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget`·`testLazyChunkGuards`·`testRegistryCoverage`·`testQaGate` 17·`testTownKitAssets` 1421·`testStudentPathContracts` PASS; `verify:quiz` 16개 PASS; `validateRecordings --book1` = 파일 0 / 5 · 승인 0 / 5 · 미등록 5 / 5.
+- **데이터 압축 검증**: `curriculum.js`·`recordings.js`를 d4cb371e 판과 값 단위로 비교 → 차이 0(키 순서만 다름).
+- **브라우저(저메모리 러너, 하나씩)**: phonicsGames 203/0, phonicsReview 49/0, phonicsProgress 62/0, pictureWordGames 150/0, pictureWordPractice 110/0, pictureWordReview 29/0, student 34/0, studentHome 242/0/1 SKIP(기존), admin 21/0. Speaking·Writing·Unit·마을 4종 spec은 262차에서 해당 소스 변경 0이라 261차 결과(전부 PASS) 그대로.
+- **학생 녹음·재생**: 가짜 마이크(실제 getUserMedia + MediaRecorder)로 카드 3장 × 2 화면 — 녹음(webm blob 19~26 KB) → 내 목소리 재생 → 다시 녹음 OK. 요청에 음성 payload 없음.
+- **알려 둘 사실**: 그림 단어·파닉스 카드의 녹음기는 Speaking 연습과 같은 부품(`useLocalRecorder`·`RecorderControls`)이고, Voca 단어 학습(`recordWithAutoStop` + 음성 인식)과는 다른 부품이다. 동작(녹음 → 재생 → 다시)은 같지만 "Voca와 동일 코드"는 아님 — 통일 여부는 운영자 결정.
+- **번들**: 2,199,999 / 2,200,000 B(여유 1 B). 다음 JS 추가는 절감 또는 기준 결정 없이는 불가.
+- **미검증**: Preview 실로그인 화면, 실기기, 실제 소리·실제 마이크.
+
+
+## 262차 (2026-10-12): Book 1 실제 수업 준비 — 관리자 Book 1 화면, 녹음 등록 준비, 제작 목록, 카드 디자인
+- **관리자 "Book 1 수업 준비"(`phr-book1`)**: 파닉스 검토 탭 맨 위. Unit 5줄(Unit 번호·글자+IPA·임시·단어 5개와 그림 상태·입 모양 문장+"검토 필요"), 요약 한 줄(데이터 계산: 단어 25 · 그림 준비 9 · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5), 단모음 녹음 5줄(예상 파일 이름, 실제 상태 = `recordingStatuses`만, "표에서 보기"로 42행 표로 이동). 업로드·저장·네트워크 없음, 미리보기와 실제 상태는 분리(브라우저 검사로 고정).
+- **녹음 등록 준비**: `validateRecordings.mjs --book1`(또는 `--only a,e,i,o,u`)가 5개 예상 파일 이름·상태를 보이고 파일 0개면 "미등록 5 / 5", 종료 0. 정적 테스트가 메모리 속 가짜 파일·승인 목록(매개변수)으로 Unit별 해제를 증명: 파일만 → 잠김, 승인만 → 잠김(+`approval-without-file` 오류), 둘 다 → 그 Unit만 열림. 절차 문서는 `PHONICS_ADVENTURE` 절 "Book 1 녹음 등록 절차". 학생 화면은 그대로(2단계 잠김).
+- **제작 목록**: 13개(cat hat map bed pig lip dog box pot sun bus mug nut) 승인·보류 전체 151개 + 마을 에셋 대조 → 같은 그림 중복 0. 기존 승인 그림 실측: 151개 전부 투명 WebP, 긴 변 최대 256 px, 최대 33,708 B. 표·사양·승인 경로는 `PHONICS_IMAGE_SPEC` 절 "Book 1 제작 목록 (262차)". 260차에 말한 P1/P2/P3 필터는 **만들지 않았다**(번들) — Book 1은 새 화면이 대신한다. 그림은 만들지 않았고 승인 그림·`pictureWords.json` 변경 0.
+- **카드 디자인(CSS만)**: `.pw-pic` = 정사각 흰 매트(padding 8px, contain, 연분홍 안쪽 테두리), 작은 카드는 padding 6px·부드러운 그림자, 카드 padding 14px, 글자 카드 gap 8px. 분홍 테두리 계열 유지. 1280/768/360에서 정사각·contain·분홍 테두리·가로 넘침 0을 브라우저 검사로 고정.
+- **녹음기 동일성(읽기 확인)**: 그림 단어 카드(`PictureWordPractice.jsx:8-9,54,82`)와 소리 카드(`PhonemeListen.jsx:6-7,14,22`)는 같은 `useLocalRecorder` + `RecorderControls`(Speaking 연습과 공유)를 쓴다. **주의: Voca의 단어 상세/퀴즈(`WordDetail.jsx`, `QuizGame.jsx`)는 이 훅이 아니라 `utils/speech.js`의 `recordWithAutoStop`/STT 경로를 쓴다** — 그림 카드의 녹음기는 Voca 단어 연습과 같은 코드가 아니라 Speaking 연습과 같은 코드다. 정적 핀 추가, 동작 변경 없음.
+- **번들(예산 가득)**: 기능 +2,071 B를 실제 절감으로 상쇄해 2,199,944 → 2,199,999 B(여유 1 B). 절감: `unit()` 기본값(difficulty 2, games BTHL)+순차 id+`dg()`(-870, BOOKS 데이터 deep-equal 확인), 녹음 행 압축·날짜 정규식 중복 제거(-~250), 버튼 색 상수 `W`(-~380), dead `pw-pop` CSS, reduced-motion 규칙 통합(속성 선택자, `testPictureWordGames`의 해당 핀을 7개 클래스 + prefix 규칙 확인으로 갱신). **다음 기능은 번들을 먼저 줄여야 한다**(후보: `pictureWords.json` 미사용 필드는 `index.js`가 admin·student 공용이라 슬림 복사본 + admin 분리가 필요, 리드 판단).
+- **검증**: dummy-env build OK; 정적 `testPhonicsProgress` 111, `testPhonicsGames` 389, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 33, `testLazyChunkGuards`, `testRegistryCoverage` 8, `testQaGate` 17, `testTownKitAssets` 1421 PASS. 브라우저(저메모리 러너, 하나씩 5회): `phonicsReview` 49/0, `pictureWordPractice` 110/0, `phonicsGames` 203/0, `pictureWordGames` 150/0, `pictureWordReview` 29/0.
+- **하지 않은 것**: 녹음 파일·이미지 생성/추가 0, DB·SQL·네트워크·새 저장 키 0, push 0. 남은 임시 파일(추적 안 됨): `dist-r15/`, `tests/e2e/_r15.spec.mjs`(손대지 않음).
+
 ## 261차 리드 검증 메모 (2026-10-11, 브라우저 통합 검사 재실행 + 합격선)
 - **브라우저 16종 재실행(리드 직접, 저메모리 러너로 하나씩, 260차 빌드 기준)**: townPilotAllowlist 33/0, phonicsGames 197/0, phonicsReview 44/0(1차 43/1 — 리드가 kit 후보 표기를 바꾸고 spec 핀을 안 맞춘 탓, 핀을 새 표기에 맞춰 재실행), phonicsProgress 62/0, pictureWordGames 150/0, pictureWordPractice 107/0, pictureWordReview 29/0, student 34/0, studentHome 242/0/1 SKIP(기존 streak fixture), admin 21/0, speaking 608/0, speakingExam 216/0, writing 83/0, unit 141/0, townWorld 146/0, grammarVillage 53/0/1 SKIP(기존 soft 지연 로드). 미실행 0.
 - **261차 뒤 리드 재확인**: build OK; 정적 `testPhonicsGames` 389, `testPhonicsProgress` 94, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget`·`testLazyChunkGuards`·`testRegistryCoverage`·`testQaGate` 17·`testTownKitAssets` 1421·`testStudentPathContracts` PASS. 브라우저(261차가 바꾼 파닉스 파일 대상): phonicsGames 203/0, phonicsReview 44/0, phonicsProgress 62/0, pictureWordGames 150/0, pictureWordPractice 107/0, student 34/0. 나머지 10종은 261차에서 해당 소스 변경 0이라 260차 빌드 결과를 그대로 둠.
