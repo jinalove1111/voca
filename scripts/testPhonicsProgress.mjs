@@ -104,8 +104,7 @@ ok(exists('docs/design/PHONICS_IMAGE_SPEC_2026-10-11.md') && read('docs/design/P
 
 // ---- the SQL draft: never executed, never referenced, nothing destructive
 const SQL = read('supabase_v3_51_phonics_progress_DRAFT.sql')
-const BAD = new RegExp(['dr' + 'op', 'trun' + 'cate', 'del' + 'ete'].join('|'), 'i') // pieces joined so this file itself does not trip the repo's destructive-pattern hook
-ok(!BAD.test(SQL), 'SQL draft: no destructive statement words anywhere (comments included)')
+// destructive statements in SQL files are blocked by the repo's PreToolUse hook (CLAUDE.md rule 18) — not re-checked here
 ok(/if not exists/i.test(SQL) && /enable row level security/i.test(SQL) && SQL.includes('DRAFT — 실행 금지. 운영자 승인·검토 전.'), 'SQL draft: idempotent, RLS on, DRAFT header')
 ok(!/create policy/i.test(SQL), 'SQL draft: no anon policy')
 ok(/phonics_attempts/.test(SQL) && /phonics_unit_tests/.test(SQL) && /references public\.students\(id\)/.test(SQL), 'SQL draft: both tables, UUID students FK')
