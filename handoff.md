@@ -68,6 +68,8 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 
 ## 2026-10-11 (257차) — PAUL PHONICS 이미지 감사·검토 패널·글자 카드·학습 발달 설계
 
+**리드 통합 검증(256~257차, 2026-10-11, 리드가 직접 실행 — 더미 env 빌드 + mock 네트워크):** 정적 testPhonicsGames 352/352 · testPhonicsProgress 59/59 · testPictureWords 754/754 · testPictureWordGames 140/140 · testBundleBudget PASS(핵심 시작 경로 2.198MB / 한도 2.2MB — 여유 약 2KB, 다음 추가 전에 정리 필요) · testLazyChunkGuards · testRegistryCoverage · testQaGate 17/17 · testTownWorldWiring · testStudentPathContracts 61/61. 브라우저(하나씩): phonicsGames 158/0 · phonicsReview 33/0 · phonicsProgress 53/0 · pictureWordGames 148/0 · pictureWordPractice 107/0 · pictureWordReview 29/0 · student 34/0 · studentHome 242/0/1 skip · speaking 608/0 · speakingExam 216/0 · writing 83/0 · unit 141/0 · admin 21/0 · townWorld 146/0. verify:audio-tts PASS. verify:quiz는 testPilotTownAllowlist 1건 FAIL(onGoTown 배선 문구 핀 — 245차 이전 커밋부터 이미 불일치, 이번 변경과 무관, 미수정). 가짜 마이크(Chromium fake device)로 그림 단어 녹음·재생 재확인. 리드 수정 1건: testPhonicsProgress의 문자열 쪼개기 정규식(파괴 명령 게이트를 피하려던 구성) 제거 — SQL 파일 파괴 패턴은 훅이 직접 막는다. 미검증: 실제 Preview 로그인·실기기·실제 소리, 기차 복귀 버그의 수정 전 재현(규칙 15).
+
 작업 위치 `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `feat/paul-town-hybrid-world-2026-10-10`. 전부 draft 유지, push 없음, DB·SQL 실행·네트워크·.env 0. 운영자 부재 중 자율 블록.
 
 ### 1. 이미지 감사
