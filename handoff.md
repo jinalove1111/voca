@@ -1,4 +1,11 @@
 # Paul Easy Voca — Handoff
+## 260차 리드 검증 메모 (2026-10-11, 258~260차 통합)
+- **리드가 직접 실행해 본 것**: dummy-env build OK. 정적: `testPhonicsGames` 371, `testPhonicsProgress` 94, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 33, `testLazyChunkGuards` 104, `testRegistryCoverage` 8, `testQaGate` 17, `testPilotTownAllowlist` 32, `testTownKitAssets` 1421/1421, `testTownWorldWiring`, `testStudentPathContracts` 61, `testGrammarVillage` 1608 — 전부 PASS. `verify:quiz` 16개 PASS, `verify:audio-tts` 11개 PASS. `validateRecordings`: 파일 0 / 42 · 승인 0 / 42.
+- **리드가 직접 못 본 것**: 통합 브라우저 검사 16종은 첫 spec 실행 중 메모리 부족(여유 1.3 GB)으로 세션이 프로세스를 종료 → 재시작하지 않음. 259·260차의 브라우저 수치(`phonicsGames` 197, `phonicsReview` 44, `phonicsProgress` 62, `pictureWordGames` 150, `pictureWordPractice` 107, `pictureWordReview` 29)는 구현 담당 보고. Speaking·Writing·Unit·학생 홈·관리자·마을 spec은 258차 이후 재실행 없음(해당 화면 소스는 a8a37b65 이후 변경 0, 마을은 `worldArt.js`·`villageArt.js`의 크기 표 교체만).
+- **리드 수정 1건**: 260차가 kit 가드를 지나가려고 경로를 문자열 조합(`TOWN + 'kit/...'`)으로 적은 것을 평범한 표기(`town kit: animals/duck.webp`)로 교체. import 없음·썸네일 없음은 동일, 핀은 실제 파일 존재를 계속 확인.
+- **번들**: 합계 2.200 MB, 여유 수십 바이트. 다음 기능은 실제 절감 또는 운영자의 측정 기준 결정이 먼저. 260차에서 용량 때문에 뺀 UI: 이미지 우선순위 열·필터, Book별 시험 표, 반복 오답 표, 음소 표 정렬, 상담 요약 추세 문장(함수·검사·문서는 있음).
+- **남은 임시 파일(추적 안 됨)**: `dist-r15/`, `tests/e2e/_r15.spec.mjs` — 훅이 삭제를 막아 그대로 둠. 운영자가 지워도 됨.
+
 ## 260차 (2026-10-11): 녹음 등록 미리보기 + 이미지 우선순위 + 학습 발달 샘플 화면 v2
 - **먼저 고친 것**: `testTownKitAssets`가 `imageCandidates.js`의 kit 참조 때문에 FAIL이던 것(257차 도입). 허용 목록은 건드리지 않고, kit 후보 4개(duck·fox·tent·gate)는 import 없이 경로 글자만 보인다("마을 kit 그림 — 파일 경로만 표시", 경로는 `TOWN + 'kit/...'`로 조합 — 가드가 소스 글자를 검색하므로). 썸네일은 cat·tree·lamp 3개. `testTownKitAssets` 1421/1421.
 - **이미지 우선순위**: `imagePriority(bookNo)`(P1 = Book 1, P2 = Book 2, P3 = Book 3~5), 제작 대기 105개 = P1 13 / P2 14 / P3 78. `PHONICS_IMAGE_SPEC` 부록에 P1 그리기 지시. **이미지는 만들지 않았다**(생성 도구 없음). 재확인에서 진짜 중복 0 — `dog`/`rope`/`boot`는 dog bowl·hot dog / skipping rope / wellington boot와 다른 그림이라 계속 제작 대기. **관리자 표의 P1/P2/P3 열·필터 UI는 번들 한도 때문에 못 붙였다**(약 0.4 KB 필요).
