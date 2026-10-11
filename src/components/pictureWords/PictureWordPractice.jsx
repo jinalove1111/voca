@@ -7,7 +7,7 @@ import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise 
 import { playWordAudio, stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls } from '../SpeakingPracticeItem'
-import { GameStyle, PwProgress, imgUrl, W } from './pictureImg.jsx'
+import { BTN, GameStyle, PwProgress, imgUrl, W } from './pictureImg.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { PICTURE_REC_LABELS } from './recLabels.js'
@@ -17,7 +17,6 @@ const PictureGames = React.lazy(() => import('./PictureGames'))
 // PAUL PHONICS(폴 파닉스, 253차 시제품 → 254차 5권 구조)도 별도 lazy 청크 — 테스터가 해당 버튼을 눌러야만 받는다
 const PaulPhonics = React.lazy(() => import('../phonics/PaulPhonics'))
 
-const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 const PRIMARY = `${BTN} bg-purple-600 text-white`
 const SOFT = `${BTN} bg-sky-100 text-sky-700`
 const SESSION_SIZE = 6
@@ -38,7 +37,7 @@ function WordText({ word }) {
   return (
     <div className="text-center">
       <p data-testid="pwp-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
-      <p data-testid="pwp-ko" className="text-lg text-gray-600 break-words">{word.ko}</p>
+      {word.ko && <p data-testid="pwp-ko" className="text-lg text-gray-600 break-words">{word.ko}</p>}
     </div>
   )
 }
@@ -73,7 +72,7 @@ function PracticeCards({ words, onDone, single = false, nextLabel = '➡️ 다�
   return (
     <div data-testid="pwp-card" data-word-index={i} className="space-y-3">
       <PwProgress testid="pwp-progress" n={i + 1} total={words.length} />
-      <Picture word={w} />
+      {w.asset ? <Picture word={w} /> : <div data-testid="pwp-text-card" className="pw-card pw-card--text"><span className="pw-card-tag">듣고 따라 말해요</span></div>}
       <WordText word={w} />
       {said.has(w.id) && <p data-testid="pwp-said-mark" className="text-center text-sm font-bold text-emerald-700">말해 봤어요</p>}
       <ListenBtn word={w} />
@@ -122,7 +121,8 @@ function QuizCard({ word, q, onAnswered, onNext, n, total, label = '시험' }) {
 
 // stage: card(연습 카드) → end(게임/시험/건너뛰기) → quiz → review → summary. 시험으로 바로 시작하면 quiz부터.
 function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) {
-  const words = useMemo(() => buildSession(pool, { size: SESSION_SIZE, seed }), [pool, seed])
+  const all = useMemo(() => buildSession(pool, { size: SESSION_SIZE, seed }), [pool, seed])
+  const words = useMemo(() => all.filter((x) => x.asset), [all]) // 시험·게임은 그림 있는 단어만
   const quiz = useMemo(() => buildQuiz(words, POOL, seed), [words, seed])
   const [stage, setStage] = useState(startStep(mode))
   const [qi, setQi] = useState(0)
@@ -151,7 +151,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
 
   let body, progress = ''
   if (stage === 'card') {
-    body = <PracticeCards words={words} onDone={() => setStage('end')} />
+    body = <PracticeCards words={all} onDone={() => setStage('end')} />
   } else if (stage === 'end') {
     body = (
       <div data-testid="pwp-end" className="space-y-3 text-center">

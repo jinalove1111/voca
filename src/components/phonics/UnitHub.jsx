@@ -89,7 +89,7 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
     rows = [
       { n: 1, key: 'intro', chunk: 0, title: '오늘의 소리 만나기', ok: hasWords, why: NONE, toggle: true, go: true, done: isSeen('intro') },
       { n: 2, key: 'hear', chunk: 0, title: '선생님 소리 듣기', ok: hasWords && allClips, why: TEACHER_SOON, info: true },
-      { n: 3, key: 'say', chunk: 1, covers: '3,4,5', badge: '3–5', title: '듣고 따라 말하고 녹음해요', sub: '단어로 따라 말해요', ok: ready.length > 0, why: '그림이 준비된 단어가 없어요', go: true, run: () => onPractice(ready), done: isSeen('say') },
+      { n: 3, key: 'say', chunk: 1, covers: '3,4,5', badge: '3–5', title: '듣고 따라 말하고 녹음해요', sub: '단어로 따라 말해요', ok: hasWords, why: NONE, go: true, run: () => onPractice(words), done: isSeen('say') },
       { n: 6, key: 'gallery', chunk: 1, title: '그림과 단어', sub: '단어 듣기 (읽기는 Book 2에서)', ok: hasWords, why: NONE, toggle: true, go: true, done: isSeen('gallery') },
       { ...bubble, n: 7, chunk: 2, tag, sub: detect ? '소리가 들리는 풍선을 터뜨려요' : '소리를 듣고 알맞은 모음 풍선을 터뜨려요', run: sess('bubble', 'bubble', bubbleWords, { interleave: true }) },
       { ...train, n: 8, chunk: 2, tag, sub: '빈 칸에 들리는 모음을 끼워요', run: sess('train', 'train', trainWords, { vowelTrain: true }) },

@@ -554,8 +554,8 @@ export async function run(browser, baseURL) {
     // 3–5단계: 기존 연습 카드(녹음 포함)
     await T(page, 'pph-step-3-go').click()
     await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
-    const shown0 = await shownItem(page, 'pwp-picture')
-    r.check(`${name} 3–5단계: 연습 카드가 열리고 단어 듣기·녹음 컨트롤이 있음(그림 준비된 단어만)`, (await T(page, 'pwp-listen').isVisible()) && (await T(page, 'pwp-rec-record').count()) === 1 && readyWords(words).some((w) => w.id === shown0.id))
+    const shown0 = (await T(page, 'pwp-picture').count()) ? await shownItem(page, 'pwp-picture') : null // 263차: 3–5단계는 Unit 단어 5개 전부(그림 없는 단어는 글자 카드)
+    r.check(`${name} 3–5단계: 연습 카드가 열리고 단어 듣기·녹음 컨트롤이 있음(그림 또는 글자 카드)`, (await T(page, 'pwp-listen').isVisible()) && (await T(page, 'pwp-rec-record').count()) === 1 && (shown0 ? readyWords(words).some((w) => w.id === shown0.id) : (await T(page, 'pwp-text-card').count()) === 1))
     for (let k = 0; k < 8 && !(await T(page, 'pwp-end').count()); k++) {
       await T(page, 'pwp-next').click()
       await page.waitForFunction(() => !!document.querySelector('[data-testid="pwp-card"], [data-testid="pwp-end"]'), null, { timeout: 5000 })
@@ -1129,6 +1129,62 @@ export async function run(browser, baseURL) {
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     r.check(`${name} 터치로 돌아오면 같은 Unit 허브(data-unit=u3), 가로 넘침 0`, (await T(page, 'pph-unit').getAttribute('data-unit')) === 'u3' && (await overflow(page)) <= 0)
   }, { studentId: TESTER_ONLY, hasTouch: true })
+
+
+  // ---- (p) 263차: Book 1 3–5단계는 Unit 단어 5개 전부 — 그림 없는 단어는 글자 카드(녹음 포함)
+  await scenario('(p) Book 1 따라 말하기 5단어', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await page.evaluate(() => {
+      navigator.mediaDevices.getUserMedia = async () => {
+        const ctx = new AudioContext(); await ctx.resume().catch(() => {})
+        const osc = ctx.createOscillator(), dest = ctx.createMediaStreamDestination()
+        osc.connect(dest); osc.start()
+        return dest.stream
+      }
+    })
+    await openScreen(page)
+    await openPhonics(page)
+    for (const u of ['u1', 'u2', 'u3', 'u4', 'u5']) {
+      if (u !== 'u1') { await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' }) } else await T(page, 'pph-book-b1').click()
+      await click(page, T(page, `pph-unit-${u}`), false)
+      await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+      const words = unitWords('b1', u)
+      const nPic = readyWords(words).length
+      await T(page, 'pph-step-3-go').click()
+      await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
+      const seen = []
+      let imgOnText = 0, listenOk = true, recOk = true
+      for (let k = 0; k < 5; k++) {
+        const pic = (await T(page, 'pwp-picture').count()) === 1
+        const txt = (await T(page, 'pwp-text-card').count()) === 1
+        if (pic === txt) throw new Error(`card ${k + 1}: pic=${pic} text=${txt}`)
+        if (txt) imgOnText += await T(page, 'pwp-text-card').locator('img').count()
+        const shown = (await T(page, 'pwp-word').textContent()) || ''
+        seen.push({ shown, pic })
+        const before = await speakLen(page)
+        await T(page, 'pwp-listen').click()
+        await page.waitForFunction((m) => window.__speak.length > m, before, { timeout: 4000 })
+        if (!(await page.evaluate((m) => window.__speak.slice(m).join() , before)).split(',').every((x) => x === shown)) listenOk = false
+        if (txt && k === 0) {
+          await T(page, 'pwp-rec-record').click()
+          await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
+          await sleep(1100)
+          await T(page, 'pwp-rec-stop').click()
+          await T(page, 'pwp-rec-play').waitFor({ state: 'visible', timeout: 8000 })
+          await T(page, 'pwp-rec-play').click()
+          await T(page, 'pwp-rec-retake').click()
+          recOk = (await T(page, 'pwp-rec-record').count()) === 1 && (await T(page, 'pwp-rec-play').count()) === 0
+        }
+        await T(page, 'pwp-next').click()
+        await page.waitForFunction(() => !!document.querySelector('[data-testid="pwp-card"], [data-testid="pwp-end"]'), null, { timeout: 5000 })
+      }
+      r.check(`${name} ${u}: 3–5단계 카드 5장 = Unit 단어 5개(순서 무관), 그림 카드 ${nPic}장·글자 카드 ${5 - nPic}장, 글자 카드에 img 0, 듣기는 보이는 단어 하나만`, seen.length === 5 && seen.map((x) => x.shown).sort().join() === words.map((w) => w.word).sort().join() && seen.filter((x) => x.pic).length === nPic && imgOnText === 0 && listenOk, JSON.stringify(seen))
+      r.check(`${name} ${u}: 글자 카드에서 녹음 → 재생 → 다시 말하기 동작`, recOk)
+      await T(page, 'pwp-end').waitFor({ state: 'visible', timeout: 5000 })
+      await T(page, 'pwp-skip').click()
+      await T(page, 'pwp-exit').click()
+      await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+    }
+  }, { studentId: TESTER_ONLY })
 
   // ---- (i) 일반 학생
   await scenario('(i) 일반 학생', { width: 1280, height: 800 }, async ({ page, name, reqs }) => {

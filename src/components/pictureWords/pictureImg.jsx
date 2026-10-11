@@ -36,6 +36,7 @@ export function useReducedMotion() {
 }
 
 // full-width button colours shared by the phonics and picture-word screens (used as `${BTN} ${W.gray}`)
+export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 export const W = { gray: 'w-full bg-gray-200 text-gray-700', purple: 'w-full bg-purple-600 text-white', sky: 'w-full bg-sky-100 text-sky-700' }
 
 const CSS = `
@@ -50,9 +51,9 @@ const CSS = `
 .pw-hop{animation:pw-hop .15s ease-out}.pw-click{animation:pw-click .18s ease-out .12s}.pw-glow{animation:pw-glow .28s ease-out}.pw-spark{animation:pw-spark .55s ease-out both}
 .pw-tile{transition:transform .25s ease,opacity .25s ease}
 .pw-cell{min-width:48px;min-height:48px}
-@media (min-width:390px){.pw-cell{min-width:56px;min-height:56px}}
+@media(min-width:390px){.pw-cell{min-width:56px;min-height:56px}}
 .pw-card{position:relative;box-sizing:border-box;width:min(100%,15rem);margin:0 auto;padding:14px;border:3px solid #F472B6;border-radius:24px;background:linear-gradient(160deg,#FFE4EF 0%,#FFF8EC 100%);box-shadow:0 6px 0 #F9A8D4,0 10px 18px rgba(244,114,182,.25)}
-@media (min-width:640px){.pw-card{width:min(100%,19rem)}}
+@media(min-width:640px){.pw-card{width:min(100%,19rem)}}
 .pw-card--text{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:6rem;text-align:center}
 .pw-card-tag{display:inline-block;padding:2px 10px;border-radius:999px;background:#fff;border:2px solid #F9A8D4;font-size:.75rem;font-weight:900;color:#BE185D}
 .pw-card-sm{width:100%;padding:6px;border-width:2px;border-radius:16px;box-shadow:0 3px 0 #F9A8D4,0 5px 10px rgba(244,114,182,.2)}
@@ -63,7 +64,7 @@ const CSS = `
 .pw-c0{--pw-bg:#FBCFE8;--pw-edge:#EC4899}.pw-c1{--pw-bg:#BBF7D0;--pw-edge:#22C55E}.pw-c2{--pw-bg:#BAE6FD;--pw-edge:#0EA5E9}.pw-c3{--pw-bg:#FEF08A;--pw-edge:#EAB308}
 .pw-letter:disabled{box-shadow:none}
 .pw-slot{border:2px dashed #C4B5FD;background:#F5F3FF;box-shadow:inset 0 2px 4px rgba(76,29,149,.18);color:#1F2937}
-.pw-slot-on{border:2px solid #22C55E;border-style:solid;background:#ECFDF5;box-shadow:0 2px 0 #22C55E;color:#1F2937}
+.pw-slot-on{border:2px solid #22C55E;background:#ECFDF5;box-shadow:0 2px 0 #22C55E;color:#1F2937}
 .pw-slot-now{border-color:#A855F7;background:#FAF5FF}
 .pw-progress{display:flex;align-items:center;gap:8px;justify-content:center;font-weight:900;font-size:.875rem;color:#7E22CE}
 .pw-bar{display:block;flex:1;max-width:9rem;height:8px;border-radius:999px;background:#F3E8FF;overflow:hidden}
@@ -80,7 +81,7 @@ const CSS = `
 @keyframes pwt-in{from{opacity:0}to{opacity:1}}
 .pwt-track{display:grid;overflow:hidden;padding:6px 4px}
 .pwt-track>*{grid-area:1/1}
-.pwt-train,.pwt-result{display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px}
+.pwt-train,.pwt-result{display:flex;align-items:center;justify-content:center;gap:4px}
 .pwt-train.pwt-depart{animation:pwt-go .6s ease-in .25s forwards}
 .pwt-result{animation:pwt-in .3s ease-out .85s both}
 .pwt-engine{display:flex;align-items:center;justify-content:center;min-width:48px;min-height:48px;font-size:1.75rem}

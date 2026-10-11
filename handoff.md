@@ -1,4 +1,20 @@
 # Paul Easy Voca — Handoff
+## 263차 리드 검증 메모 (2026-10-12, Book 1 따라 말하기 단어 연결)
+- **리드 직접 확인**: build OK; 정적 `testPhonicsGames` 401, `testPhonicsProgress` 111, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget`·`testLazyChunkGuards`·`testRegistryCoverage`·`testQaGate` 17·`testTownKitAssets` 1421·`testStudentPathContracts` PASS; `verify:quiz` 16개·`verify:audio-tts` 11개 PASS; `validateRecordings --book1` = 미등록 5 / 5.
+- **브라우저 16종 전부 재실행(저메모리 러너, 하나씩)**: phonicsGames 217/0, phonicsReview 49/0, phonicsProgress 62/0, pictureWordGames 150/0, pictureWordPractice 110/0, pictureWordReview 29/0, student 34/0, studentHome 242/0/1 SKIP(기존), admin 21/0, speaking 608/0, speakingExam 216/0, writing 83/0, unit 141/0, townWorld 146/0, townPilotAllowlist 33/0, grammarVillage 53/0/1 SKIP(기존). 미실행 0.
+- **화면 확인**: Book 1 Unit 4 3~5단계를 직접 걸어 봄 — 5장(sock 그림 카드 1 + box·pot·hot·dog 글자 카드 4), 글자 카드에 img 없음. 글자 카드에는 한국어 뜻이 없다(그림 없는 단어는 뜻 데이터가 없음) — 뜻을 넣을지는 운영자 결정.
+- **임시 파일**: `dist-r15/`, `tests/e2e/_r15.spec.mjs`는 운영자 승인으로 2026-10-12 삭제(추적 안 되던 파일, 참조 0).
+- **재사용 후보(리드가 그림을 열어 확인)**: 마을 `animals/cat.webp`(cat)·`animals/puppy.webp`(dog)만 의미 일치, 둘 다 72×54(2x 144×108)로 학습 카드에는 해상도 부족. 승인 전 보류, 학습 카드에 연결하지 않음. 나머지 11개는 일치하는 기존 그림 없음.
+- **미검증**: 배포된 Preview 주소 실로그인, 실기기, 실제 소리·마이크.
+
+## 263차 (2026-10-12): Book 1 "듣고 따라 말하고 녹음해요" 5단어 전부
+- **원인**: Book 1 허브 3–5단계(`key: 'say'`)가 `readyWords(words)`(승인된 그림이 있는 단어만)를 연습에 넘겼고, 연습 카드는 항상 `<img>`를 그려서 그림 없는 단어는 보여줄 수 없었다.
+- **수정**: `UnitHub.jsx` say 행이 `onPractice(words)`(Unit 단어 5개 전부)를 넘기고 `ok: hasWords`. `PictureWordPractice.jsx`의 `PracticeCards`가 `w.asset` 없는 단어를 기존 글자 카드 스타일(`pw-card pw-card--text` + `pw-card-tag` "듣고 따라 말해요", `data-testid="pwp-text-card"`)로 그린다. 단어 글자는 갤러리(6단계)처럼 그대로 보인다. 듣기·녹음·다시 말하기·다음은 같은 `useLocalRecorder`/`RecorderControls`. 연습 뒤 시험·게임(알파벳 망치/숨은 글자)은 그림 있는 단어만(`all.filter(asset)`) — 그림 시험·게임 로직 불변. 그림 연결/교과 단어/curriculum.js 불변, 승인 안 된 그림 연결 0.
+- **Books 2–5**: `key: 'pic'` 행은 그대로 `ready`만(변경 0). 대시보드 그림 단어 연습도 모든 단어에 그림이 있어 동작 동일.
+- **Book 1 3–5단계 단어 수(전 → 후)**: Unit 1 2 → 5, Unit 2 3 → 5, Unit 3 2 → 5, Unit 4 1 → 5, Unit 5 1 → 5 (그림 카드 수는 그대로, 나머지는 글자 카드).
+- **번들 예산**: 이 기능은 +155바이트라 예산 여유(1바이트)를 넘겼다. 실제 절약: `BTN` 클래스 문자열 중복 3곳을 `pictureImg.jsx` 한 곳으로 공유, CSS의 중복 `border-style:solid`·기본값 `flex-wrap:nowrap`·불필요한 공백 제거. 측정(dummy env 빌드): 전 2,199,999 → 후 2,199,984. 예산·테스트 수정 0.
+- **테스트**: 정적 `testPhonicsGames` 401/401(+12), 브라우저 `phonicsGames` 217/217(새 시나리오 (p): Unit 1–5 각 5장, 글자 카드 img 0, 듣기 1단어, 글자 카드 녹음→재생→다시 말하기, 쓰기 0·저장 키 0), `pictureWordPractice` 110/110, `pictureWordGames` 150/150.
+
 ## 262차 리드 검증 메모 (2026-10-12, Book 1 수업 준비)
 - **리드 직접 확인**: build OK; 정적 `testPhonicsGames` 389, `testPhonicsProgress` 111, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget`·`testLazyChunkGuards`·`testRegistryCoverage`·`testQaGate` 17·`testTownKitAssets` 1421·`testStudentPathContracts` PASS; `verify:quiz` 16개 PASS; `validateRecordings --book1` = 파일 0 / 5 · 승인 0 / 5 · 미등록 5 / 5.
 - **데이터 압축 검증**: `curriculum.js`·`recordings.js`를 d4cb371e 판과 값 단위로 비교 → 차이 0(키 순서만 다름).

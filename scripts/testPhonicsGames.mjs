@@ -530,5 +530,17 @@ ok(['PaulPhonics', 'UnitHub', 'PhonemeListen', 'PhonicsAdventure', 'SoundBubbleP
   const sm = U.missedItems([{ bookId: 'b1', unitId: 'u1', step: 'test', itemId: 'x', correct: false }, { bookId: 'b1', unitId: 'u1', unitTest: { score: 4, total: 5, passMark: 4, passed: true } }], 'b1', 'u1')
   ok(sm.join() === 'x', 'a missed test item counts toward hub step 10; the test summary record does not')
 }
+// 263차: Book 1 say/record step offers all 5 unit words (picture-less ones as text cards); picture test/hammer/hidden stay picture-ready only
+for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
+  const ws = U.unitWords('b1', u.id)
+  ok(ws.length === 5 && ws.map((w) => w.word).join() === u.words.map((n) => D.itemOfSlot(n).word).join(), `b1${u.id} say step = the unit's own 5 words in unit order`)
+  const r = U.readyWords(ws)
+  ok(r.length >= 1 && r.every((w) => ws.includes(w) && w.asset) && ws.filter((w) => !w.asset).every((w) => w.image !== 'ready'), `b1${u.id} ${r.length} picture + ${5 - r.length} text cards; ready list (test/hammer/hidden) is picture-only`)
+}
+{
+  const hub = read('src/components/phonics/UnitHub.jsx'), pwp = read('src/components/pictureWords/PictureWordPractice.jsx')
+  ok(/key: 'say'[^\n]*ok: hasWords[^\n]*onPractice\(words\)/.test(hub) && /key: 'pic'[^\n]*ok: ready\.length > 0[^\n]*onPractice\(ready\)/.test(hub), 'hub: Book 1 say row offers all unit words; Books 2-5 pic row still ready-only')
+  ok(/w\.asset \? <Picture word=\{w\} \/> : <div data-testid="pwp-text-card" className="pw-card pw-card--text">/.test(pwp) && /all.filter\(\(x\) => x\.asset\)/.test(pwp) && /PracticeCards words=\{all\}/.test(pwp), 'practice: text card for picture-less words; quiz/games use the picture-only list')
+}
 console.log(`${fail ? 'FAIL' : 'PASS'} ${n - fail}/${n} testPhonicsGames`)
 process.exit(fail ? 1 : 0)

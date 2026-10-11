@@ -5,12 +5,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { passMark, sessionItems, testPassed } from '../../utils/phonics/games.js'
 import { bubbleSession, reviewForMisses, testSession } from '../../utils/phonics/curriculum.js'
 import { stopSpeaking } from '../../utils/speech'
-import { GameStyle, W } from '../pictureWords/pictureImg.jsx'
+import { BTN, GameStyle, W } from '../pictureWords/pictureImg.jsx'
 import SfxControl from '../pictureWords/SfxControl.jsx'
 import SoundBubblePop from './SoundBubblePop.jsx'
 import WordTrain from './WordTrain.jsx'
 
-const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 const PUR = `${BTN} ${W.purple}`
 const newSeed = () => Date.now() % 2147483647
 const SESSION_SIZE = 6
