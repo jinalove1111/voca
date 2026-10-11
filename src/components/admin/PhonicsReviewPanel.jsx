@@ -131,6 +131,7 @@ function WordTable({ stats }) {
   )
 }
 
+const recs = recordingStatuses([])
 // Preview only: a chosen file lives in memory as an object URL (revoked on replace/unmount). Nothing is saved, uploaded or played for students.
 const VERDICT = { pending: '검수 대기', approved: '승인(미리보기)', rejected: '반려(미리보기)' }
 function RecordingPreview() {
@@ -148,20 +149,22 @@ function RecordingPreview() {
   const all = RECORDINGS.map((r) => ({ r, v: res(r) }))
   const chosen = all.filter((x) => x.v)
   return (
-    <div data-testid="phr-rec-preview" className="mt-3 border-t-2 border-gray-100 pt-3">
+    <div data-testid="phr-rec-preview" className="mt-2">
       <p data-testid="phr-rec-notice" className="rounded-xl bg-rose-50 p-2 text-xs font-black text-rose-800">Preview 전용 — 선택한 파일은 이 브라우저 메모리에만 있고 저장·업로드되지 않습니다. 새로고침하면 사라지며 학생 화면에는 적용되지 않습니다.</p>
       <p className="mt-2 text-xs font-bold text-gray-700"><span data-testid="phr-rec-real">실제 등록 0 / 42 · 승인 0 / 42</span> · <span data-testid="phr-rec-preview-summary">선택 {chosen.length} · 검증 통과 {chosen.filter((x) => x.v.ok).length} · 승인(미리보기) {chosen.filter((x) => x.v.ok && f[x.r.id].verdict === 'approved').length}</span></p>
       <div className="mt-2 max-h-96 max-w-full overflow-auto">
-        <table data-testid="phr-rec-table" className="min-w-[48rem] border-collapse">
-          <thead><tr>{['no', 'id', '철자', '예시', '기대 파일', '실제 상태', '미리보기'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+        <table data-testid="phr-recordings" className="min-w-[56rem] border-collapse">
+          <thead><tr>{['no', 'id', '소리', '대표 철자', '예시 단어', '파일 이름 규칙', '상태', '미리보기'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
           <tbody>
-            {all.map(({ r, v }) => {
+            {all.map(({ r, v }, n) => {
               const x = f[r.id]
               return (
-                <tr key={r.id} data-testid="phr-rec-row" data-id={r.id}>
-                  <td className={TD}>{r.no}</td><td className={`${TD} font-mono`}>{r.id}</td><td className={TD}>{r.grapheme}</td><td className={TD}>{r.exampleWord}</td>
-                  <td className={`${TD} font-mono`}>{r.fileBase}.mp3</td><td className={`${TD} whitespace-nowrap`}>{REC_STATE.missing}</td>
-                  <td className={TD}>
+                <tr key={r.id} data-testid="phr-recording" data-ipa={r.ipa} data-status={recs[n].status}>
+                  <td className={TD}>{r.no}</td><td className={`${TD} font-mono`}>{r.id}</td><td className={`${TD} font-black text-gray-900`}>/{r.ipa}/</td>
+                  <td className={TD}>{r.grapheme}</td><td className={TD}>{r.exampleWord}</td>
+                  <td className={`${TD} font-mono`}>{r.fileBase}.mp3</td>
+                  <td className={`${TD} whitespace-nowrap`}><span className="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">{REC_STATE[recs[n].status]}</span></td>
+                  <td data-testid="phr-rec-row" className={TD}>
                     <input type="file" data-testid={`phr-rec-file-${r.id}`} accept=".mp3,.m4a,.wav" aria-label={`${r.id} 파일`} onChange={(e) => pick(r.id, e.target.files[0])} className="max-w-[10rem] text-xs" />
                     {x ? (
                       <div data-testid={`phr-rec-result-${r.id}`} data-ok={v.ok} className="mt-1 space-y-1">
@@ -184,7 +187,6 @@ function RecordingPreview() {
   )
 }
 
-const recs = recordingStatuses([])
 
 export default function PhonicsReviewPanel() {
   const s = useStats()
@@ -225,21 +227,6 @@ export default function PhonicsReviewPanel() {
 
       <section className="min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3">
         <p className="text-sm font-black text-gray-800">녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className="text-xs font-bold text-gray-500">(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
-        <div className="mt-2 max-w-full overflow-x-auto">
-          <table data-testid="phr-recordings" className="min-w-[36rem] border-collapse">
-            <thead><tr>{['no', 'id', '소리', '대표 철자', '예시 단어', '파일 이름 규칙', '상태'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
-            <tbody>
-              {recs.map((r, i) => (
-                <tr key={r.id} data-testid="phr-recording" data-ipa={r.ipa} data-status={r.status}>
-                  <td className={TD}>{r.no}</td><td className={`${TD} font-mono`}>{r.id}</td><td className={`${TD} font-black text-gray-900`}>/{r.ipa}/</td>
-                  <td className={TD}>{RECORDINGS[i].grapheme}</td><td className={TD}>{RECORDINGS[i].exampleWord}</td>
-                  <td className={`${TD} font-mono`}>{RECORDINGS[i].fileBase}.mp3</td>
-                  <td className={`${TD} whitespace-nowrap`}><span className="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">{REC_STATE[r.status]}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
         <RecordingPreview />
       </section>
 
