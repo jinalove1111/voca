@@ -2,6 +2,7 @@
 // Randomness only from the seed the caller passes (reuses the picture-word seeded rng/shuffled).
 import { rng, shuffled } from '../pictureWords/practice.js'
 import { PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
+import { PHONICS_SETTINGS } from '../../data/phonics/settings.js'
 
 export const POSITION_KO = { initial: '첫', medial: '가운데', final: '끝' }
 export const BUBBLE_OBJECTIVE_KO = '단어의 첫 소리를 듣고 글자 고르기'
@@ -109,6 +110,10 @@ export function trainTap(state, tileId) {
 // step: 'bubble' | 'train' | 'test' | 'review'
 export const phonicsAttempt = ({ studentId, gameId, bookId = null, unitId = null, step = null, targetPhonemes, itemId, correct, retries, completed }) =>
   Object.freeze({ v: 1, studentId, gameId, bookId, unitId, step, targetPhonemes, itemId, correct, retries, completed })
+
+// 소리 확인 통과 기준: ceil(total * ratio) (5문제 → 4). 설정 객체는 항상 매개변수로 받는다.
+export const passMark = (total, settings = PHONICS_SETTINGS) => Math.ceil(total * settings.testPassRatio - 1e-9)
+export const testPassed = (score, total, settings = PHONICS_SETTINGS) => score >= passMark(total, settings)
 
 export const sessionItems = (seed, count = 6, items = PHONICS_ITEMS) => shuffled(items, rng(seed)).slice(0, count)
 

@@ -412,7 +412,7 @@ async function testItem(page, i, { words, touch = false, pickWrong = false, dete
 async function testSessionRun(page, words, opts = {}) {
   const out = []
   for (let i = 0; i < 5; i++) {
-    out.push(await testItem(page, i, { words, ...opts, pickWrong: i === opts.wrongAt }))
+    out.push(await testItem(page, i, { words, ...opts, pickWrong: [].concat(opts.wrongAt).includes(i) }))
     await click(page, T(page, 'pbp-next'), opts.touch)
     await page.waitForFunction(() => !!document.querySelector('[data-testid="pbp-root"], [data-testid="pha-summary"]'), null, { timeout: 5000 })
     await sleep(500)
@@ -1058,8 +1058,11 @@ export async function run(browser, baseURL) {
     const testWrong = t1[2].item
     r.check(`${name} 소리 확인: 5문제, 진행 "소리 확인 n / 5", 힌트 없음(data-mode=challenge), 한 문제에 한 번만 고르고(고른 뒤 풍선 칸이 접힘) 틀리면 부드럽게 알려 줌`, t1.length === 5 && allOk(t1, 'label') && allOk(t1, 'mode') && allOk(t1, 'opts') && allOk(t1, 'once') && allOk(t1, 'collapsed'), JSON.stringify(t1.map((x) => [x.label, x.mode, x.once, x.collapsed])))
     r.check(`${name} 소리 확인 요약: data-score 4/5, "한 번에 맞힌 소리 4개", "다시 만나기" 있음, 다음 단계 버튼 없음`, (await T(page, 'pha-summary').getAttribute('data-score')) === '4/5' && ((await T(page, 'pha-summary').innerText()) || '').includes('한 번에 맞힌 소리 4개') && (await T(page, 'pha-review').count()) === 1 && (await T(page, 'pha-next-step').count()) === 0)
+    const sm1 = await T(page, 'pha-summary').innerText()
+    r.check(`${name} 4/5 = 통과: data-passed=true, data-pass-mark=4, "통과! 5문제 중 4개 이상 맞혔어요", 다시 만나기는 보조 버튼(보라색 아님)`, (await T(page, 'pha-summary').getAttribute('data-passed')) === 'true' && (await T(page, 'pha-summary').getAttribute('data-pass-mark')) === '4' && sm1.includes('통과! 5문제 중 4개 이상 맞혔어요') && !((await T(page, 'pha-review').getAttribute('class')) || '').includes('bg-purple-600') && (await T(page, 'pha-retest').count()) === 0, sm1)
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+    r.check(`${name} 허브 9단계: 이번에 한 결과 "통과"`, ((await T(page, 'pph-step-9').innerText()) || '').includes('통과') && !((await T(page, 'pph-step-9').innerText()) || '').includes('다시 도전'))
     const missedIds = new Set([det[0].item.id, vt[1].item.id, testWrong.id])
     const h = await hub1(page)
     r.check(`${name} 허브: 7·8·9단계 "오늘 했어요", 10단계 준비됨(다시 볼 단어 ${missedIds.size}개 = 놓친 소리만)`, [7, 8, 9].every((n) => h.rows.find((x) => x.n === n).st === 'done') && h.rows.find((x) => x.n === 10).st !== 'locked' && h.rows.find((x) => x.n === 10).txt.includes(`다시 볼 단어 ${missedIds.size}개`), JSON.stringify(h.rows.map((x) => [x.n, x.st])))
@@ -1072,15 +1075,31 @@ export async function run(browser, baseURL) {
     const h2 = await hub1(page)
     r.check(`${name} 모두 맞히면 10단계는 다시 잠김("틀린 소리가 없어요")`, h2.rows.find((x) => x.n === 10).st === 'locked' && h2.rows.find((x) => x.n === 10).txt.includes('틀린 소리가 없어요'))
 
-    // 소리 확인을 한 번 더: 틀린 소리는 요약의 "다시 만나기"로 바로 이어진다
+    // 소리 확인을 한 번 더: 2개 틀리면 아직 통과 전 — 보라색 주 버튼은 틀린 소리 복습, 복습 뒤에는 다시 확인
     await T(page, 'pph-step-9-go').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
-    const t2 = await testSessionRun(page, words, { detect: true, wrongAt: 0 })
-    r.check(`${name} 다시 푼 소리 확인: 4/5`, (await T(page, 'pha-summary').getAttribute('data-score')) === '4/5' && allOk(t2, 'once'))
+    const t2 = await testSessionRun(page, words, { detect: true, wrongAt: [0, 3] })
+    const sm2 = await T(page, 'pha-summary').innerText()
+    r.check(`${name} 3/5 = 아직: data-passed=false, data-pass-mark=4, "조금만 더! 4개를 맞히면 통과예요", 실패 문구 없음, 주 버튼 = 틀린 소리 다시 만나기`, (await T(page, 'pha-summary').getAttribute('data-score')) === '3/5' && (await T(page, 'pha-summary').getAttribute('data-passed')) === 'false' && (await T(page, 'pha-summary').getAttribute('data-pass-mark')) === '4' && sm2.includes('조금만 더! 4개를 맞히면 통과예요') && !/실패|불합격/.test(sm2) && ((await T(page, 'pha-review').getAttribute('class')) || '').includes('bg-purple-600') && (await T(page, 'pha-retest').count()) === 0, sm2)
+    await T(page, 'pha-exit').click()
+    await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+    const h3 = await hub1(page)
+    r.check(`${name} 허브 9단계: 최근 결과 "다시 도전", 10단계는 시험에서 틀린 소리로 열려 있음, 2단계(선생님 소리)는 여전히 잠김`, ((await T(page, 'pph-step-9').innerText()) || '').includes('다시 도전') && h3.rows.find((x) => x.n === 10).st !== 'locked' && h3.rows.find((x) => x.n === 2).st === 'locked', JSON.stringify(h3.rows.map((x) => [x.n, x.st])))
+    await T(page, 'pph-step-9-go').click()
+    await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
+    const t3 = await testSessionRun(page, words, { detect: true, wrongAt: [1, 2] })
+    const miss3 = new Set([t3[1].item.id, t3[2].item.id])
     await T(page, 'pha-review').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
-    const rv2 = await detectSession(page, 1)
-    r.check(`${name} "다시 만나기" 버튼: 방금 틀린 소리 1개만 (${rv2[0].item.word})`, rv2.length === 1 && rv2[0].item.id === t2[0].item.id && (await T(page, 'pha-root').count()) === 0)
+    const total = Number((((await T(page, 'pbp-progress').textContent()) || '').match(/\/\s*(\d+)/) || [])[1])
+    const rv3 = await detectSession(page, total)
+    r.check(`${name} 복습 ${total}문제(3~6): 틀린 소리 ${miss3.size}개를 모두 포함하고, 모든 문제의 풍선은 [a, 다른 소리] 둘뿐`, total >= 3 && total <= 6 && [...miss3].every((id) => rv3.some((x) => x.item.id === id)) && rv3.every((x) => x.opts), JSON.stringify(rv3.map((x) => x.item.word)))
+    r.check(`${name} 복습 요약에 "소리 확인 다시 하기"(pha-retest)가 보임`, (await T(page, 'pha-retest').count()) === 1 && (await T(page, 'pha-summary').getAttribute('data-passed')) === null)
+    await T(page, 'pha-retest').click()
+    await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
+    r.check(`${name} 다시 확인 = 새 5문제 소리 확인`, ((await T(page, 'pbp-progress').textContent()) || '').includes('소리 확인 1 / 5') && (await T(page, 'pbp-root').getAttribute('data-mode')) === 'challenge')
+    const t4 = await testSessionRun(page, words, { detect: true })
+    r.check(`${name} 모두 맞히면 5/5 통과, 복습 버튼 없음`, (await T(page, 'pha-summary').getAttribute('data-passed')) === 'true' && (await T(page, 'pha-summary').getAttribute('data-score')) === '5/5' && (await T(page, 'pha-review').count()) === 0 && allOk(t4, 'once'))
   }, { studentId: TESTER_ONLY })
 
   // ---- (o) 360x640 터치: Book 1 Unit 3 허브 · 소개 · 풍선 · Word Train

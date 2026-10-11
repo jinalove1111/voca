@@ -491,5 +491,44 @@ const srcFiles = fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).fil
 ok(srcFiles.length > 100 && !srcFiles.some((f) => /Phonics Adventure/.test(read(path.join('src', f)))), `the name "Phonics Adventure" appears nowhere in src/ (${srcFiles.length} files)`)
 ok(!/playEn|playWordAudio|speak/.test(stripC(read('src/components/phonics/PhonemeListen.jsx'))), 'PhonemeListen never calls TTS')
 ok(['PaulPhonics', 'UnitHub', 'PhonemeListen', 'PhonicsAdventure', 'SoundBubblePop', 'WordTrain'].every((nm) => fs.existsSync(path.join(ROOT, `src/components/phonics/${nm}.jsx`))), 'phonics components present')
+
+// ---- 261차 pass mark: ONE settings source, helpers take the settings as a parameter, review of missed sounds
+{
+  const S = await import('../src/data/phonics/settings.js')
+  ok(S.PHONICS_SETTINGS.testPassRatio === 0.8, 'settings: default pass ratio 0.8')
+  ok([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((t) => G.passMark(t)).join() === '1,2,3,4,4,5,6,7,8,8', 'passMark 1..10 at 0.8')
+  ok([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((t) => G.passMark(t, { testPassRatio: 0.6 })).join() === '1,2,2,3,3,4,5,5,6,6', 'passMark 1..10 at 0.6')
+  ok([1, 2, 3, 4, 5].every((t) => G.passMark(t, { testPassRatio: 1 }) === t), 'passMark at 1.0 = total')
+  ok(!G.testPassed(3, 5) && G.testPassed(4, 5) && G.testPassed(5, 5) && !G.testPassed(0, 5), 'testPassed boundaries 3/5 false, 4/5 true')
+  ok(G.testPassed(3, 5, { testPassRatio: 0.6 }) && !G.testPassed(4, 5, { testPassRatio: 1 }), 'a custom settings object changes the result (configurable)')
+  const lit = [...fs.readdirSync(path.join(ROOT, 'src'), { recursive: true })].filter((f) => /phonics/i.test(f) && /\.jsx?$/.test(f)).filter((f) => /Ratio\W+0\.8/.test(read(path.join('src', f))))
+  ok(lit.length === 1 && /settings\.js$/.test(lit[0]), `the 0.8 pass mark literal lives only in settings.js (${JSON.stringify(lit)})`)
+  const ctxOf = (id) => U.unitContext('b1', id)
+  for (const u of C.BOOKS[0].units) {
+    let st = true, why = ''
+    for (let seed = 1; seed <= 12; seed++) {
+      const test = U.testSession('b1', u.id, seed)
+      for (const miss of [[test[0]], [test[1], test[3]], test]) {
+        const rv = U.reviewForMisses('b1', u.id, miss, seed)
+        const key = (w) => (w.detect ? (w.graphemes.includes(w.vowel) ? w.vowel : '') : w.graphemes[w.targetIndex])
+        if (rv.length < 3 || rv.length > 6 && miss.length < 6) { st = false; why = `size ${rv.length}` }
+        if (!miss.every((m) => rv.some((x) => x.id === m.id))) { st = false; why = 'misses missing' }
+        if (new Set(rv.map((x) => x.id)).size !== rv.length) { st = false; why = 'dup' }
+        if (JSON.stringify(rv.map((x) => x.id)) !== JSON.stringify(U.reviewForMisses('b1', u.id, miss, seed).map((x) => x.id))) { st = false; why = 'not deterministic' }
+        if (!rv.every((x) => rv.some((y) => key(y) === key(x)) && (miss.some((m) => key(m) === key(x)) || false))) { st = false; why = 'foreign sound' }
+        for (const w of rv) {
+          const r = G.bubbleRound(w, seed, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctxOf(u.id).optionPairs, detect: !!w.detect, vowel: w.vowel })
+          if (!r || r.options.some((o) => /^[bcdfghjklmnpqrstvwxyz]/.test(o) && o !== '다른 소리')) { st = false; why = `consonant option in ${w.word}` }
+        }
+      }
+    }
+    ok(st, `reviewForMisses ${u.id}: 3-6 items, covers every missed item and sound, deterministic, no consonant option (${why})`)
+  }
+  ok(U.reviewForMisses('b1', 'u1', [], 5).length === 0, 'reviewForMisses: empty misses -> empty')
+  const pa = read('src/components/phonics/PhonicsAdventure.jsx')
+  ok(/unitTest: \{ score: firstTry, total: items\.length, passMark: mark, passed \}/.test(pa) && /data-passed/.test(pa) && /data-pass-mark/.test(pa) && /pha-retest/.test(pa), 'test record shape { score, total, passMark, passed } + data-passed/data-pass-mark/pha-retest')
+  const sm = U.missedItems([{ bookId: 'b1', unitId: 'u1', step: 'test', itemId: 'x', correct: false }, { bookId: 'b1', unitId: 'u1', unitTest: { score: 4, total: 5, passMark: 4, passed: true } }], 'b1', 'u1')
+  ok(sm.join() === 'x', 'a missed test item counts toward hub step 10; the test summary record does not')
+}
 console.log(`${fail ? 'FAIL' : 'PASS'} ${n - fail}/${n} testPhonicsGames`)
 process.exit(fail ? 1 : 0)

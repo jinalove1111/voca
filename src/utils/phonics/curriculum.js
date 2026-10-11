@@ -217,3 +217,17 @@ export function wordDifficulty(item) {
 
 // image production priority from the first Book a word appears in: P1 = Book 1, P2 = Book 2, P3 = Books 3-5 (260차)
 export const imagePriority = (bookNo) => `P${Math.min(Math.max(bookNo, 1), 3)}`
+
+// 소리 확인에서 틀린 소리의 복습: 틀린 문제 + 같은 소리를 익히는 다른 단어(이 Unit·이전 Unit)를 합쳐 3~6개. 시드로만 섞는다. Unit 1(소리 찾기)은 같은 판정 형태(모음 있음/없음)를 쓴다.
+export function reviewForMisses(bookId, unitId, missed, seed) {
+  const ctx = unitContext(bookId, unitId)
+  if (!missed.length || !ctx || ctx.unit.review) return missed.slice(0, 6)
+  const key = (w) => (w.detect ? (w.graphemes.includes(w.vowel) ? w.vowel : '') : w.graphemes[w.targetIndex])
+  const d = detectUnit(bookId, unitId) ? detectWords(bookId, unitId) : null
+  const pool = d ? [...d.own, ...d.far] : [...ctx.words.filter((w) => hasGame(w, 'B') && w.targetIndex >= 0 && bubbleOk(w, ctx)), ...bubbleReviewPool(bookId, unitId)]
+  const keys = new Set(missed.map(key))
+  const out = missed.slice(0, 6)
+  const want = Math.min(6, Math.max(3, out.length + 2))
+  for (const w of shuffled(pool, rng(seed))) if (out.length < want && keys.has(key(w)) && !out.some((x) => x.id === w.id)) out.push(w)
+  return shuffled(out, rng(seed + 1))
+}

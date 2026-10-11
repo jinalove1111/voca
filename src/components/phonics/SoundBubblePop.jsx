@@ -10,7 +10,10 @@ import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { stopSpeaking } from '../../utils/speech'
 import { GamePicture, PwProgress, playEn, useReducedMotion } from '../pictureWords/pictureImg.jsx'
 
-const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
+export const WRONG = 'rounded-2xl bg-amber-50 p-2 text-center text-base font-black text-amber-700'
+export const KO = 'text-center text-lg font-bold text-gray-700 break-words'
+export const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
+export const PUR = `${BTN} w-full bg-purple-600 text-white`
 const PRAISE = ['좋아요!', '잘 들었어요!', '바로 그 소리예요!']
 
 export default function SoundBubblePop({ item, seed, index, total, autoplay, onHeard, studentId, onRecord, onNext, ctx }) {
@@ -91,7 +94,7 @@ export default function SoundBubblePop({ item, seed, index, total, autoplay, onH
           ))}
         </div>
       )}
-      {st.last === 'wrong' && !st.done && <p data-testid="pbp-feedback" data-result="wrong" className="rounded-2xl bg-amber-50 p-2 text-center text-base font-black text-amber-700">다시 들어 볼까요?</p>}
+      {st.last === 'wrong' && !st.done && <p data-testid="pbp-feedback" data-result="wrong" className={WRONG}>다시 들어 볼까요?</p>}
       {!test && !st.done && !hinted && <button type="button" data-testid="pbp-hint" onClick={() => setHinted(true)} className={`${BTN} w-full bg-yellow-100 text-yellow-800`}>💡 힌트</button>}
       {reveal && (
         <div data-testid="pbp-reveal" className="space-y-2">
@@ -100,15 +103,15 @@ export default function SoundBubblePop({ item, seed, index, total, autoplay, onH
             const word = <p data-testid="pbp-word" className="text-center text-3xl font-black text-gray-900 break-words">{parts.map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
             return item.asset ? word : <div data-testid="pbp-text-card" className="pw-card pw-card--text pw-card-sm"><span className="pw-card-tag">듣기 단어</span>{word}</div>
           })()}
-          {item.ko && <p data-testid="pbp-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>}
+          {item.ko && <p data-testid="pbp-ko" className={KO}>{item.ko}</p>}
         </div>
       )}
       {st.done && (
         <>
           {st.last === 'right'
             ? <p data-testid="pbp-feedback" data-result="right" className="rounded-2xl bg-green-50 p-2 text-center text-base font-black text-green-700">{PRAISE[seed % 3]}</p>
-            : <p data-testid="pbp-feedback" data-result="wrong" className="rounded-2xl bg-amber-50 p-2 text-center text-base font-black text-amber-700">이 소리를 다시 만나 볼게요</p>}
-          <button type="button" data-testid="pbp-next" onClick={finish} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
+            : <p data-testid="pbp-feedback" data-result="wrong" className={WRONG}>이 소리를 다시 만나 볼게요</p>}
+          <button type="button" data-testid="pbp-next" onClick={finish} className={PUR}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
         </>
       )}
     </div>

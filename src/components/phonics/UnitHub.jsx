@@ -12,6 +12,7 @@ import PhonemeListen, { LOCKED_TEXT_KO } from './PhonemeListen.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
 const MIN_TEST_WORDS = 4
+const MUTED = 'text-xs font-bold text-gray-500'
 const NONE = '단어 준비 중'
 const TEACHER_SOON = '선생님 목소리는 곧 만나요'
 const CHUNKS = ['만나요', '말해요', '놀아요']
@@ -21,6 +22,8 @@ const Spelled = ({ item, big }) => (
   <span className={`font-black ${big ? 'text-3xl' : 'text-xl'}`}>{spellParts(item.graphemes, item.targetIndex ?? -1).map((x, k) => <span key={k} data-hl={x.hl ? 'true' : undefined} className={x.hl ? 'text-pink-600' : 'text-gray-400'}>{x.t}</span>)}</span>
 )
 const Thumb = ({ item, cls }) => (item.image === 'ready' ? <img src={imgUrl(item.asset)} alt="그림" draggable={false} className={cls} /> : null)
+
+const Play = ({ w, id }) => <button type="button" data-testid={id} aria-label="단어 듣기" onClick={() => playEn(w.word)} className="min-h-[44px] min-w-[44px] rounded-2xl bg-sky-100 text-xl btn-press">🔊</button>
 
 function Row({ r, onGo, children }) {
   const next = r.state === 'next'
@@ -46,6 +49,7 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
   const [open, setOpen] = useState({})
   const mine = records.filter((r) => r.bookId === bookId && r.unitId === unitId)
   const attempts = mine.filter((r) => !r.unitTest)
+  const lastTest = mine.filter((r) => r.unitTest).pop()?.unitTest
   const missedIds = missedItems(records, bookId, unitId)
   const detect = detectUnit(bookId, unitId)
   const bubbleWords = useMemo(() => (detect ? detectWords(bookId, unitId).own : words.filter((w) => hasGame(w, 'B') && bubbleRound(w, 0, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctx.optionPairs }))), [words, ctx, detect, bookId, unitId])
@@ -76,6 +80,9 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
   const trainLock = !unit.games.includes('T') ? (unit.games.includes('B') ? '이 Unit은 Sound Bubble Pop으로 연습해요' : '철자 게임으로 연습해요') : NONE
   const testLock = unitTestLock(book)
   const doneBy = (step) => attempts.some((r) => r.step === step)
+  const bubble = { key: 'bubble', chain: true, title: 'Sound Bubble Pop', ok: bubbleWords.length > 0, why: bubbleLock, go: true, done: doneBy('bubble') }
+  const train = { key: 'train', chain: true, title: 'Word Train', ok: trainWords.length > 0, why: trainLock, go: true, done: doneBy('train') }
+  const review = { key: 'review', sub: reviewWhy, ok: missed.length > 0, why: reviewWhy, go: true, run: sess('bubble', 'review', missed) }
 
   if (b1) {
     const tag = '소리 찾기'
@@ -84,20 +91,20 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
       { n: 2, key: 'hear', chunk: 0, title: '선생님 소리 듣기', ok: hasWords && allClips, why: TEACHER_SOON, info: true },
       { n: 3, key: 'say', chunk: 1, covers: '3,4,5', badge: '3–5', title: '듣고 따라 말하고 녹음해요', sub: '단어로 따라 말해요', ok: ready.length > 0, why: '그림이 준비된 단어가 없어요', go: true, run: () => onPractice(ready), done: isSeen('say') },
       { n: 6, key: 'gallery', chunk: 1, title: '그림과 단어', sub: '단어 듣기 (읽기는 Book 2에서)', ok: hasWords, why: NONE, toggle: true, go: true, done: isSeen('gallery') },
-      { n: 7, key: 'bubble', chunk: 2, tag, chain: true, title: 'Sound Bubble Pop', sub: detect ? '소리가 들리는 풍선을 터뜨려요' : '소리를 듣고 알맞은 모음 풍선을 터뜨려요', ok: bubbleWords.length > 0, why: bubbleLock, go: true, run: sess('bubble', 'bubble', bubbleWords, { interleave: true }), done: doneBy('bubble') },
-      { n: 8, key: 'train', chunk: 2, tag, chain: true, title: 'Word Train', sub: '빈 칸에 들리는 모음을 끼워요', ok: trainWords.length > 0, why: trainLock, go: true, run: sess('train', 'train', trainWords, { vowelTrain: true }), done: doneBy('train') },
-      { n: 9, key: 'test', chunk: 2, tag, chain: true, title: '소리 확인', sub: '5문제, 한 문제에 한 번씩 골라요', ok: testSession(bookId, unitId, 0).length === 5, why: NONE, go: true, run: sess('bubble', 'test', [], { test: true }), done: mine.some((r) => r.unitTest) },
-      { n: 10, key: 'review', chunk: 2, title: '다시 만나는 소리', sub: reviewWhy, ok: missed.length > 0, why: reviewWhy, go: true, run: sess('bubble', 'review', missed) },
+      { ...bubble, n: 7, chunk: 2, tag, sub: detect ? '소리가 들리는 풍선을 터뜨려요' : '소리를 듣고 알맞은 모음 풍선을 터뜨려요', run: sess('bubble', 'bubble', bubbleWords, { interleave: true }) },
+      { ...train, n: 8, chunk: 2, tag, sub: '빈 칸에 들리는 모음을 끼워요', run: sess('train', 'train', trainWords, { vowelTrain: true }) },
+      { n: 9, key: 'test', chunk: 2, tag, chain: true, title: '소리 확인', sub: `5문제, 한 문제에 한 번씩 골라요${lastTest ? (lastTest.passed ? ' · 통과' : ' · 다시 도전') : ''}`, ok: testSession(bookId, unitId, 0).length === 5, why: NONE, go: true, run: sess('bubble', 'test', [], { test: true }), done: mine.some((r) => r.unitTest) },
+      { ...review, n: 10, chunk: 2, title: '다시 만나는 소리' },
     ]
   } else {
     rows = [
       { n: 1, key: 'hear', title: '소리 듣기', ok: hasWords && allClips, why: rec.length ? LOCKED_TEXT_KO : '소리 하나를 따로 듣지 않는 Unit이에요', info: true },
       { n: 2, key: 'repeat', title: '듣고 따라 말하기', ok: hasWords && allClips, why: rec.length ? `${LOCKED_TEXT_KO} — 소리 하나씩 따라 말하려면 선생님 녹음이 있어야 해요. 단어 따라 말하기는 3번에서 해요.` : '소리 하나를 따로 듣지 않는 Unit이에요', info: true },
       { n: 3, key: 'pic', title: '그림과 단어', sub: '그림을 보고 단어를 듣고 따라 말해요', ok: ready.length > 0, why: '그림이 준비된 단어가 없어요', go: true, run: () => onPractice(ready), done: isSeen('pic') },
-      { n: 4, key: 'bubble', chain: true, title: 'Sound Bubble Pop', sub: '소리를 듣고 풍선을 터뜨려요', ok: bubbleWords.length > 0, why: bubbleLock, go: true, run: sess('bubble', 'bubble', bubbleWords, unit.review ? undefined : { interleave: true }), done: doneBy('bubble') },
-      { n: 5, key: 'train', chain: true, title: 'Word Train', sub: '소리 블록으로 단어를 만들어요', ok: trainWords.length > 0, why: trainLock, go: true, run: sess('train', 'train', trainWords), done: doneBy('train') },
+      { ...bubble, n: 4, sub: '소리를 듣고 풍선을 터뜨려요', run: sess('bubble', 'bubble', bubbleWords, unit.review ? undefined : { interleave: true }) },
+      { ...train, n: 5, sub: '소리 블록으로 단어를 만들어요', run: sess('train', 'train', trainWords) },
       { n: 6, key: 'test', chain: true, title: 'Unit Test', sub: '그림을 보고 단어를 골라요', ok: !testLock && ready.length >= MIN_TEST_WORDS, why: testLock || '그림이 준비된 단어가 4개 이상일 때 열려요', go: true, run: () => onTest(ready), done: isSeen('test') },
-      { n: 7, key: 'review', title: '틀린 소리 복습', sub: reviewWhy, ok: missed.length > 0, why: reviewWhy, go: true, run: sess('bubble', 'review', missed) },
+      { ...review, n: 7, title: '틀린 소리 복습' },
     ]
   }
   rows = rows.map((r) => ({ ...r, state: !r.ok ? 'locked' : r.done ? 'done' : 'ready' }))
@@ -125,7 +132,7 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
               <div key={w.id} data-testid="pph-intro-word" data-picture={w.image === 'ready' ? 'true' : 'false'} className="pw-card pw-card--text pw-card-sm">
                 <Thumb item={w} cls="pw-pic" />
                 <Spelled item={w} />
-                <button type="button" data-testid="pph-intro-play" aria-label="단어 듣기" onClick={() => playEn(w.word)} className="min-h-[44px] min-w-[44px] rounded-2xl bg-sky-100 text-xl btn-press">🔊</button>
+                <Play w={w} id="pph-intro-play" />
               </div>
             ))}
           </div>
@@ -140,7 +147,7 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
             <div key={w.id} data-testid="pph-gallery-word" className="flex flex-col items-center gap-1 rounded-2xl border-2 border-pink-100 bg-white p-2">
               <Thumb item={w} cls="h-16 w-16 rounded-xl object-contain" />
               <Spelled item={w} />
-              <button type="button" data-testid="pph-gallery-play" aria-label="단어 듣기" onClick={() => playEn(w.word)} className="min-h-[44px] min-w-[44px] rounded-2xl bg-sky-100 text-xl btn-press">🔊</button>
+              <Play w={w} id="pph-gallery-play" />
             </div>
           ))}
         </div>
@@ -162,8 +169,8 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
         <span data-testid="pph-unit-status" className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">{STATUS_LABEL_KO[unit.status]}</span>
         <p data-testid="pph-unit-words" className="text-sm font-bold text-gray-600">{hasWords ? `단어 ${words.length}개` : NONE}</p>
         {!unit.review && <p data-testid="pph-unit-objective" className="text-sm font-bold text-sky-700">{objectiveKo(book, unit)}</p>}
-        {!unit.review && !b1 && <p data-testid="pph-unit-prereq" className="text-xs font-bold text-gray-500">먼저 배운 것: {prereqKo(bookId, unitId)}</p>}
-        {unit.note && <p className="text-xs font-bold text-gray-500">{unit.note}</p>}
+        {!unit.review && !b1 && <p data-testid="pph-unit-prereq" className={MUTED}>먼저 배운 것: {prereqKo(bookId, unitId)}</p>}
+        {unit.note && <p className={MUTED}>{unit.note}</p>}
       </div>
 
       {b1

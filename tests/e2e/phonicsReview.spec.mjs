@@ -87,7 +87,7 @@ export async function run(browser, baseURL) {
 
     // 기존 에셋 후보 7개: 썸네일이 실제로 로드됐고 "승인 필요" 표시
     const cands = await page.locator('[data-testid="phr-candidate"]').evaluateAll((l) => l.map((e) => { const i = e.querySelector('img'); const b = i ? i.getBoundingClientRect() : {}; return { w: e.getAttribute('data-word'), nat: i ? i.naturalWidth : null, bw: b.width, bh: b.height, fit: i ? getComputedStyle(i).objectFit : '', t: e.innerText } }))
-    r.check('기존 에셋 후보 7개(썸네일 3 + kit 경로만 4): 썸네일 로드(naturalWidth>0), 같은 정사각 상자(object-fit: contain), "승인 필요 — 학생 화면에 사용 안 함"', cands.length === 7 && (await txt(page, 'phr-candidates-count')) === '7' && cands.filter((c) => c.nat != null).length === 3 && cands.every((c) => (c.nat == null || (c.nat > 0 && c.bw === c.bh && c.fit === 'contain')) && c.t.includes('승인 필요 — 학생 화면에 사용 안 함') && c.t.includes('src/assets/town/')), JSON.stringify(cands.map((c) => [c.w, c.nat, c.bw, c.bh])))
+    r.check('기존 에셋 후보 7개(썸네일 3 + kit 경로만 4): 썸네일 로드(naturalWidth>0), 같은 정사각 상자(object-fit: contain), "승인 필요 — 학생 화면에 사용 안 함"', cands.length === 7 && (await txt(page, 'phr-candidates-count')) === '7' && cands.filter((c) => c.nat != null).length === 3 && cands.every((c) => (c.nat == null || (c.nat > 0 && c.bw === c.bh && c.fit === 'contain')) && c.t.includes('승인 필요 — 학생 화면에 사용 안 함') && c.t.includes(c.nat == null ? 'town kit: ' : 'src/assets/town/')), JSON.stringify(cands.map((c) => [c.w, c.nat, c.bw, c.bh])))
     const unitRv = await page.locator('[data-testid="phr-unit-review"]').count()
     r.check('Unit 표 단어에 검토 배지(⚠)가 보임', unitRv > 0, String(unitRv))
     r.check('방언 메모 11개', (await page.locator('[data-testid="phr-dialect"] li').count()) === 11)
