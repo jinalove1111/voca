@@ -3,10 +3,10 @@
   "role": "PAUL PHONICS 5권 구조 구현 (254차)",
   "task_id": "paul-phonics-5-books-2026-10-11",
   "task": "5권 -> Unit -> 7단계 허브 + 기존 게임 연결(테스터 전용, 저장/네트워크/보상 0)",
-  "status": "working",
-  "progress": 85,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T06:00:05.000Z",
+  "updated_at": "2026-10-11T06:01:13.000Z",
   "files_owned": [
     "TESTING.md",
     "docs/design/PHONICS_ADVENTURE_2026-10-11.md",
@@ -35,7 +35,7 @@
     "src/utils/pictureWords/*",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "4/5: 브라우저 스펙 115/115, 문서 작업 남음",
+  "summary": "5권 구조 구현·정적 127/127·브라우저 115/115·문서 완료",
   "blocker": null,
   "next_action": ""
 }
