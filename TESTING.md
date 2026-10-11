@@ -2146,3 +2146,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 261차 추가 (2026-10-11): 소리 확인 통과 기준
 - `scripts/testPhonicsGames.mjs`(389): `passMark` 1..10(0.8·0.6·1.0), `testPassed` 경계(3/5 거짓·4/5 참), 다른 설정 객체가 결과를 바꿈, 0.8 리터럴은 `settings.js`에만, `reviewForMisses`(결정적·3~6개·틀린 문제 포함·자음 선택지 없음·빈 입력 → 빈 배열), 기록 모양, 시험 오답은 `missedItems`에 들어가고 요약 기록은 안 들어감.
 - `tests/e2e/phonicsGames.spec.mjs`: Book 1 Unit 1 시나리오에 4/5 통과·3/5 아직(`data-passed`/`data-pass-mark`/주 버튼)·허브 9단계 결과·10단계 열림·2단계 잠김·복습 → `pha-retest` → 새 5문제 → 5/5 추가.
+
+### 262차 추가 (2026-10-12): Book 1 수업 준비
+- `scripts/testPhonicsProgress.mjs`(111): Book 1 숫자가 데이터에서 25 / 9 / 13 / 3, 13개 제작 단어 목록, 앞 5개 녹음 id·파일 이름, 메모리 속 가짜 목록으로 Unit별 해제(파일만·승인만·둘 다·미완 승인·m4a), 이름·짝·형식·크기 오류, 녹음기 동일성(`useLocalRecorder`+`RecorderControls`, `MediaRecorder` 직접 사용 0), 관리자 섹션에 네트워크·저장 없음.
+- `tests/e2e/phonicsReview.spec.mjs`(49): `phr-book1` 맨 위 · Unit 5 · 단어 25 · 요약 숫자 = 데이터 · 녹음 5줄 모두 "파일 없음" · "표에서 보기" 이동 · 미리보기 승인이 실제 상태에 영향 없음. `tests/e2e/pictureWordPractice.spec.mjs`(110): 카드 그림 상자 1280/768/360에서 정사각·contain·분홍 테두리·가로 넘침 0.
+- `scripts/phonics/validateRecordings.mjs --book1`: 파일 0개면 "미등록 5 / 5" 오류 없음(종료 0).
