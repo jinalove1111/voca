@@ -11,7 +11,7 @@ const DIFFS = [['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움']]
 
 // 난이도가 바뀌면 호출한 쪽이 key를 바꿔 라운드를 새로 시작한다.
 export default function HiddenLetters({ word, seed, difficulty, onDifficulty, index, total, onNext }) {
-  const round = useMemo(() => hiddenRound(word, { difficulty, seed }), [word, difficulty, seed])
+  const round = useMemo(() => hiddenRound(word, { difficulty, seed, prefer: word.prefer }), [word, difficulty, seed])
   const [st, setSt] = useState(() => hiddenStart(round))
   const blank = round.blanks[st.filled]
   const reduced = useReducedMotion()

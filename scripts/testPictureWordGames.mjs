@@ -98,7 +98,8 @@ ok(!/Math\.random|fetch\(|localStorage|sessionStorage|document\.|window\.|from '
 if (exists('src/components/pictureWords/AlphabetHammer.jsx')) {
   const hs = read('src/components/pictureWords/AlphabetHammer.jsx'), imgSrc = read('src/components/pictureWords/pictureImg.jsx')
   ok(!FORBID.test(hs + imgSrc), 'hammer: no network/storage/reward/analytics')
-  ok(!/data-correct|data-answer|data-right|aria-label/.test(hs + imgSrc), 'hammer: no answer-bearing attributes / aria-label')
+  // 259차: a tile may carry aria-label="글자 <its own letter>" (the letter is already its visible text — it says nothing about the answer order); any other aria-label is still forbidden
+  ok(!/data-correct|data-answer|data-right/.test(hs + imgSrc) && (hs.match(/aria-label=/g) || []).length === 1 && hs.includes('aria-label={`글자 ${t.ch}`}') && !/aria-label/.test(imgSrc), 'hammer: no answer-bearing attributes; the only aria-label is the tile letter itself (259차)')
   ok(/alt="그림"/.test(imgSrc) && /GamePicture/.test(hs), 'hammer: neutral picture alt')
   ok(/\{st\.done && \([\s\S]{0,300}data-testid="pwh-word"/.test(hs), 'hammer: pwh-word mounted only after completion')
   ok(/prefers-reduced-motion/.test(imgSrc) && /useReducedMotion\(\)/.test(hs), 'hammer: reduced-motion branch')

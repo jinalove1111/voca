@@ -103,13 +103,13 @@ function QuizCard({ word, q, onAnswered, onNext, n, total, label = '시험' }) {
         {q.options.map((o, k) => (
           <button key={o.id} type="button" data-testid={`pwp-opt-${k}`} disabled={answered}
             onClick={() => { if (answered) return; setPicked(o.id); playSfx(o.id === q.correctId ? 'right' : 'wrong'); onAnswered(o.id === q.correctId) }}
-            className={`min-h-[56px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40 break-words border-2 ${answered && o.id === q.correctId ? 'border-green-500 bg-green-100 text-green-800' : answered && o.id === picked ? 'border-red-400 bg-red-100 text-red-700' : 'border-gray-200 bg-white text-gray-800'}`}>
+            className={`min-h-[56px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40 break-words border-2 ${answered && o.id === q.correctId ? 'border-green-500 bg-green-100 text-green-800' : answered && o.id === picked ? 'border-amber-400 bg-amber-100 text-amber-800' : 'border-gray-200 bg-white text-gray-800'}`}>
             {o.en}
           </button>
         ))}
       </div>
       {answered && (
-        <div data-testid="pwp-feedback" data-result={right ? 'right' : 'wrong'} className={`space-y-2 rounded-2xl p-3 ${right ? 'bg-green-50' : 'bg-red-50'}`}>
+        <div data-testid="pwp-feedback" data-result={right ? 'right' : 'wrong'} className={`space-y-2 rounded-2xl p-3 ${right ? 'bg-green-50' : 'bg-amber-50'}`}>
           <p className="text-center text-lg font-black">{right ? '맞았어요!' : '아쉬워요, 다시 봐요'}</p>
           <WordText word={word} />
           <ListenBtn word={word} />
