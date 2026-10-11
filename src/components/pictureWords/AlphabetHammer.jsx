@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { hammerRound, hammerStart, hammerTap } from '../../utils/pictureWords/games.js'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
-import { GamePicture, PwProgress, playEn, useReducedMotion, W } from './pictureImg.jsx'
+import { GamePicture, PwProgress, playEn, T3, useReducedMotion, W } from './pictureImg.jsx'
 import { Sparkles, useSuccessThenSpeak } from './gameFx.jsx'
 
 const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-xl btn-press disabled:opacity-40'
@@ -111,7 +111,7 @@ export default function AlphabetHammer({ word, seed, index, total, onNext }) {
       )}
       {st.done && (
         <div className="space-y-2 text-center">
-          <p data-testid="pwh-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
+          <p data-testid="pwh-word" className={T3}>{word.en}</p>
           <button ref={nextBtn} type="button" data-testid="pwh-next" onClick={() => { cancel(); onNext(st.wrong) }} className={`${BTN} ${W.purple}`}>{index + 1 >= total ? '결과 보기' : '다음 단어'}</button>
         </div>
       )}

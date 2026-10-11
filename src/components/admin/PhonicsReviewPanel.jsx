@@ -17,6 +17,7 @@ const REC_STATE = { missing: '파일 없음', uploaded: '승인 대기', approve
 const FILTERS = [['all', '전체'], ['ready', '그림 준비'], ['needed', '제작 대기'], ['candidate', '기존 후보'], ['free', '그림 없이'], ['review', '검토 필요']]
 const CAND_WORDS = new Set(IMAGE_CANDIDATES.map((c) => c.word))
 const SCROLL = 'mt-2 max-h-96 max-w-full overflow-auto'
+const MUTED = 'text-xs font-bold text-gray-500'
 const H = 'text-sm font-black text-gray-800'
 const SEC = 'min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3'
 const AMBER = 'rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800'
@@ -93,7 +94,7 @@ function WordList({ testid, title, words }) {
 function CandidateSection({ list }) {
   return (
     <section data-testid="phr-candidates" className={SEC}>
-      <p className={H}>기존 에셋 후보 <span data-testid="phr-candidates-count">{list.length}</span> <span className="text-xs font-bold text-gray-500">({CANDIDATE_NOTE_KO})</span></p>
+      <p className={H}>기존 에셋 후보 <span data-testid="phr-candidates-count">{list.length}</span> <span className={MUTED}>({CANDIDATE_NOTE_KO})</span></p>
       <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {IMAGE_CANDIDATES.map((c) => (
           <li key={c.word} data-testid="phr-candidate" data-word={c.word} className="min-w-0 rounded-xl bg-gray-50 p-2 text-center text-xs text-gray-700">
@@ -247,7 +248,7 @@ export default function PhonicsReviewPanel() {
 
       {BOOKS.map((b) => (
         <section key={b.id} className="min-w-0 space-y-2">
-          <p className={H}>Book {b.no} · {b.titleEn} · {b.titleKo} <span className="text-xs font-bold text-gray-500">(Unit {b.units.length})</span></p>
+          <p className={H}>Book {b.no} · {b.titleEn} · {b.titleKo} <span className={MUTED}>(Unit {b.units.length})</span></p>
           <div className="max-w-full overflow-x-auto rounded-2xl border-2 border-gray-200 bg-white">
             <table data-testid={`phr-book-${b.id}`} className="min-w-[64rem] border-collapse">
               <thead>
@@ -266,12 +267,12 @@ export default function PhonicsReviewPanel() {
       <WordTable stats={s} />
 
       <section className={SEC}>
-        <p className={H}>녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className="text-xs font-bold text-gray-500">(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
+        <p className={H}>녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className={MUTED}>(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
         <RecordingPreview />
       </section>
 
       <section className={SEC}>
-        <p className={H}>방언 메모 <span className="text-xs font-bold text-gray-500">(영국식 RP 기준)</span></p>
+        <p className={H}>방언 메모 <span className={MUTED}>(영국식 RP 기준)</span></p>
         <ul data-testid="phr-dialect" className="mt-2 list-disc space-y-1 pl-5 text-xs text-gray-700">
           {DIALECT_NOTES.map((t) => <li key={t} className="break-words">{t}</li>)}
         </ul>

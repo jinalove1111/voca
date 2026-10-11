@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { passMark, sessionItems, testPassed } from '../../utils/phonics/games.js'
 import { bubbleSession, reviewForMisses, testSession } from '../../utils/phonics/curriculum.js'
 import { stopSpeaking } from '../../utils/speech'
-import { BTN, GameStyle, W } from '../pictureWords/pictureImg.jsx'
+import { BTN, GameStyle, T2, W } from '../pictureWords/pictureImg.jsx'
 import SfxControl from '../pictureWords/SfxControl.jsx'
 import SoundBubblePop from './SoundBubblePop.jsx'
 import WordTrain from './WordTrain.jsx'
@@ -46,7 +46,7 @@ export default function PhonicsAdventure({ game, items: pool, ctx, studentId, on
     return (
       <div data-testid="pha-summary" data-records={records.length} data-score={`${firstTry}/${items.length}`} {...(test && { 'data-passed': String(passed), 'data-pass-mark': mark })} className="space-y-3 text-center">
         <GameStyle />
-        <p className="text-2xl font-black text-gray-900">{test ? '소리 확인을 마쳤어요' : '게임을 마쳤어요'}</p>
+        <p className={T2}>{test ? '소리 확인을 마쳤어요' : '게임을 마쳤어요'}</p>
         <p className="text-lg text-gray-700">한 번에 {game === 'train' ? '만든' : '맞힌'} {noun} <span data-testid="pha-first-try" data-score={`${firstTry} / ${items.length}`} className="font-black text-purple-700">{firstTry}개</span></p>
         {test && <p data-testid="pha-pass-line" className={`text-lg font-black ${passed ? 'text-green-700' : 'text-amber-800'}`}>{passed ? `통과! ${items.length}문제 중 ${mark}개 이상 맞혔어요` : `조금만 더! ${mark}개를 맞히면 통과예요`}</p>}
         {nxt && <button type="button" data-testid="pha-next-step" onClick={() => onNext(nxt.run)} className={PUR}>{nxt.label}</button>}

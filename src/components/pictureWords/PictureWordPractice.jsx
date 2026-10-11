@@ -7,7 +7,7 @@ import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise 
 import { playWordAudio, stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls } from '../SpeakingPracticeItem'
-import { BTN, GameStyle, PwProgress, imgUrl, W } from './pictureImg.jsx'
+import { BTN, GameStyle, MUTED, PwProgress, T2, T3, imgUrl, W } from './pictureImg.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { PICTURE_REC_LABELS } from './recLabels.js'
@@ -36,7 +36,7 @@ function Picture({ word, glow = false }) {
 function WordText({ word }) {
   return (
     <div className="text-center">
-      <p data-testid="pwp-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
+      <p data-testid="pwp-word" className={T3}>{word.en}</p>
       {word.ko && <p data-testid="pwp-ko" className="text-lg text-gray-600 break-words">{word.ko}</p>}
     </div>
   )
@@ -155,7 +155,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
   } else if (stage === 'end') {
     body = (
       <div data-testid="pwp-end" className="space-y-3 text-center">
-        <p className="text-2xl font-black text-gray-900">다음은 게임!</p>
+        <p className={T2}>다음은 게임!</p>
         <p className="text-base text-gray-600">같은 단어로 게임을 하거나 시험을 볼 수 있어요</p>
         {gameBtns('알파벳 망치로', '숨은 글자로')}
         <button type="button" data-testid="pwp-go-test" onClick={startTest} className={`${PRIMARY} w-full`}>시험 보기</button>
@@ -189,7 +189,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
     const s = summarise(results)
     body = (
       <div data-testid="pwp-summary" className="space-y-3 text-center">
-        <p className="text-2xl font-black text-gray-900">{s.total ? '시험을 마쳤어요' : '연습을 마쳤어요'}</p>
+        <p className={T2}>{s.total ? '시험을 마쳤어요' : '연습을 마쳤어요'}</p>
         {s.total > 0 && <p className="text-lg text-gray-700">처음에 맞힌 단어 <span data-testid="pwp-summary-first-try" className="font-black text-purple-700">{s.firstTryCorrect} / {s.total}</span></p>}
         {s.needsReview.length > 0 && (
           <div className="rounded-2xl bg-amber-50 p-3 text-left text-sm">
@@ -263,7 +263,7 @@ export default function PictureWordPractice({ onExit, studentId }) {
         <div className="space-y-2">
           {sets.map((s) => (
             <div key={s.id} data-testid={`pwp-set-${s.id}`} data-ready={s.ready ? 'true' : 'false'} className="rounded-2xl border-2 border-purple-200 bg-white p-2">
-              <p className="break-words text-center text-base font-black text-purple-700">{s.labelKo}<span className="ml-2 text-xs font-bold text-gray-500">{s.ready ? `${s.words.length}개` : '준비 중'}</span></p>
+              <p className="break-words text-center text-base font-black text-purple-700">{s.labelKo}<span className={`ml-2 ${MUTED}`}>{s.ready ? `${s.words.length}개` : '준비 중'}</span></p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <button type="button" data-testid={`pwp-start-practice-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'practice')} className={`${PRIMARY} text-base`}>연습하기</button>
                 <button type="button" data-testid={`pwp-start-test-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'test')} className={`${SOFT} text-base`}>시험 보기</button>

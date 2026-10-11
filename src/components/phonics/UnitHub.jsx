@@ -7,12 +7,11 @@ import { bubbleRound, spellParts, summarisePhonemes } from '../../utils/phonics/
 import { detectUnit, detectWords, hasGame, missedItems, readyWords, testSession, unitContext, unitTestLock } from '../../utils/phonics/curriculum.js'
 import { gameEligible } from '../../utils/pictureWords/games.js'
 import { phonemeClip } from '../../data/phonics/phonemeClips.js'
-import { imgUrl, playEn, W } from '../pictureWords/pictureImg.jsx'
+import { imgUrl, MUTED, playEn, T2, W } from '../pictureWords/pictureImg.jsx'
 import PhonemeListen, { LOCKED_TEXT_KO } from './PhonemeListen.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
 const MIN_TEST_WORDS = 4
-const MUTED = 'text-xs font-bold text-gray-500'
 const NONE = '단어 준비 중'
 const TEACHER_SOON = '선생님 목소리는 곧 만나요'
 const CHUNKS = ['만나요', '말해요', '놀아요']
@@ -163,7 +162,7 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
     <div data-testid="pph-unit" data-book={bookId} data-unit={unitId} data-layout={b1 ? 'book1' : 'classic'} className="space-y-3">
       <div className="text-center">
         <p className="text-sm font-bold text-gray-500">Book {book.no} · {book.titleEn} ({book.titleKo})</p>
-        <p className="text-2xl font-black text-gray-900">{unitName}</p>
+        <p className={T2}>{unitName}</p>
         <p data-testid="pph-unit-target" className={`break-words font-black text-pink-600 ${b1 ? 'text-6xl' : 'text-lg'}`}>{targetLine}</p>
         {b1 && <div className="flex justify-center gap-2">{keyWords.map((w) => <Thumb key={w.id} item={w} cls="h-14 w-14 rounded-xl border-2 border-pink-200 bg-white object-contain" />)}</div>}
         <span data-testid="pph-unit-status" className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">{STATUS_LABEL_KO[unit.status]}</span>

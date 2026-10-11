@@ -37,6 +37,9 @@ export function useReducedMotion() {
 
 // full-width button colours shared by the phonics and picture-word screens (used as `${BTN} ${W.gray}`)
 export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
+export const T2 = 'text-2xl font-black text-gray-900'
+export const T3 = 'text-3xl font-black text-gray-900 break-words'
+export const MUTED = 'text-xs font-bold text-gray-500'
 export const W = { gray: 'w-full bg-gray-200 text-gray-700', purple: 'w-full bg-purple-600 text-white', sky: 'w-full bg-sky-100 text-sky-700' }
 
 const CSS = `

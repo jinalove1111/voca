@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { BOOKS, STATUS_LABEL_KO, bookById, unitLabel, unitsOf } from '../../data/phonics/curriculum.js'
 import { unitWords } from '../../utils/phonics/curriculum.js'
-import { GameStyle, W } from '../pictureWords/pictureImg.jsx'
+import { GameStyle, MUTED, T2, W } from '../pictureWords/pictureImg.jsx'
 import PhonicsAdventure from './PhonicsAdventure.jsx'
 import PhonicsProgress from './PhonicsProgress.jsx'
 import UnitHub from './UnitHub.jsx'
@@ -24,7 +24,7 @@ function Main({ onOpen, onProgress, onExit }) {
   return (
     <div data-testid="pph-main" className="space-y-3">
       <div className="text-center">
-        <p className="text-2xl font-black text-gray-900">PAUL PHONICS · 폴 파닉스</p>
+        <p className={T2}>PAUL PHONICS · 폴 파닉스</p>
         <p data-testid="pph-draft-notice" className="mt-1 rounded-2xl bg-amber-50 p-2 text-sm font-bold text-amber-800">{DRAFT_NOTICE_KO}</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -59,7 +59,7 @@ function Book({ bookId, onOpen, onBack }) {
           <span className="block text-base font-black text-gray-800">{label}</span>
           <span className="block break-words text-sm font-bold text-pink-600">{targets}</span>
           <span data-testid={`pph-unit-${id}-count`} className="block text-xs font-bold text-gray-600">{n ? `단어 ${n}개` : '단어 준비 중'}</span>
-          {n > 0 && <span data-testid={`pph-unit-${id}-media`} className="block text-xs font-bold text-gray-500">그림 {pics} · 듣기 {n - pics}</span>}
+          {n > 0 && <span data-testid={`pph-unit-${id}-media`} className={`block ${MUTED}`}>그림 {pics} · 듣기 {n - pics}</span>}
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1">
           <span data-testid={`pph-unit-${id}-badge`} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">{STATUS_LABEL_KO[status]}</span>
