@@ -75,3 +75,102 @@ Treasure Hunt, Sound Bridge. 교재 순서 확정, 실제 음소 음원, 저장/
 ### 아직 만들지 않은 것
 
 Treasure Hunt, Sound Bridge, 마을 건물 연결, 저장/학부모 리포트, 실제 소리 음원, 승인된 Unit 구성.
+
+
+## 43 Unit (구조 승인, 255차, 2026-10-11)
+
+### 운영자가 승인한 것 / 승인하지 않은 것
+
+- **승인:** 5권 안의 **Unit 구조(43개: Book 1~5 = 5/7/6/11/14)** 뿐이다.
+- **승인하지 않음:** 단어, 소리, 이미지, 음성(녹음). 그래서 43개 Unit은 전부 `status: 'draft'`(화면 배지 "임시")이고, 승인된 Unit 목록(`unitsOf(.., { includeDraft: false })`)은 모든 Book에서 비어 있다. 단어 목록은 리드가 쓰고 검증한 임시 표다.
+
+### 24 Unit 초안에서 달라진 것
+
+초안 24개 → 최종 43개. 리드 정리: **수정 9, 병합 2, 분리 1, Book 5 Unit 14(같은 철자, 다른 소리) 추가** — 앞서 "그래도 43"이라던 산수는 틀렸고 43 − 2 + 1 = 42이므로 리드가 Book 5 Unit 14를 추가해 43을 맞췄다. Book 1 단어는 이제 5개씩이고 Book 5의 제목은 "모음 조합 및 확장 음가"이다.
+
+### 전체 Unit 목록 (게임: B = Sound Bubble Pop, T = Word Train, H = Alphabet Hammer, L = Hidden Letters)
+
+**Book 1 · Short Vowels · 단모음** (5 Unit)
+
+| Unit | 철자 | 소리 | 난이도 | 게임 | 단어 |
+|---|---|---|---|---|---|
+| 1 | a | /æ/ | 2 | B | bag, jam, cat, hat, map |
+| 2 | e | /e/ | 2 | B | pen, desk, egg, bed, red |
+| 3 | i | /ɪ/ | 2 | B | milk, ink, pig, six, lip |
+| 4 | o | /ɒ/ | 2 | B | sock, dog, box, hot, pot |
+| 5 | u | /ʌ/ | 3 | B | cup, sun, bus, mug, nut |
+
+**Book 2 · Single Consonants · 단자음** (7 Unit)
+
+| Unit | 철자 | 소리 | 난이도 | 게임 | 단어 |
+|---|---|---|---|---|---|
+| 1 | m · s · t · p | /m/ /s/ /t/ /p/ | 1 | BTHL | mat, sat, tap, pot, sip |
+| 2 | n · d · g · c | /n/ /d/ /ɡ/ /k/ | 1 | BTHL | pen, cup, dog, can, dig |
+| 3 | b · h · f · l | /b/ /h/ /f/ /l/ | 2 | BTHL | bag, bed, hat, fan, leg |
+| 4 | r · j · k · w | /r/ /dʒ/ /k/ /w/ | 2 | BTHL | jam, milk, desk, red, wet |
+| 5 | v · y · z | /v/ /j/ /z/ | 3 | BTHL | van, yes, zip, vet, yam |
+| 6 | ll · ss · ff · gg · zz · tt · pp · bb · ck (doubles) | /l/ /s/ /f/ /ɡ/ /z/ /t/ /p/ /b/ | 1 | THL | egg, dress, bell, hill, miss, sock, duck |
+| 7 | qu · x (quex) | /kw/ /ks/ | 2 | THL | box, six, fox, quiz, quit |
+
+**Book 3 · Long Vowels · 장모음** (6 Unit)
+
+| Unit | 철자 | 소리 | 난이도 | 게임 | 단어 |
+|---|---|---|---|---|---|
+| 1 | a_e | /eɪ/ | 2 | BTHL | cake, tape, gate, name, game |
+| 2 | i_e | /aɪ/ | 2 | BTHL | kite, slide, bike, five, time |
+| 3 | o_e | /əʊ/ | 2 | BTHL | bone, home, cone, rope, note |
+| 4 | u_e | /juː/ | 2 | BTHL | cube, tube, cute, mule, tune |
+| 5 | u_e | /uː/ | 2 | BTHL | rule, june, flute, rude, prune |
+| 6 | tap–tape · kit–kite · cap–cape · hop–hope · cub–cube (contrast) | — | 3 | B | tap, tape, kit, kite, cap, cape, hop, hope, cub, cube |
+
+**Book 4 · Consonant Teams · 이중자음** (11 Unit)
+
+| Unit | 철자 | 소리 | 난이도 | 게임 | 단어 |
+|---|---|---|---|---|---|
+| 1 | ck (digraph) | /k/ | 1 | BTHL | sock, duck, kick, neck, rock |
+| 2 | sh (digraph) | /ʃ/ | 2 | BTHL | ship, shop, fish, dish, shell |
+| 3 | ch (digraph) | /tʃ/ | 2 | BTHL | chip, chin, rich, much, chick |
+| 4 | th (digraph) | /θ/ | 3 | BTHL | thin, thick, moth, thud, tenth |
+| 5 | th (digraph) | /ð/ | 3 | BTHL | this, that, them, then, with |
+| 6 | wh (digraph) | /w/ | 1 | BTHL | when, whip, which, whiz, whisk |
+| 7 | ng · nk (digraph) | /ŋ/ /ŋk/ | 2 | BTHL | ink, ring, king, song, pink |
+| 8 | bl · cl · fl · gl · pl · sl (cluster) | — | 3 | THL | slide, flag, clap, plum, glad |
+| 9 | br · cr · dr · fr · gr · tr (cluster) | — | 3 | THL | dress, grapes, drum, frog, crab |
+| 10 | st · sp · sn · sm · sk · sw (cluster) | — | 2 | THL | desk, stop, spot, snap, swim |
+| 11 | nd · nt · mp · st · lk (cluster) | — | 2 | THL | milk, hand, tent, lamp, nest |
+
+**Book 5 · Vowel Teams · 모음 조합 및 확장 음가** (14 Unit)
+
+| Unit | 철자 | 소리 | 난이도 | 게임 | 단어 |
+|---|---|---|---|---|---|
+| 1 | ai · ay | /eɪ/ | 2 | BTHL | train, rain, snail, day, play |
+| 2 | ee · ea · e_e | /iː/ | 2 | BTHL | sweet, peach, green, tree, sea, pete, eve |
+| 3 | oa · ow | /əʊ/ | 2 | BTHL | boat, coat, road, snow, grow |
+| 4 | ow · ou | /aʊ/ | 2 | BTHL | cow, town, brown, loud, cloud |
+| 5 | oi · oy | /ɔɪ/ | 2 | BTHL | coin, oil, boil, boy, toy |
+| 6 | igh | /aɪ/ | 2 | BTHL | night, light, high, right, fight |
+| 7 | oo · ou | /uː/ | 3 | BTHL | moon, spoon, zoo, food, boot, soup, group, you |
+| 8 | oo | /ʊ/ | 3 | BTHL | book, foot, cook, good, wood |
+| 9 | ar | /ɑː/ | 2 | BTHL | car, scarf, star, park, farm |
+| 10 | or | /ɔː/ | 2 | BTHL | fork, born, corn, storm, short |
+| 11 | er · ir · ur | /ɜː/ | 3 | BTHL | shirt, skirt, bird, turn, her |
+| 12 | er | /ə/ | 2 | HL | butter, pepper, jumper, rubber, winter |
+| 13 | air · ear | /eə/ | 2 | BTHL | chair, pear, hair, pair, fair |
+| 14 | ow snow/cow · oo moon/book · ea sea/bread · ou cloud/soup (contrast) | /e/ | 3 | THL | snow, cow, moon, book, sea, bread, cloud, soup |
+
+
+### 규칙
+
+- **ck 보조 철자:** Book 2 Unit 6(겹자음)은 `aux: ['ck|k']`로 ck를 **미리 만난다**(sock·duck 때문). 정식 학습은 Book 4 Unit 1이다. `learnedPairs`는 보조 쌍도 그 Unit부터 "배운 것"으로 센다 — 이 처리를 빼면 sock·duck 해독 검사가 실패한다(변이 검사 5건 FAIL로 확인).
+- **자음군(Book 4 Unit 8~11):** 글자마다 제 소리를 내고 이어 읽는 것이라 새 소리 쌍이 없다(`targets` 0, 표시용 `labels`만). 녹음 불필요, Sound Bubble Pop 없음, Word Train에서도 낱글자 타일로 남는다.
+- **Book 3 vs Book 5 목표:** Book 3 = "silent-e로 장모음 읽기", Book 5 = "같은 소리의 다른 철자 익히기"(Book 3 소리가 다시 나오면 관리자 표에 "재사용 /ipa/ (같은 녹음)"), 단모음·장모음/철자 비교 Unit(Book 3 Unit 6, Book 5 Unit 14) = "소리 구별 복습".
+- **그림 없는 단어:** Sound Bubble Pop과 Word Train은 그림 없이도 돈다(Word Train은 "잘 듣고 소리 블록을 이어 보세요" 듣기 전용 안내). 알파벳 망치·숨은 글자·연습 카드(3단계)·그림 시험(6단계)은 **그림이 준비된(`image: 'ready'`) 단어만** 쓴다.
+- **이미지 목록(리드 확정):** 197개 단어 중 그림 준비 32 / 이미지 제작 대기 94 / 그림 없이 학습 71. 슬롯 230(같은 단어 반복 포함) 중 그림 있는 슬롯 50.
+
+### 녹음 42개와 등록·승인 흐름
+
+`src/data/phonics/phonemeClips.js`의 `RECORDING_LIST`가 가르치는 순서대로 소리 42개(대표 철자·예시 단어)를 가진다. **지금 존재하는 녹음은 0개**이므로 전부 "대기"이고 1·2단계는 모든 Unit에서 잠겨 있다. /kw/ /ks/ /ŋk/, 겹자음, 자음군은 녹음이 필요 없다. 레지스트리는 **소리(ipa) 기준**이라 u_e /uː/와 oo /uː/는 같은 녹음을 쓴다. 흐름: 교사가 녹음 파일을 넘김 → 파일을 `src/assets/phonics/clips/`에 두고 레지스트리에 `{ src, status: 'teacher-approved', approvedBy, approvedOn }` 항목 추가 → `recordingStatus(ipa)`가 'approved'. 관리자 업로드 화면은 저장소와 SQL이 필요하므로 **만들지 않았다.** 글자·자소·IPA 하나는 어디서도 TTS로 보내지 않는다.
+
+### 관리자 검토 탭
+
+관리자 화면의 새 탭 "🔤 파닉스 검토"(`src/components/admin/PhonicsReviewPanel.jsx`, lazy 청크)는 **읽기 전용**이다(저장·네트워크·편집 컨트롤 없음). 요약 칩, Book별 표(Unit·상태·목표 음소·철자 패턴·대표 단어와 그림 표시·게임·음성 준비·이미지 준비·난이도·선수 학습·비고), 이미지 제작 대기 목록, 그림 없이 학습 목록, 녹음 42행, 방언 메모(영국식 RP 기준)를 보여 준다. 숫자는 데이터에서 계산한다.
