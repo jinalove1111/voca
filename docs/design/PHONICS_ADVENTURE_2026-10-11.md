@@ -174,3 +174,26 @@ Treasure Hunt, Sound Bridge, 마을 건물 연결, 저장/학부모 리포트, �
 ### 관리자 검토 탭
 
 관리자 화면의 새 탭 "🔤 파닉스 검토"(`src/components/admin/PhonicsReviewPanel.jsx`, lazy 청크)는 **읽기 전용**이다(저장·네트워크·편집 컨트롤 없음). 요약 칩, Book별 표(Unit·상태·목표 음소·철자 패턴·대표 단어와 그림 표시·게임·음성 준비·이미지 준비·난이도·선수 학습·비고), 이미지 제작 대기 목록, 그림 없이 학습 목록, 녹음 42행, 방언 메모(영국식 RP 기준)를 보여 준다. 숫자는 데이터에서 계산한다.
+
+
+## 256차 품질 개선 (2026-10-11)
+
+운영자 부재 중 리드 지시로 진행. 모든 Unit은 여전히 `status: 'draft'`이고 녹음은 0개다.
+
+### 반영한 검수 결과 (리드 확정, 원문 목록은 `phonicsFinal2.mjs`)
+- **단어:** b2u2 + gum, b2u4 + kid, b2u5 yam→yum, b2u6 + off·buzz, b2u7 quit→quick, b4u3 rich·much→chop·lunch, b4u4 thud→cloth, b4u6 whiz·whisk→white·whale, b4u7 + ring·king·song·wing·ink·pink, b4u8 glad→globe + black, b4u9 + brick·truck, b4u10 + smell·skip, b5u10 born→horn, b5u13 fair→stair. 결과: 단어 210(그림 준비 32 / 제작 대기 105 / 그림 없이 73), 슬롯 236, 디코딩 불가 0.
+- **b5u2:** `e_e`(these, Pete)는 드물어 목표에서 뺐다(예외로만 소개, Unit 비고). **b5u14:** 대비 Unit이 아니라 진짜 `ea /e/` Unit(게임 BTHL, 난이도 3). 같은 철자 다른 소리 4쌍(snow/cow, moon/book, sea/bread, cloud/soup)은 Book 5 전체 연습의 안내 줄.
+- **소리 둘짜리 목표:** `qu`(/kw/)·`x`(/ks/)·`nk`(/ŋk/)는 `twoSounds` — 풍선 목표가 될 수 없고 녹음 1개도 필요 없다. b4u7 풍선은 ng 단어 4개, ink·pink는 Word Train/철자 항목. `ng`는 그대로 digraph.
+- **표시:** Unit 라벨은 Book 안에서 유일(`th (thin)`/`th (this)`, `u_e (cube)`/`u_e (rule)`, `oo (moon) · ou (soup)`/`oo (book)`, `ea (bread)`, `oa · ow (snow)`/`ow (cow) · ou (cloud)`). 고유명사는 `display`로 대문자 유지(June). 교사 확인 필요 단어 17개(`REVIEW_WORDS`: mule, prune, tenth, cub, moth, vet, rude, yum, cloth, globe, horn, thread, spread, breath, head, jumper, rubber — jumper는 영국식 sweater, rubber는 eraser). `wordDifficulty`: 3 = 자소 5개 이상 / 자음군 2번 이상 / 음절 2개 이상, 2 = 자소 4개 또는 글자가 둘 이상인 자소(이중자음·분리 이중자음·모음 조합) 또는 자음군 1번, 1 = 그 밖. 방언 메모: tube/tune /tʃuː-/, air/ear /ɛː/, with /wɪθ/, tr/dr /tʃr dʒr/, ow.
+- **Book 1 Unit Test 잠금:** 그림 시험(6단계)은 아직 배우지 않은 자음이 든 단어 전체 읽기라 Book 1(Unit·전체 연습)에서 잠그고 "Book 1은 소리 풍선으로 확인해요"를 보인다. 3단계(그림 + 듣기 + 따라 말하기)는 그대로.
+
+### Sound Bubble Pop — 복습 섞기
+단일 목표 Unit에서는 모든 정답이 같은 글자였다. 이제 세션 = 그 Unit의 풍선 단어 전부 + 이전 Unit(책 순서·Unit 순서, 대비 Unit 제외) 풍선 단어에서 시드로 뽑은 복습 최대 3개. 복습은 이 Unit의 목표와 다른 글자를 우선하고 글자당 1개, 각 항목은 **자기 Unit의 목표 글자와 기록(book/unit)** 을 갖는다. Book 1은 Book 1 앞 Unit에서만, 보기는 단모음 5개. Book 1 Unit 1은 복습이 없다(앞 Unit이 없음). 순서는 셔플. 다중 목표 Unit은 덜 쓰인 목표를 고른다(b2u2: n c d c g g). 정적 검사: 풍선이 있고 앞 Unit이 있는 모든 Unit × 시드 0..19에서 정답 글자 ≥ 2종류. 팝 애니메이션 0.28s(≤ 300ms), 정답/오답 효과음이 다르고 오답은 정답을 알려 주지 않으며, 연타(같은 오답 반복·정답 뒤 클릭)에서도 오답 수 = 서로 다른 오답 풍선 수, 완료·기록 1건씩. `pbp-listen-sound`("소리 듣기")는 그 소리의 승인된 녹음이 있을 때만 마운트 — 지금은 0개.
+
+### Word Train — 출발한 기차
+원인 확정은 못 했다(코드만으로는 transition이 끝에 머무는 구조라 재현이 안 됐다). 구조로 막았다: 출발을 `animation: pwt-go ... forwards`(끝 상태 translateX(130%) + visibility:hidden)로 바꿔 끝난 뒤에도 돌아올 수 없게 하고, 같은 칸(CSS grid 겹침, 높이 불변)에 완성한 단어를 채워진 칸 줄 `pwt-result`로 보인다. 다음 버튼 y 이동 ≤ 8px(브라우저 검사), 동작 줄이기: 애니메이션 없이 기차 숨김 + 결과 줄 즉시. 클러스터는 낱글자 타일(black = b·l·a·ck, 360×640 터치 6단어 완주). 타일을 맞게 누르면 그 소리의 승인된 녹음이 있을 때만 재생, 완성 시 모든 자소의 녹음이 승인된 경우에만 성공음 → 소리 하나씩(≈350ms 간격) → 단어 전체; 아니면 기존대로. 모두 `playPhonemes(ipas)` 한 곳을 통하며 승인 없는 소리가 하나라도 있으면 **아무것도 하지 않는다**(TTS 폴백 없음). 다음/나가기 시 대기 중 재생 취소.
+
+### 선생님 녹음 42개 — 파일·승인 흐름
+- 파일 규칙: `src/assets/phonics/clips/ph-<NN>-<id>.<mp3|m4a|wav>` (NN = 두 자리 순번). 예: `ph-01-a.mp3`, `ph-31-th-thin.mp3`, `ph-32-th-this.mp3`. 크기 2KB~500KB. 순번·id 목록은 `src/data/phonics/recordings.js`의 `RECORDINGS`(가르치는 순서: a e i o u · m s t p n d g k b h f l r j w v y z · ai ie oa ue oo-long · sh ch th-thin th-this ng · ee ow oi oo-short ar or er schwa air).
+- 선생님이 파일을 넘기면 개발자가 위 이름으로 폴더에 둔다 → `node scripts/phonics/validateRecordings.mjs`가 이름·번호/id 짝·중복·확장자·크기를 점검(상태 `uploaded`) → 교사가 **듣고 승인**하면 `PHONEME_APPROVALS`에 `'<id>': { approvedBy: '<교사>', approvedOn: 'YYYY-MM-DD' }`를 추가 → `approved`가 되어서야 재생된다. 파일만 있거나 승인만 있으면 재생되지 않는다(승인 항목이 파일 없이 있으면 검증 오류).
+- 상태 `missing`(파일 없음) | `uploaded`(파일만) | `approved`(파일 + 완전한 승인). 지금은 42개 전부 `missing`: `파일 0 / 42 · 승인 0 / 42`. 관리자 화면은 건드리지 않았다(숫자는 그대로 데이터에서 계산).

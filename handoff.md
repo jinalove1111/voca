@@ -1,4 +1,5 @@
 # Paul Easy Voca — Handoff
+_256차 갱신: 2026-10-11 (256차 — **PAUL PHONICS 품질 개선**: 검수 반영 단어 210개·Unit 정리, Bubble Pop 복습 섞기(정답이 계속 같은 글자이던 문제), Word Train 출발 기차 고정 + 완성 단어 칸, 선생님 녹음 42개 등록·승인·검증 구조(녹음 파일 0개, 모든 Unit 임시). 아래 256차 섹션 참고.)
 _255차 갱신: 2026-10-11 (255차 — **PAUL PHONICS 43 Unit(구조 승인, 전부 임시) 적용 + 관리자 읽기 전용 검토 탭**: 24 Unit 초안을 운영자가 구조만 승인한 43 Unit(5/7/6/11/14)으로 교체. Sound Bubble Pop·Word Train은 그림 없는 단어도 처리, 그림이 필요한 단계는 그림 준비된 단어만. 녹음 42개는 모두 대기. 정적 테스트·브라우저 스펙 갱신. 단어·소리·이미지·음성은 승인 전.)
 _254차 갱신: 2026-10-11 (254차 — **PAUL PHONICS (폴 파닉스) 5권 → Unit → 7단계 허브**: 시제품 게임 2종 앞에 책장·Book·Unit 허브를 두고 기존 연습 카드·그림 시험·알파벳 망치·숨은 글자에 Unit 단어를 넘겨 연결. Unit은 전부 리드 초안(임시), 소리 하나는 선생님 녹음 없이는 잠김(TTS 없음). 테스터 전용·저장·네트워크·보상·DB 없음. 아래 254차 섹션 참고.)_
 _최종 갱신: 2026-10-08 (227차 — **레벨별 교육과정 세분화 + 레벨 구조 연결**: 전 과정 단계표(파닉스·회화 6·발표 3·RG 4·중등 후속, 월별 목표 → Unit → 차시, Unit 8항목, 미제작 표시)·말하기/쓰기 수행 수준 사다리·기존 콘텐츠 매핑 문서(`CURRICULUM_STAGES`), 데이터 계약(`PERFORMANCE_LEVELS`·`profile`·`followUp`), QA 화면 **과정 → 단계 → Unit** 선택(저장 없음), 인접 단계 실증 Unit 3 = C2 발전 "거기 아니야, 저기는?"(C1 Unit 2와 같은 목표·상황, 질문 생성·되묻기·2~3문장 쓰기). 정적 PASS; 브라우저 e2e는 RAM <3GB로 미실행(재개 시 갱신). 전부 교사 검수 대기. PR #62 Draft·QA 전용. 아래 227차 섹션 참고.)_
@@ -63,6 +64,14 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-11 (256차) — PAUL PHONICS 품질 개선: 단어·Unit 수정, 풍선 복습 섞기, 기차 출발 고정, 녹음 42개 등록·검증 구조
+
+- **무엇:** 독립 검수에서 나온 Unit/단어 문제를 리드 확정 목록(`phonicsFinal2.mjs`)대로 반영 — 단어 210개(그림 준비 32 / 제작 대기 105 / 그림 없이 73), 슬롯 236. b5u14는 진짜 `ea /e/` Unit(bread·head·thread·spread·breath), 같은 철자 다른 소리 4쌍은 Book 5 전체 연습의 안내 줄로 이동. `nk`는 `twoSounds`(소리 둘)라 풍선 목표 불가(b4u7 풍선은 ng 단어 4개). Unit 라벨은 `th (thin)`/`th (this)` 등 Book 안에서 유일. `June`은 `display`로 대문자 유지. `REVIEW_WORDS` 17개(`needsReview`), `wordDifficulty(item)` 1~3(순수), 방언 메모 11개.
+- **Sound Bubble Pop:** 단일 목표 Unit에서 정답이 계속 같은 풍선이던 문제 → 세션 = 그 Unit 풍선 단어 + 이전 Unit 복습 최대 3개(`bubbleSession`, 시드 셔플, 각자 자기 Unit의 목표·기록). 다중 목표 Unit은 덜 쓰인 목표를 고름(b2u2는 n c d c g g). Book 1 첫 Unit은 복습 없음. `pbp-listen-sound`는 승인된 소리 녹음이 있을 때만 마운트(지금은 0개). Book 1 Unit Test(6단계)는 "Book 1은 소리 풍선으로 확인해요"로 잠금.
+- **Word Train:** 출발한 기차가 제자리로 돌아오던 문제 → 출발 애니메이션 `pwt-go`(forwards, 끝에 visibility:hidden)로 바꾸고 같은 칸(grid 겹침)에 완성한 단어 `pwt-result`를 표시(동작 줄이기: 즉시). 소리 녹음 재생은 `playPhonemes`(승인 없으면 아무것도 안 함)로만 — 지금은 소리 0.
+- **녹음 등록:** `recordings.js`(순수: 42개 `RECORDINGS`, `PHONEME_APPROVALS = {}`, `recordingStatuses`, `validateRecordings`), `clipFiles.js`(`import.meta.glob` 한 곳, 폴더 없음 = 파일 0), `phonemeClips.js`는 그 위에 재구성(기존 API 유지). CLI `node scripts/phonics/validateRecordings.mjs` → `파일 0 / 42 · 승인 0 / 42`. 녹음 파일·플레이스홀더는 만들지 않았다.
+- **검증:** 정적 `testPhonicsGames` 337/337(아홉 숫자 `units 43 slots 236 withPic 48 uniqueWords 210 uniqueNoPic 178 needImage 105 noImageNeeded 73 flags 0 recordings 42`), 브라우저 `phonicsGames` 158/158·`phonicsReview` 23/23·`pictureWordGames` 148/148·`pictureWordPractice` 107/107. 모든 Unit은 여전히 `draft`. 설계: `docs/design/PHONICS_ADVENTURE_2026-10-11.md` "256차 품질 개선".
 
 ## 2026-10-11 (255차) — PAUL PHONICS 43 Unit (구조 승인, 임시) + 관리자 검토 탭
 
