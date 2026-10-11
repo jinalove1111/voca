@@ -47,92 +47,95 @@ const CLUSTER = '자음군 — 글자마다 제 소리, 이어서 읽기'
 // qu (/kw/), x (/ks/) and nk (/ŋk/) are ONE written unit but TWO sounds: never a Sound Bubble Pop target, never recorded as one clip.
 const NO_RECORDING = new Set(['kw', 'ks', 'ŋk'])
 
-// unit(id, 'learn tokens', 'word notations', { difficulty, games, label?, ...extra })
-function unit(id, learn, words, m) {
+// unit('learn tokens', 'word notations', { difficulty = 2, games = 'BTHL', label?, ...extra })
+function unit(learn, words, m = {}) {
   const toks = learn ? learn.split(' ').map(parseToken) : []
   const targets = toks.map(({ raw, ...x }) => {
     const t = m.kind === 'digraph' ? { ...x, kind: 'digraph' } : x
     return NO_RECORDING.has(x.ipa) ? { ...t, twoSounds: true } : t
   })
-  const { aux = [], ...rest } = m
-  return { id, status: 'draft', targets, aux, words: words.split(' '), ...rest }
+  const { aux = [], difficulty = 2, games = 'BTHL', ...rest } = m
+  return { status: 'draft', targets, aux, words: words.split(' '), difficulty, games, ...rest }
 }
 
 // Book 1 mouth tips are lead-authored DRAFTS (needsReview: admin shows them later; the child screen does not mark them). No Hangul transliteration of a sound.
 const tip = (tipKo) => ({ tipKo, tipNeedsReview: true })
 
+const dg = (learn, words, m) => unit(learn, words, { ...m, kind: 'digraph' })
+const seq = (list) => list.map((u, i) => ({ id: `u${i + 1}`, ...u }))
+
 export const BOOKS = [
   {
     id: 'b1', no: 1, titleEn: 'Short Vowels', titleKo: '단모음', focus: 'vowel-recognition', skill: 'sound',
     notes: ['모음 소리를 알아듣는 Book이에요. 자음은 도우미 소리일 뿐이고 Book 2에서 정식으로 배워요'],
-    units: [
-      unit('u1', 'a', 'b-a-g j-a-m c-a-t h-a-t m-a-p', { difficulty: 2, games: 'BT', intro: tip('입을 크게 벌리고 혀를 낮게, 짧게 소리 내요') }),
-      unit('u2', 'e', 'p-e-n d-e-s-k e-gg b-e-d r-e-d', { difficulty: 2, games: 'BT', intro: tip('입을 조금 벌리고 입꼬리를 살짝 옆으로, 짧게') }),
-      unit('u3', 'i', 'm-i-l-k i-nk p-i-g s-i-x l-i-p', { difficulty: 2, games: 'BT', intro: tip('입에 힘을 빼고 살짝만 벌려 짧게') }),
-      unit('u4', 'o', 's-o-ck d-o-g b-o-x h-o-t p-o-t', { difficulty: 2, games: 'BT', intro: tip('입을 둥글게 하고 턱을 내려 짧게'), dialect: D_O }),
-      unit('u5', 'u', 'c-u-p s-u-n b-u-s m-u-g n-u-t', { difficulty: 3, games: 'BT', intro: tip('입을 편하게 반쯤 벌리고 짧게'), dialect: D_U }),
-    ],
+    units: seq([
+      unit('a', 'b-a-g j-a-m c-a-t h-a-t m-a-p', { games: 'BT', intro: tip('입을 크게 벌리고 혀를 낮게, 짧게 소리 내요') }),
+      unit('e', 'p-e-n d-e-s-k e-gg b-e-d r-e-d', { games: 'BT', intro: tip('입을 조금 벌리고 입꼬리를 살짝 옆으로, 짧게') }),
+      unit('i', 'm-i-l-k i-nk p-i-g s-i-x l-i-p', { games: 'BT', intro: tip('입에 힘을 빼고 살짝만 벌려 짧게') }),
+      unit('o', 's-o-ck d-o-g b-o-x h-o-t p-o-t', { games: 'BT', intro: tip('입을 둥글게 하고 턱을 내려 짧게'), dialect: D_O }),
+      unit('u', 'c-u-p s-u-n b-u-s m-u-g n-u-t', { difficulty: 3, games: 'BT', intro: tip('입을 편하게 반쯤 벌리고 짧게'), dialect: D_U }),
+    ]),
   },
   {
     id: 'b2', no: 2, titleEn: 'Single Consonants', titleKo: '단자음', focus: 'sound-letter', skill: 'reading', notes: [],
-    units: [
-      unit('u1', 'm s t p', 'm-a-t s-a-t t-a-p p-o-t s-i-p', { difficulty: 1, games: 'BTHL' }),
-      unit('u2', 'n d g c', 'p-e-n c-u-p d-o-g c-a-n d-i-g g-u-m', { difficulty: 1, games: 'BTHL' }),
-      unit('u3', 'b h f l', 'b-a-g b-e-d h-a-t f-a-n l-e-g', { difficulty: 2, games: 'BTHL' }),
-      unit('u4', 'r j k w', 'j-a-m m-i-l-k d-e-s-k r-e-d w-e-t k-i-d', { difficulty: 2, games: 'BTHL' }),
-      unit('u5', 'v y z', 'v-a-n y-e-s z-i-p v-e-t y-u-m', { difficulty: 3, games: 'BTHL' }),
-      unit('u6', 'll ss ff gg zz tt pp bb', 'e-gg d-r-e-ss b-e-ll h-i-ll m-i-ss o-ff b-u-zz s-o-ck d-u-ck', { difficulty: 1, games: 'THL', kind: 'doubles', aux: ['ck|k'], note: 'ck는 여기서 미리 만나고 Book 4에서 정식으로 배워요' }),
-      unit('u7', 'qu x', 'b-o-x s-i-x f-o-x qu-i-z qu-i-ck', { difficulty: 2, games: 'THL', kind: 'quex', note: 'qu /kw/, x /ks/ — 글자 하나 모양, 소리는 둘' }),
-    ],
+    units: seq([
+      unit('m s t p', 'm-a-t s-a-t t-a-p p-o-t s-i-p', { difficulty: 1 }),
+      unit('n d g c', 'p-e-n c-u-p d-o-g c-a-n d-i-g g-u-m', { difficulty: 1 }),
+      unit('b h f l', 'b-a-g b-e-d h-a-t f-a-n l-e-g'),
+      unit('r j k w', 'j-a-m m-i-l-k d-e-s-k r-e-d w-e-t k-i-d'),
+      unit('v y z', 'v-a-n y-e-s z-i-p v-e-t y-u-m', { difficulty: 3 }),
+      unit('ll ss ff gg zz tt pp bb', 'e-gg d-r-e-ss b-e-ll h-i-ll m-i-ss o-ff b-u-zz s-o-ck d-u-ck', { difficulty: 1, games: 'THL', kind: 'doubles', aux: ['ck|k'], note: 'ck는 여기서 미리 만나고 Book 4에서 정식으로 배워요' }),
+      unit('qu x', 'b-o-x s-i-x f-o-x qu-i-z qu-i-ck', { games: 'THL', kind: 'quex', note: 'qu /kw/, x /ks/ — 글자 하나 모양, 소리는 둘' }),
+    ]),
   },
   {
     id: 'b3', no: 3, titleEn: 'Long Vowels', titleKo: '장모음', focus: 'sound-letter', skill: 'reading', notes: [],
-    units: [
-      unit('u1', 'a_e', 'c-a_e-k t-a_e-p g-a_e-t n-a_e-m g-a_e-m', { difficulty: 2, games: 'BTHL' }),
-      unit('u2', 'i_e', 'k-i_e-t s-l-i_e-d b-i_e-k f-i_e-v t-i_e-m', { difficulty: 2, games: 'BTHL' }),
-      unit('u3', 'o_e', 'b-o_e-n h-o_e-m c-o_e-n r-o_e-p n-o_e-t', { difficulty: 2, games: 'BTHL', dialect: D_OE }),
-      unit('u4', 'u_e', 'c-u_e-b t-u_e-b c-u_e-t m-u_e-l t-u_e-n', { difficulty: 2, games: 'BTHL', label: 'u_e (cube)', dialect: D_TUBE, note: 'u_e /juː/' }),
-      unit('u5', 'u_e:uː', 'r-u_e:uː-l J-u_e:uː-n f-l-u_e:uː-t r-u_e:uː-d p-r-u_e:uː-n', { difficulty: 2, games: 'BTHL', label: 'u_e (rule)', note: 'u_e /uː/' }),
-      unit('u6', '', 't-a-p t-a_e-p k-i-t k-i_e-t c-a-p c-a_e-p h-o-p h-o_e-p c-u-b c-u_e-b', { difficulty: 3, games: 'B', kind: 'contrast', labels: ['tap–tape', 'kit–kite', 'cap–cape', 'hop–hope', 'cub–cube'], note: '단모음·장모음 구별' }),
-    ],
+    units: seq([
+      unit('a_e', 'c-a_e-k t-a_e-p g-a_e-t n-a_e-m g-a_e-m'),
+      unit('i_e', 'k-i_e-t s-l-i_e-d b-i_e-k f-i_e-v t-i_e-m'),
+      unit('o_e', 'b-o_e-n h-o_e-m c-o_e-n r-o_e-p n-o_e-t', { dialect: D_OE }),
+      unit('u_e', 'c-u_e-b t-u_e-b c-u_e-t m-u_e-l t-u_e-n', { label: 'u_e (cube)', dialect: D_TUBE, note: 'u_e /juː/' }),
+      unit('u_e:uː', 'r-u_e:uː-l J-u_e:uː-n f-l-u_e:uː-t r-u_e:uː-d p-r-u_e:uː-n', { label: 'u_e (rule)', note: 'u_e /uː/' }),
+      unit('', 't-a-p t-a_e-p k-i-t k-i_e-t c-a-p c-a_e-p h-o-p h-o_e-p c-u-b c-u_e-b', { difficulty: 3, games: 'B', kind: 'contrast', labels: ['tap–tape', 'kit–kite', 'cap–cape', 'hop–hope', 'cub–cube'], note: '단모음·장모음 구별' }),
+    ]),
   },
   {
     id: 'b4', no: 4, titleEn: 'Consonant Teams', titleKo: '이중자음', focus: 'sound-letter', skill: 'reading',
     notes: ['A: 글자 둘이 소리 하나를 내요 (digraph).  B: 자음군은 글자마다 제 소리를 내고 이어서 읽어요 (cluster) — 소리 하나를 따로 듣지 않아요'],
     groups: [{ id: 'a', titleKo: `A. ${DIGRAPH}`, unitIds: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7'] }, { id: 'b', titleKo: `B. ${CLUSTER}`, unitIds: ['u8', 'u9', 'u10', 'u11'] }],
-    units: [
-      unit('u1', 'ck', 's-o-ck d-u-ck k-i-ck n-e-ck r-o-ck', { difficulty: 1, games: 'BTHL', kind: 'digraph' }),
-      unit('u2', 'sh', 'sh-i-p sh-o-p f-i-sh d-i-sh sh-e-ll', { difficulty: 2, games: 'BTHL', kind: 'digraph' }),
-      unit('u3', 'ch', 'ch-i-p ch-i-n ch-o-p l-u-n-ch ch-i-ck', { difficulty: 2, games: 'BTHL', kind: 'digraph' }),
-      unit('u4', 'th', 'th-i-n th-i-ck m-o-th c-l-o-th t-e-n-th', { difficulty: 3, games: 'BTHL', kind: 'digraph', label: 'th (thin)', note: 'th /θ/' }),
-      unit('u5', 'th:ð', 'th:ð-i-s th:ð-a-t th:ð-e-m th:ð-e-n w-i-th:ð', { difficulty: 3, games: 'BTHL', kind: 'digraph', label: 'th (this)', dialect: D_WITH, note: 'th /ð/' }),
-      unit('u6', 'wh', 'wh-e-n wh-i-p wh-i-ch wh-i_e-t wh-a_e-l', { difficulty: 1, games: 'BTHL', kind: 'digraph', dialect: D_WH }),
-      unit('u7', 'ng nk', 'r-i-ng k-i-ng s-o-ng w-i-ng i-nk p-i-nk', { difficulty: 2, games: 'BTHL', kind: 'digraph', note: 'ng /ŋ/는 소리 하나, nk /ŋk/는 소리 둘이라 풍선은 ng 단어로만 해요' }),
-      unit('u8', '', 's-l-i_e-d f-l-a-g c-l-a-p p-l-u-m g-l-o_e-b b-l-a-ck', { difficulty: 3, games: 'THL', kind: 'cluster', labels: ['bl', 'cl', 'fl', 'gl', 'pl', 'sl'], note: 'l 자음군' }),
-      unit('u9', '', 'd-r-e-ss g-r-a_e-p-s d-r-u-m f-r-o-g c-r-a-b b-r-i-ck t-r-u-ck', { difficulty: 3, games: 'THL', kind: 'cluster', labels: ['br', 'cr', 'dr', 'fr', 'gr', 'tr'], dialect: D_TRDR, note: 'r 자음군' }),
-      unit('u10', '', 'd-e-s-k s-t-o-p s-p-o-t s-n-a-p s-w-i-m s-m-e-ll s-k-i-p', { difficulty: 2, games: 'THL', kind: 'cluster', labels: ['st', 'sp', 'sn', 'sm', 'sk', 'sw'], note: 's 자음군' }),
-      unit('u11', '', 'm-i-l-k h-a-n-d t-e-n-t l-a-m-p n-e-s-t', { difficulty: 2, games: 'THL', kind: 'cluster', labels: ['nd', 'nt', 'mp', 'st', 'lk'], note: '끝 자음군' }),
-    ],
+    units: seq([
+      dg('ck', 's-o-ck d-u-ck k-i-ck n-e-ck r-o-ck', { difficulty: 1 }),
+      dg('sh', 'sh-i-p sh-o-p f-i-sh d-i-sh sh-e-ll'),
+      dg('ch', 'ch-i-p ch-i-n ch-o-p l-u-n-ch ch-i-ck'),
+      dg('th', 'th-i-n th-i-ck m-o-th c-l-o-th t-e-n-th', { difficulty: 3, label: 'th (thin)', note: 'th /θ/' }),
+      dg('th:ð', 'th:ð-i-s th:ð-a-t th:ð-e-m th:ð-e-n w-i-th:ð', { difficulty: 3, label: 'th (this)', dialect: D_WITH, note: 'th /ð/' }),
+      dg('wh', 'wh-e-n wh-i-p wh-i-ch wh-i_e-t wh-a_e-l', { difficulty: 1, dialect: D_WH }),
+      dg('ng nk', 'r-i-ng k-i-ng s-o-ng w-i-ng i-nk p-i-nk', { note: 'ng /ŋ/는 소리 하나, nk /ŋk/는 소리 둘이라 풍선은 ng 단어로만 해요' }),
+      unit('', 's-l-i_e-d f-l-a-g c-l-a-p p-l-u-m g-l-o_e-b b-l-a-ck', { difficulty: 3, games: 'THL', kind: 'cluster', labels: ['bl', 'cl', 'fl', 'gl', 'pl', 'sl'], note: 'l 자음군' }),
+      unit('', 'd-r-e-ss g-r-a_e-p-s d-r-u-m f-r-o-g c-r-a-b b-r-i-ck t-r-u-ck', { difficulty: 3, games: 'THL', kind: 'cluster', labels: ['br', 'cr', 'dr', 'fr', 'gr', 'tr'], dialect: D_TRDR, note: 'r 자음군' }),
+      unit('', 'd-e-s-k s-t-o-p s-p-o-t s-n-a-p s-w-i-m s-m-e-ll s-k-i-p', { games: 'THL', kind: 'cluster', labels: ['st', 'sp', 'sn', 'sm', 'sk', 'sw'], note: 's 자음군' }),
+      unit('', 'm-i-l-k h-a-n-d t-e-n-t l-a-m-p n-e-s-t', { games: 'THL', kind: 'cluster', labels: ['nd', 'nt', 'mp', 'st', 'lk'], note: '끝 자음군' }),
+    ]),
   },
   {
     id: 'b5', no: 5, titleEn: 'Vowel Teams', titleKo: '모음 조합 및 확장 음가', focus: 'sound-letter', skill: 'reading', notes: [],
     reviewNote: '같은 철자, 다른 소리 — ow: snow/cow · oo: moon/book · ea: sea/bread · ou: cloud/soup',
-    units: [
-      unit('u1', 'ai ay', 't-r-ai-n r-ai-n s-n-ai-l d-ay p-l-ay', { difficulty: 2, games: 'BTHL' }),
-      unit('u2', 'ee ea', 's-w-ee-t p-ea-ch g-r-ee-n t-r-ee s-ea l-ea-f', { difficulty: 2, games: 'BTHL', note: 'e_e(these, Pete)는 드물어 예외로만 소개' }),
-      unit('u3', 'oa ow', 'b-oa-t c-oa-t r-oa-d s-n-ow g-r-ow', { difficulty: 2, games: 'BTHL', label: 'oa · ow (snow)', dialect: D_OE }),
-      unit('u4', 'ow:aʊ ou', 'c-ow:aʊ t-ow:aʊ-n b-r-ow:aʊ-n l-ou-d c-l-ou-d', { difficulty: 2, games: 'BTHL', label: 'ow (cow) · ou (cloud)' }),
-      unit('u5', 'oi oy', 'c-oi-n oi-l b-oi-l b-oy t-oy', { difficulty: 2, games: 'BTHL' }),
-      unit('u6', 'igh', 'n-igh-t l-igh-t h-igh r-igh-t f-igh-t', { difficulty: 2, games: 'BTHL' }),
-      unit('u7', 'oo ou:uː', 'm-oo-n s-p-oo-n z-oo f-oo-d b-oo-t s-ou:uː-p g-r-ou:uː-p y-ou:uː', { difficulty: 3, games: 'BTHL', label: 'oo (moon) · ou (soup)', note: 'oo /uː/ (+ ou /uː/ 예외 철자: soup, group, you)' }),
-      unit('u8', 'oo:ʊ', 'b-oo:ʊ-k f-oo:ʊ-t c-oo:ʊ-k g-oo:ʊ-d w-oo:ʊ-d', { difficulty: 3, games: 'BTHL', label: 'oo (book)', dialect: D_BOOK }),
-      unit('u9', 'ar', 'c-ar s-c-ar-f s-t-ar p-ar-k f-ar-m', { difficulty: 2, games: 'BTHL', dialect: D_R }),
-      unit('u10', 'or', 'f-or-k h-or-n c-or-n s-t-or-m sh-or-t', { difficulty: 2, games: 'BTHL', dialect: D_R }),
-      unit('u11', 'er ir ur', 'sh-ir-t s-k-ir-t b-ir-d t-ur-n h-er', { difficulty: 3, games: 'BTHL', dialect: D_R }),
-      unit('u12', 'er:ə', 'b-u-tt-er:ə p-e-pp-er:ə j-u-m-p-er:ə r-u-bb-er:ə w-i-n-t-er:ə', { difficulty: 2, games: 'THL', note: '끝 -er /ə/', dialect: D_R }),
-      unit('u13', 'air ear:eə', 'ch-air p-ear:eə h-air p-air s-t-air', { difficulty: 2, games: 'BTHL', dialect: `${D_R}. ${D_PEAR}. ${D_AIR}` }),
-      unit('u14', 'ea:e', 'b-r-ea:e-d h-ea:e-d th-r-ea:e-d s-p-r-ea:e-d b-r-ea:e-th', { difficulty: 3, games: 'BTHL', label: 'ea (bread)', note: 'ea /e/ — 같은 철자 ea의 또 다른 소리' }),
-    ],
+    units: seq([
+      unit('ai ay', 't-r-ai-n r-ai-n s-n-ai-l d-ay p-l-ay'),
+      unit('ee ea', 's-w-ee-t p-ea-ch g-r-ee-n t-r-ee s-ea l-ea-f', { note: 'e_e(these, Pete)는 드물어 예외로만 소개' }),
+      unit('oa ow', 'b-oa-t c-oa-t r-oa-d s-n-ow g-r-ow', { label: 'oa · ow (snow)', dialect: D_OE }),
+      unit('ow:aʊ ou', 'c-ow:aʊ t-ow:aʊ-n b-r-ow:aʊ-n l-ou-d c-l-ou-d', { label: 'ow (cow) · ou (cloud)' }),
+      unit('oi oy', 'c-oi-n oi-l b-oi-l b-oy t-oy'),
+      unit('igh', 'n-igh-t l-igh-t h-igh r-igh-t f-igh-t'),
+      unit('oo ou:uː', 'm-oo-n s-p-oo-n z-oo f-oo-d b-oo-t s-ou:uː-p g-r-ou:uː-p y-ou:uː', { difficulty: 3, label: 'oo (moon) · ou (soup)', note: 'oo /uː/ (+ ou /uː/ 예외 철자: soup, group, you)' }),
+      unit('oo:ʊ', 'b-oo:ʊ-k f-oo:ʊ-t c-oo:ʊ-k g-oo:ʊ-d w-oo:ʊ-d', { difficulty: 3, label: 'oo (book)', dialect: D_BOOK }),
+      unit('ar', 'c-ar s-c-ar-f s-t-ar p-ar-k f-ar-m', { dialect: D_R }),
+      unit('or', 'f-or-k h-or-n c-or-n s-t-or-m sh-or-t', { dialect: D_R }),
+      unit('er ir ur', 'sh-ir-t s-k-ir-t b-ir-d t-ur-n h-er', { difficulty: 3, dialect: D_R }),
+      unit('er:ə', 'b-u-tt-er:ə p-e-pp-er:ə j-u-m-p-er:ə r-u-bb-er:ə w-i-n-t-er:ə', { games: 'THL', note: '끝 -er /ə/', dialect: D_R }),
+      unit('air ear:eə', 'ch-air p-ear:eə h-air p-air s-t-air', { dialect: `${D_R}. ${D_PEAR}. ${D_AIR}` }),
+      unit('ea:e', 'b-r-ea:e-d h-ea:e-d th-r-ea:e-d s-p-r-ea:e-d b-r-ea:e-th', { difficulty: 3, label: 'ea (bread)', note: 'ea /e/ — 같은 철자 ea의 또 다른 소리' }),
+    ]),
   },
 ]
 
