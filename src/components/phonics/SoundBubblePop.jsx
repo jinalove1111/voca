@@ -1,8 +1,11 @@
 // Sound Bubble Pop (253차 시제품, 254차 Unit 연결): 단어를 듣고 목표 소리(첫/가운데/끝)의 글자 풍선을 터뜨린다. 상태는 React state뿐 — 저장·네트워크·보상 0.
 // 정답 전에는 그림·영어 단어·뜻이 DOM에 없다(연습 모드 힌트만 예외). 아직 누르지 않은 풍선은 정답이든 아니든 속성·클래스가 똑같다.
-// 글자/소리 하나를 음성으로 읽히지 않는다 — 발음은 단어 전체만(playEn).
+// 글자/소리 하나를 음성으로 읽히지 않는다 — 발음은 단어 전체만(playEn). 소리 하나는 선생님이 승인한 녹음이 있을 때만 '소리 듣기' 버튼으로 들려준다(지금은 없음).
+// 복습 문제(item.origin)는 자기 Unit의 기록으로 남는다.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { POSITION_KO, bubblePick, bubbleRound, bubbleStart, phonicsAttempt, spellParts } from '../../utils/phonics/games.js'
+import { phonemeClip } from '../../data/phonics/phonemeClips.js'
+import { playPhonemes } from '../../utils/phonics/playPhonemes.js'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { GamePicture, PwProgress, playEn, useReducedMotion } from '../pictureWords/pictureImg.jsx'
 
@@ -17,6 +20,7 @@ export default function SoundBubblePop({ item, seed, index, total, mode, onMode,
   const [hinted, setHinted] = useState(false)
   const stRef = useRef(st) // 탭마다 한 번만 처리
   const timer = useRef(null)
+  const sent = useRef(false) // 기록·다음은 한 번만
   const reduced = useReducedMotion()
 
   useEffect(() => {
@@ -47,13 +51,18 @@ export default function SoundBubblePop({ item, seed, index, total, mode, onMode,
     }
   }
   const finish = () => {
+    if (sent.current) return
+    sent.current = true
     clearTimeout(timer.current)
-    onRecord(phonicsAttempt({ studentId, gameId: 'bubble', bookId: ctx?.bookId, unitId: ctx?.unitId, step: ctx?.step ?? 'bubble', targetPhonemes: [item.phonemes[ti]], itemId: item.id, correct: st.wrong === 0 && !hinted, retries: st.wrong, completed: true }))
+    onRecord(phonicsAttempt({ studentId, gameId: 'bubble', bookId: item.origin?.bookId ?? ctx?.bookId, unitId: item.origin?.unitId ?? ctx?.unitId, step: ctx?.step ?? 'bubble', targetPhonemes: [item.phonemes[ti]], itemId: item.id, correct: st.wrong === 0 && !hinted, retries: st.wrong, completed: true }))
     onNext()
   }
 
   const reveal = st.done || (hinted && mode === 'practice')
   const posKo = POSITION_KO[round.target.position]
+  const clip = phonemeClip(round.target.ipa)
+  const parts = spellParts(item.graphemes, ti)
+  if (item.display && item.display !== item.word && parts.length) parts[0] = { ...parts[0], t: item.display[0] + parts[0].t.slice(1) } // 고유명사는 대문자로
   return (
     <div data-testid="pbp-root" data-position={round.target.position} data-item-index={index} data-done={st.done ? 'true' : 'false'} data-wrong={st.wrong} className="space-y-3">
       <PwProgress testid="pbp-progress" label={`${posKo} 소리 풍선 ·`} n={index + 1} total={total} />
@@ -65,6 +74,7 @@ export default function SoundBubblePop({ item, seed, index, total, mode, onMode,
       </div>
       <p className="text-center text-base font-bold text-gray-700">잘 듣고 {posKo} 소리 풍선을 터뜨려요</p>
       <button type="button" data-testid="pbp-listen" onClick={listen} className={`${BTN} w-full bg-sky-100 text-sky-700 ${st.last === 'wrong' && !st.done && !reduced ? 'pbp-pulse' : ''}`}>🔊 듣기</button>
+      {clip && <button type="button" data-testid="pbp-listen-sound" onClick={() => playPhonemes([round.target.ipa])} className={`${BTN} w-full bg-pink-100 text-pink-700`}>소리 듣기</button>}
       <div className="grid grid-cols-2 place-items-center gap-3 py-2">
         {round.options.map((g, i) => (
           <span key={i} className={reduced ? 'block' : 'pbp-float block'} style={reduced ? undefined : { animationDelay: `${i * 450}ms` }}>
@@ -78,7 +88,7 @@ export default function SoundBubblePop({ item, seed, index, total, mode, onMode,
       {reveal && (
         <div data-testid="pbp-reveal" className="space-y-2">
           {item.asset && <GamePicture word={item} testid="pbp-picture" glow={st.done && !reduced} />}
-          <p data-testid="pbp-word" className="text-center text-3xl font-black text-gray-900 break-words">{spellParts(item.graphemes, ti).map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
+          <p data-testid="pbp-word" className="text-center text-3xl font-black text-gray-900 break-words">{parts.map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
           {item.ko && <p data-testid="pbp-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>}
         </div>
       )}
