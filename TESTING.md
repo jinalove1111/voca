@@ -2115,3 +2115,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 254차 추가 (2026-10-11): PAUL PHONICS 5권 구조
 - `scripts/testPhonicsGames.mjs`(127): 5권 제목·전부 draft·`unitsOf(includeDraft:false)` 빈 목록, Unit → 단어 표 전체(계산값이 기대 표와 정확히 일치해야 함), `learnedPairs`, Book 2~5의 모든 Unit·복습 노드 x 시드 0..19에서 풍선 보기·기차 타일(방해 타일 포함)·단어 쌍이 모두 익힌 쌍 안에 있음("배우지 않은 소리 없음"), Book 1 풍선은 단모음 5개 안에 정답 포함·Word Train 미제공, `spell`(a_e), `phonemeClip`(지금은 전부 null / 승인 fixture만 항목), `summarisePhonemes`·`missedItems`, 소스 핀(TTS는 단어 전체만, `PhonemeListen`은 TTS 호출 없음, `src/` 어디에도 옛 이름 없음). 규칙 15: `unitWords`가 `learnedPairs`를 무시하게 바꾸면 11개 FAIL.
 - `tests/e2e/phonicsGames.spec.mjs`(115): 책장 5권 → Book 1 Unit 2 허브 7단계 상태/잠금 이유 → Bubble Pop(모든 풍선이 단모음, 위치 안내) → 틀린 소리 복습(놓친 항목만) → 허브 복귀; Book 2 Unit 3 Word Train/Bubble Pop(익힌 글자만, 시험은 단어 3개라 잠김); Book 3 Unit 1 `c · a_e · k`; Book 1 전체 연습의 그림 시험/연습 카드(녹음 컨트롤)/알파벳 망치/숨은 글자 → 같은 허브; 단어 0개 Unit 전체 잠김; 360x640 터치; 3 해상도 책장·Book·허브 레이아웃; 소리 끔·동작 줄이기; 일반 학생 0; TTS q는 항상 단어 전체. 실행: 스크래치 `runOne.mjs`(vite preview 4193).
+
+
+### 255차 추가 (2026-10-11): PAUL PHONICS 43 Unit
+- `scripts/testPhonicsGames.mjs`(258): 43 Unit = 5/7/6/11/14·제목·전부 draft·아홉 숫자(`units 43 slots 230 withPic 50 uniqueWords 197 uniqueNoPic 165 needImage 94 noImageNeeded 71 flags 0 recordings 42`)·모든 Unit 단어가 `learnedPairs`로 해독 가능(0 flags)·Unit × 시드 0..19 풍선/타일이 배운 쌍 안·자음군/겹자음/qu·x/b5u12/b5u14는 풍선 미제공·Book 1 풍선 전용·철자 비교 Unit 보기 2개·그림 없는 단어 라운드 유효·H/L/연습/시험 목록은 `image:'ready'`만·녹음 42개 전부 대기·`phonemeClip` ipa 키·ck 보조 규칙·소스 핀(관리자 패널 포함). 변이 검사: `u.aux.forEach` 제거 시 b2u6 sock/duck 해독 검사 포함 5건 FAIL.
+- `tests/e2e/phonicsGames.spec.mjs`(135)·`tests/e2e/phonicsReview.spec.mjs`(23): 위 변경의 브라우저 검증. 둘 다 `scripts/testBrowserE2E.mjs`에는 등록돼 있지 않다(기존 phonicsGames와 같음) — 단독 실행.

@@ -1,53 +1,32 @@
-// PAUL PHONICS word table (253차 prototype, 254차 renamed). Lead-authored British (RP) table: grapheme and phoneme lists are 1:1 (a split digraph like a_e is ONE grapheme).
-// There is NO confirmed textbook/unit order, so every item has unitId null + orderConfirmed false and the set is labelled as a prototype bundle.
-// Pure: no React, storage or network.
+// PAUL PHONICS word table (255차). The words are the union of the 43 draft units' own word lists (data/phonics/curriculum.js, segmented notation).
+// graphemes and phonemes are 1:1 (a split digraph like a_e is ONE grapheme). Pure: no React, storage or network.
+// image: 'ready' = a learnable picture word with the same en exists; 'not-needed' = can be learned without a picture; 'needed' = a picture still has to be made.
 import { learnableWords } from '../pictureWords/index.js'
+import { BOOKS, parseWord, spell } from './curriculum.js'
 
+export { spell }
 export const PHONICS_SET_LABEL_KO = '시제품 묶음 (교재 순서 아님)'
+export const IMAGE_LABEL_KO = { ready: '그림 준비', needed: '이미지 제작 대기', 'not-needed': '그림 없이 학습' }
 
-// [picture-word id, word, graphemes, phonemes]
-const ROWS = [
-  ['pics2/bag', 'bag', ['b', 'a', 'g'], ['b', 'æ', 'ɡ']],
-  ['pics2/cup', 'cup', ['c', 'u', 'p'], ['k', 'ʌ', 'p']],
-  ['pics2/pen', 'pen', ['p', 'e', 'n'], ['p', 'e', 'n']],
-  ['pics2/jam', 'jam', ['j', 'a', 'm'], ['dʒ', 'æ', 'm']],
-  ['pics2/egg', 'egg', ['e', 'gg'], ['e', 'ɡ']],
-  ['pics2/ink', 'ink', ['i', 'n', 'k'], ['ɪ', 'ŋ', 'k']],
-  ['pics2/milk', 'milk', ['m', 'i', 'l', 'k'], ['m', 'ɪ', 'l', 'k']],
-  ['pics2/desk', 'desk', ['d', 'e', 's', 'k'], ['d', 'e', 's', 'k']],
-  ['pics2/sock', 'sock', ['s', 'o', 'ck'], ['s', 'ɒ', 'k']],
-  ['pics2/dress', 'dress', ['d', 'r', 'e', 'ss'], ['d', 'r', 'e', 's']],
-  ['pics2/peach', 'peach', ['p', 'ea', 'ch'], ['p', 'iː', 'tʃ']],
-  ['pics2/candy', 'sweet', ['s', 'w', 'ee', 't'], ['s', 'w', 'iː', 't']],
-  ['pics2/boat', 'boat', ['b', 'oa', 't'], ['b', 'əʊ', 't']],
-  ['pics2/train', 'train', ['t', 'r', 'ai', 'n'], ['t', 'r', 'eɪ', 'n']],
-  ['pics2/book', 'book', ['b', 'oo', 'k'], ['b', 'ʊ', 'k']],
-  ['pics2/shirt', 'shirt', ['sh', 'ir', 't'], ['ʃ', 'ɜː', 't']],
-  ['pics2/scarf', 'scarf', ['s', 'c', 'ar', 'f'], ['s', 'k', 'ɑː', 'f']],
-  ['pics2/soup', 'soup', ['s', 'ou', 'p'], ['s', 'uː', 'p']],
-  ['pics2/chaor', 'chair', ['ch', 'air'], ['tʃ', 'eə']],
-  ['pics2/cheese', 'cheese', ['ch', 'ee', 'se'], ['tʃ', 'iː', 'z']],
-  ['pics2/cake', 'cake', ['c', 'a_e', 'k'], ['k', 'eɪ', 'k']],
-  ['pics2/tape', 'tape', ['t', 'a_e', 'p'], ['t', 'eɪ', 'p']],
-  ['pics2/kite', 'kite', ['k', 'i_e', 't'], ['k', 'aɪ', 't']],
-  ['pics2/slide', 'slide', ['s', 'l', 'i_e', 'd'], ['s', 'l', 'aɪ', 'd']],
-]
-
-// A split digraph X_e writes X, then the NEXT grapheme, then e (c + a_e + k -> cake).
-export function spell(graphemes) {
-  let out = '', tail = ''
-  for (const g of graphemes) {
-    const m = /^(.+)_e$/.exec(g)
-    if (m) { out += m[1]; tail = 'e' } else { out += g + tail; tail = '' }
-  }
-  return out + tail
-}
+export const NOIMG = new Set('boil brown clap cute day dig eve fight five game glad group grow her high home hop hope hot june kick kit miss much name note pair pete pink play quit quiz red rich right rude rule sat short sip six snap song spot stop swim tenth that them then thick thin this thud time tune turn wet when which whiz with yes you green loud born winter fair cook good'.split(' '))
 
 const LEARN = learnableWords()
+const PICTURE_BY_EN = new Map()
+for (const e of LEARN) { const k = e.en.toLowerCase(); if (!PICTURE_BY_EN.has(k)) PICTURE_BY_EN.set(k, e) }
 
-// A row whose picture word is missing, not learnable or spelled differently is dropped (never shown).
-export const PHONICS_ITEMS = ROWS.flatMap(([id, word, graphemes, phonemes]) => {
-  const pw = LEARN.find((e) => e.id === id)
-  if (!pw || pw.en !== word) return []
-  return [{ id, word, en: word, ko: pw.ko, asset: pw.asset, graphemes, phonemes, unitId: null, orderConfirmed: false }]
-})
+function build(notation) {
+  const { graphemes, phonemes } = parseWord(notation)
+  const word = spell(graphemes)
+  const pic = PICTURE_BY_EN.get(word) || null
+  const item = { id: pic ? pic.id : `word:${word}`, word, en: word, ko: pic ? pic.ko : null, asset: pic ? pic.asset : null, graphemes, phonemes, picture: pic, image: pic ? 'ready' : NOIMG.has(word) ? 'not-needed' : 'needed' }
+  return item
+}
+
+// the first notation of a word wins (the static test proves repeats are identical)
+const BY_WORD = new Map()
+for (const b of BOOKS) for (const u of b.units) for (const n of u.words) { const it = build(n); if (!BY_WORD.has(it.word)) BY_WORD.set(it.word, it) }
+
+export const PHONICS_ITEMS = [...BY_WORD.values()]
+export const itemOfWord = (word) => BY_WORD.get(word) || null
+// one unit slot (a notation string) -> the table item
+export const itemOfSlot = (notation) => BY_WORD.get(spell(parseWord(notation).graphemes)) || null

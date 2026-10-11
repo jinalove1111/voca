@@ -10,7 +10,7 @@ const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-lg btn-p
 
 export default function SoundBubblePop({ item, seed, index, total, mode, onMode, autoplay, onHeard, studentId, onRecord, onNext, ctx }) {
   const ti = item.targetIndex ?? 0
-  const round = useMemo(() => bubbleRound(item, seed, undefined, { targetIndex: ti, optionPairs: ctx?.optionPairs }), [item, seed]) // eslint-disable-line react-hooks/exhaustive-deps
+  const round = useMemo(() => bubbleRound(item, seed, undefined, { targetIndex: ti, optionPairs: item.optionPairs || ctx?.optionPairs }), [item, seed]) // eslint-disable-line react-hooks/exhaustive-deps
   const [st, setSt] = useState(() => bubbleStart(round))
   const [fx, setFx] = useState(null) // 방금 틀린 풍선 index (흔들림 효과용)
   const [popped, setPopped] = useState(-1)
@@ -77,9 +77,9 @@ export default function SoundBubblePop({ item, seed, index, total, mode, onMode,
       {mode === 'practice' && !st.done && !hinted && <button type="button" data-testid="pbp-hint" onClick={() => setHinted(true)} className={`${BTN} w-full bg-yellow-100 text-yellow-800`}>💡 힌트</button>}
       {reveal && (
         <div data-testid="pbp-reveal" className="space-y-2">
-          <GamePicture word={item} testid="pbp-picture" glow={st.done && !reduced} />
+          {item.asset && <GamePicture word={item} testid="pbp-picture" glow={st.done && !reduced} />}
           <p data-testid="pbp-word" className="text-center text-3xl font-black text-gray-900 break-words">{spellParts(item.graphemes, ti).map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
-          <p data-testid="pbp-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>
+          {item.ko && <p data-testid="pbp-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>}
         </div>
       )}
       {st.done && (

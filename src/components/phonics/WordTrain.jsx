@@ -70,11 +70,18 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
   return (
     <div data-testid="pwt-root" data-item-index={index} data-done={st.done ? 'true' : 'false'} data-wrong={st.wrong} data-placed={st.placed} className="space-y-3">
       <PwProgress testid="pwt-progress" label="단어 기차 ·" n={index + 1} total={total} />
-      <div className="relative">
-        <GamePicture word={item} testid="pwt-picture" glow={st.done && !reduced} />
-        {st.done && !reduced && <Sparkles />}
-      </div>
-      <p data-testid="pwt-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>
+      {item.asset ? (
+        <div className="relative">
+          <GamePicture word={item} testid="pwt-picture" glow={st.done && !reduced} />
+          {st.done && !reduced && <Sparkles />}
+        </div>
+      ) : (
+        <div className="relative">
+          <p data-testid="pwt-listen-only" className="rounded-2xl bg-sky-50 p-3 text-center text-base font-black text-sky-800">잘 듣고 소리 블록을 이어 보세요</p>
+          {st.done && !reduced && <Sparkles />}
+        </div>
+      )}
+      {item.ko && <p data-testid="pwt-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>}
       <button type="button" data-testid="pwt-listen" onClick={() => playEn(item.word)} className={`${BTN} w-full bg-sky-100 text-sky-700`}>🔊 듣기</button>
       <p className="text-center text-sm font-bold text-gray-600">소리 블록을 차례로 이어 보세요</p>
       <div className="pwt-track">
