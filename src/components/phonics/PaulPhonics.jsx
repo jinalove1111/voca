@@ -9,6 +9,7 @@ import PhonicsProgress from './PhonicsProgress.jsx'
 import UnitHub from './UnitHub.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
+const GRAY = `${BTN} w-full bg-gray-200 text-gray-700`
 export const DRAFT_NOTICE_KO = '기본 구조만 승인된 임시 교육과정입니다 — 단어·소리·그림·녹음은 승인 전입니다'
 // 책 표지 색(분홍/민트/하늘/노랑/연보라) — 순수 CSS로 그린 표지와 책등
 const COVER = {
@@ -41,7 +42,7 @@ function Main({ onOpen, onProgress, onExit }) {
         })}
       </div>
       <button type="button" data-testid="pph-open-progress" onClick={onProgress} className={`${BTN} w-full bg-sky-100 text-sky-800`}>나의 학습 발달상황 (샘플)</button>
-      <button type="button" data-testid="pph-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
+      <button type="button" data-testid="pph-exit" onClick={onExit} className={GRAY}>나가기</button>
     </div>
   )
 }
@@ -88,7 +89,7 @@ function Book({ bookId, onOpen, onBack }) {
           : units.map(unitRow)}
         {row('review', 'Book 전체 연습', `Book ${book.no} 전체`, 'draft', 0)}
       </div>
-      <button type="button" data-testid="pph-back" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-gray-700`}>책장으로 돌아가기</button>
+      <button type="button" data-testid="pph-back" onClick={onBack} className={GRAY}>책장으로 돌아가기</button>
     </div>
   )
 }
