@@ -1,4 +1,10 @@
 # Paul Easy Voca — Handoff
+## 258차 (2026-10-11): 안정성 — 낡은 onGoTown 핀 재고정 + 번들 -16.5 KB
+- **핀 드리프트 원인**: 66047a57이 `onGoTown`을 `paulTown2_5dEnabled ? proto25d : townV1Enabled ? town : null`로 의도적으로 확장해 `testPilotTownAllowlist`의 `onGoTown={townV1Enabled ?` 리터럴 핀이 낡음(verify:quiz FAIL). 제품 코드는 그대로, 핀을 식 전체(2.5D 분기 먼저 → townV1Enabled → town → `: null`)로 더 엄격히 교체. 변이 검증: `townV1Enabled ?`를 `true ?`로 바꾸면 32중 1 FAIL(원복함). verify:quiz 16개 스크립트 전부 PASS.
+- **번들**: 핵심 JS 합계 2.198 → 2.182 MB(-16.5 KB). `manifest-*.js`(19.6 KB)는 town kit manifest.json 전체(출처/품질 필드)를 런타임이 w/h만 쓰려고 번들한 것 → `scripts/town/buildKitSizes.mjs`가 만든 슬림 `kit/kitSizes.js`(2.9 KB)로 교체(worldArt/villageArt). `testTownKitAssets`가 동기 고정, `testGrammarVillage` 핀을 kitSizes로 갱신. 예산/제외 불변.
+- **하지 않은 것**: pictureWords.json 미사용 필드(suggested/autoLink/newCandidate ≈ 11 KB) 제거는 testPictureWords가 해당 필드를 핀으로 쓰므로 보류. `signpost@2x-*.js`는 이미지가 아니라 공유 모듈 청크 이름일 뿐. 헤드룸 확대는 "start path" 합계가 AdminScreen(346 KB)·lazy 청크를 포함하는 정의 자체를 운영자가 재검토해야 함(미적용).
+- 기존 FAIL(내 변경 아님): `testTownKitAssets`의 `src/data/phonics/imageCandidates.js`가 kit을 허용 디렉터리 밖에서 참조(Phonics 작업 소관).
+
 _257차 갱신: 2026-10-11 (257차 — **PAUL PHONICS 이미지 감사 + 관리자 검토 패널 확장 + 글자 카드 + 학습 발달 설계(샘플 화면)**: 이미지 필요 105개 중 7개는 Paul Town 기존 그림 후보(승인 전), 새 제작 98개는 사양 문서로. 그림 없는 단어는 `pw-card--text` 카드. 학습 발달은 순수 함수 + 가상 `샘플반` + 샘플 화면 2개 + 실행 안 한 SQL 초안. 학생 기록 저장·DB 실행·네트워크 0)_
 _256차 갱신: 2026-10-11 (256차 — **PAUL PHONICS 품질 개선**: 검수 반영 단어 210개·Unit 정리, Bubble Pop 복습 섞기(정답이 계속 같은 글자이던 문제), Word Train 출발 기차 고정 + 완성 단어 칸, 선생님 녹음 42개 등록·승인·검증 구조(녹음 파일 0개, 모든 Unit 임시). 아래 256차 섹션 참고.)
 _255차 갱신: 2026-10-11 (255차 — **PAUL PHONICS 43 Unit(구조 승인, 전부 임시) 적용 + 관리자 읽기 전용 검토 탭**: 24 Unit 초안을 운영자가 구조만 승인한 43 Unit(5/7/6/11/14)으로 교체. Sound Bubble Pop·Word Train은 그림 없는 단어도 처리, 그림이 필요한 단계는 그림 준비된 단어만. 녹음 42개는 모두 대기. 정적 테스트·브라우저 스펙 갱신. 단어·소리·이미지·음성은 승인 전.)

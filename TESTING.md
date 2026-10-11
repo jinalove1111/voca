@@ -2130,3 +2130,6 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 257차 추가 (2026-10-11): PAUL PHONICS 이미지 감사·학습 발달 설계
 - `scripts/testPhonicsProgress.mjs`(60, 신규, `tests/harness/registry.mjs` extra:false): `progress.js` 순수 함수 전부를 손계산 fixture로 검증, 가상 샘플 데이터(6명·결정적·UUID 아님·30~80건·실제 Unit/음소), 이미지 후보 격리(105/7/98, 관리자 패널만 import), SQL 초안(파괴 문구 0·if not exists·RLS·src/api 참조 0), 소스 핀(네트워크·저장소·시계·랜덤 없음).
 - `tests/e2e/phonicsReview.spec.mjs`(33)·`phonicsProgress.spec.mjs`(53, 신규)·`phonicsGames.spec.mjs`(158, 글자 카드 확인 추가): 필터별 행 수, 후보 썸네일 로드, 녹음 42행, 샘플 화면 학생/관리자(360·768·1280), 쓰기 0·저장소 키 0. 실행은 `runOne` 방식으로 한 번에 하나씩.
+
+### 258차 추가 (2026-10-11): 안정성
+- `testPilotTownAllowlist`: onGoTown 핀을 2.5D 우선 3분기 식 전체로 교체(32단언). `testTownKitAssets`: kitSizes.js 동기 핀 1단언 추가(`testGrammarVillage`의 villageArt 핀은 kitSizes로 갱신).
