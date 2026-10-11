@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react'
 import { shopSets } from '../../data/pictureWords/index.js'
 import { rng, shuffled } from '../../utils/pictureWords/practice.js'
-import { imgUrl, W } from './pictureImg.jsx'
+import { imgUrl, MUTED, W } from './pictureImg.jsx'
 
 const BTN = 'min-h-[44px] px-3 rounded-2xl font-black btn-press disabled:opacity-40'
 
@@ -20,7 +20,7 @@ export default function ShopShelf({ onPractice, onBack }) {
         {sets.map((s) => (
           <button key={s.shop} type="button" data-testid={`pws-shop-${s.shop}`} data-open={open === s.shop ? 'true' : 'false'} onClick={() => setOpen(open === s.shop ? null : s.shop)}
             className={`${BTN} border-2 py-3 ${open === s.shop ? 'border-purple-500 bg-purple-50' : 'border-purple-200 bg-white'} text-purple-700`}>
-            {s.labelKo}<span className="block text-xs font-bold text-gray-500">{s.ready ? `${s.words.length}개` : '준비 중'}</span>
+            {s.labelKo}<span className={`block ${MUTED}`}>{s.ready ? `${s.words.length}개` : '준비 중'}</span>
           </button>
         ))}
       </div>

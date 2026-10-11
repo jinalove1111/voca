@@ -8,7 +8,7 @@ import { phonemeClip } from '../../data/phonics/phonemeClips.js'
 import { playPhonemes } from '../../utils/phonics/playPhonemes.js'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { stopSpeaking } from '../../utils/speech'
-import { GamePicture, PwProgress, playEn, useReducedMotion, W } from '../pictureWords/pictureImg.jsx'
+import { GamePicture, PwProgress, playEn, T3, useReducedMotion, W } from '../pictureWords/pictureImg.jsx'
 
 export const WRONG = 'rounded-2xl bg-amber-50 p-2 text-center text-base font-black text-amber-700'
 export const KO = 'text-center text-lg font-bold text-gray-700 break-words'
@@ -100,7 +100,7 @@ export default function SoundBubblePop({ item, seed, index, total, autoplay, onH
         <div data-testid="pbp-reveal" className="space-y-2">
           {item.asset && <GamePicture word={item} testid="pbp-picture" glow={st.done && !reduced} small />}
           {(() => {
-            const word = <p data-testid="pbp-word" className="text-center text-3xl font-black text-gray-900 break-words">{parts.map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
+            const word = <p data-testid="pbp-word" className={`text-center ${T3}`}>{parts.map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
             return item.asset ? word : <div data-testid="pbp-text-card" className="pw-card pw-card--text pw-card-sm"><span className="pw-card-tag">듣기 단어</span>{word}</div>
           })()}
           {item.ko && <p data-testid="pbp-ko" className={KO}>{item.ko}</p>}

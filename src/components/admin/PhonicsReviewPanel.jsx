@@ -17,6 +17,7 @@ const REC_STATE = { missing: '파일 없음', uploaded: '승인 대기', approve
 const FILTERS = [['all', '전체'], ['ready', '그림 준비'], ['needed', '제작 대기'], ['candidate', '기존 후보'], ['free', '그림 없이'], ['review', '검토 필요']]
 const CAND_WORDS = new Set(IMAGE_CANDIDATES.map((c) => c.word))
 const SCROLL = 'mt-2 max-h-96 max-w-full overflow-auto'
+const MUTED = 'text-xs font-bold text-gray-500'
 const H = 'text-sm font-black text-gray-800'
 const SEC = 'min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3'
 const AMBER = 'rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800'
@@ -93,7 +94,7 @@ function WordList({ testid, title, words }) {
 function CandidateSection({ list }) {
   return (
     <section data-testid="phr-candidates" className={SEC}>
-      <p className={H}>기존 에셋 후보 <span data-testid="phr-candidates-count">{list.length}</span> <span className="text-xs font-bold text-gray-500">({CANDIDATE_NOTE_KO})</span></p>
+      <p className={H}>기존 에셋 후보 <span data-testid="phr-candidates-count">{list.length}</span> <span className={MUTED}>({CANDIDATE_NOTE_KO})</span></p>
       <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {IMAGE_CANDIDATES.map((c) => (
           <li key={c.word} data-testid="phr-candidate" data-word={c.word} className="min-w-0 rounded-xl bg-gray-50 p-2 text-center text-xs text-gray-700">
@@ -202,16 +203,17 @@ function Book1() {
   const us = b.units.map((u) => ({ u, w: unitWords(b.id, u.id) }))
   const all = us.flatMap((x) => x.w)
   const n = (s) => all.filter((w) => w.image === s).length
+  const prop = all.filter((x) => x.koProposed)
   const five = RECORDINGS.slice(0, us.length)
   const jump = (ipa) => document.querySelector(`[data-ipa="${ipa}"]`)?.scrollIntoView({ block: 'center' })
   return (
     <section data-testid="phr-book1" className={SEC}>
       <p className={H}>Book 1 수업 준비</p>
-      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 준비 ${n('ready')} · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length}`}</p>
+      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 준비 ${n('ready')} · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length} · 뜻 승인 ${prop.filter((x) => x.ko).length} / ${prop.length}`}</p>
       {us.map(({ u, w }) => (
         <div key={u.id} data-testid="phr-b1-unit" className="mt-2 text-xs text-gray-700">
           <b className="text-gray-900">Unit {u.id.slice(1)} · {unitLabel(u)} /{u.targets[0].ipa}/</b> <span className={AMBER}>{STATUS_LABEL_KO[u.status]}</span>
-          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>))}</div>
+          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <><small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>{x.koProposed && <small data-testid="phr-b1-ko" className={`ml-1 ${ROSE}`}>{x.koProposed}{x.ko ? ' 승인' : ' 뜻 검토 필요'}</small>}</>))}</div>
           {u.intro.tipKo} <span className={ROSE}>검토 필요</span>
         </div>
       ))}
@@ -247,7 +249,7 @@ export default function PhonicsReviewPanel() {
 
       {BOOKS.map((b) => (
         <section key={b.id} className="min-w-0 space-y-2">
-          <p className={H}>Book {b.no} · {b.titleEn} · {b.titleKo} <span className="text-xs font-bold text-gray-500">(Unit {b.units.length})</span></p>
+          <p className={H}>Book {b.no} · {b.titleEn} · {b.titleKo} <span className={MUTED}>(Unit {b.units.length})</span></p>
           <div className="max-w-full overflow-x-auto rounded-2xl border-2 border-gray-200 bg-white">
             <table data-testid={`phr-book-${b.id}`} className="min-w-[64rem] border-collapse">
               <thead>
@@ -266,12 +268,12 @@ export default function PhonicsReviewPanel() {
       <WordTable stats={s} />
 
       <section className={SEC}>
-        <p className={H}>녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className="text-xs font-bold text-gray-500">(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
+        <p className={H}>녹음 필요 <span data-testid="phr-recordings-count">{RECORDINGS.length}</span> <span className={MUTED}>(소리 하나는 음성 합성으로 읽지 않습니다)</span></p>
         <RecordingPreview />
       </section>
 
       <section className={SEC}>
-        <p className={H}>방언 메모 <span className="text-xs font-bold text-gray-500">(영국식 RP 기준)</span></p>
+        <p className={H}>방언 메모 <span className={MUTED}>(영국식 RP 기준)</span></p>
         <ul data-testid="phr-dialect" className="mt-2 list-disc space-y-1 pl-5 text-xs text-gray-700">
           {DIALECT_NOTES.map((t) => <li key={t} className="break-words">{t}</li>)}
         </ul>

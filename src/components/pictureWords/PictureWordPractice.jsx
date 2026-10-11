@@ -4,10 +4,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { LEVELS, learnableWords, shopSets, wordsForLevel } from '../../data/pictureWords/index.js'
 import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise } from '../../utils/pictureWords/practice.js'
-import { playWordAudio, stopSpeaking } from '../../utils/speech'
+import { stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls } from '../SpeakingPracticeItem'
-import { BTN, GameStyle, PwProgress, imgUrl, W } from './pictureImg.jsx'
+import { BTN, GamePicture, GameStyle, MUTED, PwProgress, T2, T3, W, playEn } from './pictureImg.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { PICTURE_REC_LABELS } from './recLabels.js'
@@ -22,34 +22,29 @@ const SOFT = `${BTN} bg-sky-100 text-sky-700`
 const SESSION_SIZE = 6
 const POOL = learnableWords()
 
-const listen = (en) => playWordAudio(null, en, { source: 'pictureWords' })
 const newSeed = () => Date.now() % 2147483647
 
-function Picture({ word, glow = false }) {
-  return (
-    <div data-testid="pwp-picture-card" className={`pw-card${glow ? ' pw-glow' : ''}`}>
-      <img data-testid="pwp-picture" src={imgUrl(word.asset)} alt="그림" draggable={false} className="pw-pic" />
-    </div>
-  )
-}
+// 단어를 누르면 "발음 듣기"와 같은 함수로 전체 단어 소리가 난다. hide = 글자 카드(단어가 카드 안에 이미 있음)
+const WordBtn = ({ word, className }) => <button type="button" data-testid="pwp-word" onClick={() => playEn(word.en)} className={className}>{word.en}</button>
 
-function WordText({ word }) {
+function WordText({ word, hide }) {
+  if (hide && !word.ko) return null
   return (
     <div className="text-center">
-      <p data-testid="pwp-word" className="text-3xl font-black text-gray-900 break-words">{word.en}</p>
+      {!hide && <WordBtn word={word} className={`${T3} min-h-[44px]`} />}
       {word.ko && <p data-testid="pwp-ko" className="text-lg text-gray-600 break-words">{word.ko}</p>}
     </div>
   )
 }
 
 const ListenBtn = ({ word }) => (
-  <button type="button" data-testid="pwp-listen" onClick={() => listen(word.en)} className={`${SOFT} w-full`}>🔊 발음 듣기</button>
+  <button type="button" data-testid="pwp-listen" onClick={() => playEn(word.en)} className={`${SOFT} w-full`}>🔊 발음 듣기</button>
 )
 
 // 연습 카드: 단어마다 한 장에 그림·단어·뜻·듣기·녹음(따라 말하기/내 목소리 듣기/다시 말하기)·다음.
 // 녹음기는 이 컴포넌트가 단어들 사이에서 하나를 쓴다(마이크는 카드 묶음을 떠날 때 놓는다). 단어를 바꾸면 녹음을 버린다 — 녹음 중에 넘기면 멈춘 뒤 버린다.
 // "말해 봤어요" 표시는 판정이 아니다 — 점수·별 없음, 녹음은 기기 밖으로 나가지 않는다.
-function PracticeCards({ words, onDone, single = false, nextLabel = '➡️ 다음 단어' }) {
+export function PracticeCards({ words, onDone, single = false, nextLabel = '➡️ 다음 단어' }) {
   const rec = useLocalRecorder()
   const [i, setI] = useState(0)
   const [said, setSaid] = useState(() => new Set())
@@ -72,8 +67,8 @@ function PracticeCards({ words, onDone, single = false, nextLabel = '➡️ 다�
   return (
     <div data-testid="pwp-card" data-word-index={i} className="space-y-3">
       <PwProgress testid="pwp-progress" n={i + 1} total={words.length} />
-      {w.asset ? <Picture word={w} /> : <div data-testid="pwp-text-card" className="pw-card pw-card--text"><span className="pw-card-tag">듣고 따라 말해요</span></div>}
-      <WordText word={w} />
+      {w.asset ? <GamePicture word={w} testid="pwp-picture" /> : <div data-testid="pwp-text-card" className="pw-card"><div className="pw-pic flex flex-col items-center justify-center gap-2"><span className="pw-card-tag">듣고 따라 말해요</span><WordBtn word={w} className="break-words text-4xl font-black text-gray-900" /></div></div>}
+      <WordText word={w} hide={!w.asset} />
       {said.has(w.id) && <p data-testid="pwp-said-mark" className="text-center text-sm font-bold text-emerald-700">말해 봤어요</p>}
       <ListenBtn word={w} />
       <div data-testid="pwp-rec" className="space-y-1">
@@ -96,7 +91,7 @@ function QuizCard({ word, q, onAnswered, onNext, n, total, label = '시험' }) {
   return (
     <div data-testid="pwp-quiz" className="space-y-3">
       <PwProgress testid="pwp-quiz-progress" label={label} n={n} total={total} />
-      <Picture word={word} glow={right} />
+      <GamePicture word={word} testid="pwp-picture" glow={right} />
       <p className="text-center text-base font-bold text-gray-700">그림에 맞는 단어를 골라요</p>
       <div className="grid grid-cols-2 gap-2">
         {q.options.map((o, k) => (
@@ -155,7 +150,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
   } else if (stage === 'end') {
     body = (
       <div data-testid="pwp-end" className="space-y-3 text-center">
-        <p className="text-2xl font-black text-gray-900">다음은 게임!</p>
+        <p className={T2}>다음은 게임!</p>
         <p className="text-base text-gray-600">같은 단어로 게임을 하거나 시험을 볼 수 있어요</p>
         {gameBtns('알파벳 망치로', '숨은 글자로')}
         <button type="button" data-testid="pwp-go-test" onClick={startTest} className={`${PRIMARY} w-full`}>시험 보기</button>
@@ -189,7 +184,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
     const s = summarise(results)
     body = (
       <div data-testid="pwp-summary" className="space-y-3 text-center">
-        <p className="text-2xl font-black text-gray-900">{s.total ? '시험을 마쳤어요' : '연습을 마쳤어요'}</p>
+        <p className={T2}>{s.total ? '시험을 마쳤어요' : '연습을 마쳤어요'}</p>
         {s.total > 0 && <p className="text-lg text-gray-700">처음에 맞힌 단어 <span data-testid="pwp-summary-first-try" className="font-black text-purple-700">{s.firstTryCorrect} / {s.total}</span></p>}
         {s.needsReview.length > 0 && (
           <div className="rounded-2xl bg-amber-50 p-3 text-left text-sm">
@@ -263,7 +258,7 @@ export default function PictureWordPractice({ onExit, studentId }) {
         <div className="space-y-2">
           {sets.map((s) => (
             <div key={s.id} data-testid={`pwp-set-${s.id}`} data-ready={s.ready ? 'true' : 'false'} className="rounded-2xl border-2 border-purple-200 bg-white p-2">
-              <p className="break-words text-center text-base font-black text-purple-700">{s.labelKo}<span className="ml-2 text-xs font-bold text-gray-500">{s.ready ? `${s.words.length}개` : '준비 중'}</span></p>
+              <p className="break-words text-center text-base font-black text-purple-700">{s.labelKo}<span className={`ml-2 ${MUTED}`}>{s.ready ? `${s.words.length}개` : '준비 중'}</span></p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <button type="button" data-testid={`pwp-start-practice-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'practice')} className={`${PRIMARY} text-base`}>연습하기</button>
                 <button type="button" data-testid={`pwp-start-test-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'test')} className={`${SOFT} text-base`}>시험 보기</button>

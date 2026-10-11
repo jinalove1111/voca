@@ -186,7 +186,8 @@ ok(/onGoPictureWords && \(\s*<button[^>]*data-testid="student-home-picture-words
 const scr = fs.readFileSync(path.join(ROOT, 'src/components/pictureWords/PictureWordPractice.jsx'), 'utf8')
 ok(!/fetch\(|supabase|\/api\/|localStorage|sessionStorage|grantReward|markPronunciationOk|addStars|XMLHttpRequest|sendBeacon|trackEvent|productEvents/.test(scr), 'screen: no network/storage/reward/analytics')
 ok(!/data-correct|data-answer|data-right/.test(scr), 'screen: no data-correct/data-answer attributes')
-ok(/alt="그림"/.test(scr) && !/alt=\{/.test(scr), 'screen: img alt is the literal "그림"')
+const shared = fs.readFileSync(path.join(ROOT, 'src/components/pictureWords/pictureImg.jsx'), 'utf8')
+ok(/alt="그림"/.test(shared) && !/alt=\{/.test(shared + scr) && !/<img/.test(scr) && scr.includes('testid="pwp-picture"'), 'screen: img alt is the literal "그림" (264차: the shared GamePicture renders it)')
 ok(/useEffect\(\(\) => stopSpeaking, \[\]\)/.test(scr), 'screen: stopSpeaking on unmount')
 ok(/\{answered && \(\s*<div data-testid="pwp-feedback"[\s\S]*?<WordText word=\{word\} \/>[\s\S]*?<ListenBtn word=\{word\} \/>/.test(scr), 'quiz: feedback (word, meaning, listen) is conditionally mounted after answering')
 const quizCard = scr.slice(scr.indexOf('function QuizCard'), scr.indexOf('function Session'))
@@ -195,7 +196,7 @@ ok(!/WordText|ListenBtn|pwp-word|pwp-ko|pwp-listen|\.ko/.test(beforeAnswer), 'q
 ok(/data-testid=\{`pwp-opt-\$\{k\}`\}/.test(scr), 'quiz: positional option testids')
 ok(!/hidden|invisible|opacity-0|sr-only|display:\s*none/.test(quizCard), 'quiz: no CSS-hide tricks (conditional mount only)')
 for (const id of ['pwp-root', 'pwp-set-', 'pwp-picture', 'pwp-word', 'pwp-ko', 'pwp-listen', 'pwp-next', 'pwp-prev', 'pwp-rec', 'pwp-card', 'pwp-progress', 'pwp-said-mark', 'pwp-end', 'pwp-go-test', 'pwp-skip', 'pwp-start-practice-', 'pwp-start-test-', 'pwp-feedback', 'pwp-review-card', 'pwp-summary', 'pwp-summary-first-try', 'pwp-again', 'pwp-other-set', 'pwp-exit']) ok(scr.includes(id), `screen testid ${id}`)
-ok(scr.includes('useLocalRecorder') && scr.includes('RecorderControls') && /playWordAudio\(null/.test(scr), 'screen reuses recorder + playWordAudio (en-GB)')
+ok(scr.includes('useLocalRecorder') && scr.includes('RecorderControls') && /playEn\(/.test(scr) && /playWordAudio\(null/.test(shared), 'screen reuses recorder + playWordAudio (en-GB, via the shared playEn)')
 
 // ---- 251차: one card per word (listen + recorder together), test mode, privacy pins
 const cardSrc = scr.slice(scr.indexOf('function PracticeCards'), scr.indexOf('function QuizCard'))

@@ -37,14 +37,17 @@ export function useReducedMotion() {
 
 // full-width button colours shared by the phonics and picture-word screens (used as `${BTN} ${W.gray}`)
 export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
+export const T2 = 'text-2xl font-black text-gray-900'
+export const T3 = 'text-3xl font-black text-gray-900 break-words'
+export const MUTED = 'text-xs font-bold text-gray-500'
 export const W = { gray: 'w-full bg-gray-200 text-gray-700', purple: 'w-full bg-purple-600 text-white', sky: 'w-full bg-sky-100 text-sky-700' }
 
 const CSS = `
 @keyframes pw-swing{0%{transform:rotate(-70deg) translateY(-6px)}60%{transform:rotate(25deg) translateY(4px)}100%{transform:rotate(0) translateY(0)}}
-@keyframes pw-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-@keyframes pw-bounce{0%{transform:scale(1)}40%{transform:scale(1.15)}100%{transform:scale(1)}}
-@keyframes pw-hop{0%{transform:translateY(0)}50%{transform:translateY(-10px)}100%{transform:translateY(0)}}
-@keyframes pw-click{0%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes pw-shake{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@keyframes pw-bounce{0%,100%{transform:none}40%{transform:scale(1.15)}}
+@keyframes pw-hop{0%,100%{transform:none}50%{transform:translateY(-10px)}}
+@keyframes pw-click{0%{transform:scale(1.25)}100%{transform:none}}
 @keyframes pw-glow{0%{box-shadow:0 6px 0 #F9A8D4,0 0 0 0 rgba(244,114,182,.6)}50%{box-shadow:0 6px 0 #F9A8D4,0 0 18px 6px rgba(244,114,182,.55)}100%{box-shadow:0 6px 0 #F9A8D4,0 0 0 0 rgba(244,114,182,0)}}
 @keyframes pw-spark{0%{transform:scale(.3) rotate(0);opacity:0}30%{opacity:1}100%{transform:scale(1.2) rotate(90deg) translateY(-14px);opacity:0}}
 .pw-swing{animation:pw-swing .18s ease-out both}.pw-shake{animation:pw-shake .25s ease-in-out}.pw-bounce{animation:pw-bounce .3s ease-out}
@@ -57,7 +60,7 @@ const CSS = `
 .pw-card--text{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:6rem;text-align:center}
 .pw-card-tag{display:inline-block;padding:2px 10px;border-radius:999px;background:#fff;border:2px solid #F9A8D4;font-size:.75rem;font-weight:900;color:#BE185D}
 .pw-card-sm{width:100%;padding:6px;border-width:2px;border-radius:16px;box-shadow:0 3px 0 #F9A8D4,0 5px 10px rgba(244,114,182,.2)}
-.pw-pic{display:block;box-sizing:border-box;width:100%;height:auto;aspect-ratio:1/1;object-fit:contain;padding:8px;border-radius:18px;background:#fff;box-shadow:inset 0 0 0 2px #FCE7F3}
+.pw-pic{box-sizing:border-box;width:100%;height:auto;aspect-ratio:1/1;object-fit:contain;padding:8px;border-radius:18px;background:#fff;box-shadow:inset 0 0 0 2px #FCE7F3}
 .pw-card-sm .pw-pic{width:6rem;height:6rem;margin:0 auto;aspect-ratio:auto;padding:6px;border-radius:14px}
 .pw-letter{border:2px solid var(--pw-edge);background:var(--pw-bg);color:#1F2937;box-shadow:0 3px 0 var(--pw-edge);transition:transform .15s ease,box-shadow .15s ease}
 .pw-letter:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 var(--pw-edge)}
@@ -70,15 +73,15 @@ const CSS = `
 .pw-bar{display:block;flex:1;max-width:9rem;height:8px;border-radius:999px;background:#F3E8FF;overflow:hidden}
 .pw-bar-fill{display:block;height:100%;border-radius:999px;background:#F472B6;transition:width .25s ease}
 .pw-spark-star{position:absolute;pointer-events:none;font-size:1.25rem;line-height:1;color:#F59E0B}
-@keyframes pbp-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-@keyframes pbp-wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-7deg)}75%{transform:rotate(7deg)}}
-@keyframes pbp-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes pbp-float{0%,100%{transform:none}50%{transform:translateY(-8px)}}
+@keyframes pbp-wobble{0%,100%{transform:none}25%{transform:rotate(-7deg)}75%{transform:rotate(7deg)}}
+@keyframes pbp-pulse{0%,100%{transform:none}50%{transform:scale(1.04)}}
 .pbp-float{animation:pbp-float 3s ease-in-out infinite}.pbp-wobble{animation:pbp-wobble .25s ease-in-out}.pbp-pulse{animation:pbp-pulse .8s ease-in-out infinite}
 .pbp-bubble{width:7rem;height:7rem;border-radius:9999px;font-size:3rem;font-weight:900;line-height:1;border:3px solid var(--pw-edge);background:radial-gradient(circle at 30% 28%,#fff 0,var(--pw-bg) 62%);color:#1F2937;box-shadow:0 4px 0 var(--pw-edge);transition:transform .28s ease-out,opacity .28s ease-out}
 .pbp-bubble[data-tried=true]{opacity:.35}
 .pbp-bubble.pbp-pop{transform:scale(1.5);opacity:0;pointer-events:none}
-@keyframes pwt-go{from{transform:translateX(0)}to{transform:translateX(130%);visibility:hidden}}
-@keyframes pwt-in{from{opacity:0}to{opacity:1}}
+@keyframes pwt-go{from{transform:none}to{transform:translateX(130%);visibility:hidden}}
+@keyframes pwt-in{from{opacity:0}}
 .pwt-track{display:grid;overflow:hidden;padding:6px 4px}
 .pwt-track>*{grid-area:1/1}
 .pwt-train,.pwt-result{display:flex;align-items:center;justify-content:center;gap:4px}

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { gameWords } from '../../utils/pictureWords/games.js'
 import { stopSpeaking } from '../../utils/speech'
-import { BTN, GameStyle, W } from './pictureImg.jsx'
+import { BTN, GameStyle, T2, W } from './pictureImg.jsx'
 import AlphabetHammer from './AlphabetHammer.jsx'
 import HiddenLetters from './HiddenLetters.jsx'
 import ShopShelf from './ShopShelf.jsx'
@@ -35,7 +35,7 @@ function GameSession({ mode: first, level, from, onPractice, onTest, onMenu, onE
     const first = wrongs.filter((x) => x === 0).length
     return (
       <div data-testid="pwg-summary" className="space-y-3 text-center">
-        <p className="text-2xl font-black text-gray-900">게임을 마쳤어요</p>
+        <p className={T2}>게임을 마쳤어요</p>
         <p className="text-lg text-gray-700">처음에 맞힌 단어 <span data-testid="pwg-first-try" className="font-black text-purple-700">{first} / {words.length}</span></p>
         <button type="button" data-testid="pwg-again" onClick={() => restart(mode)} className={`${BTN} ${W.purple}`}>다시 하기</button>
         <button type="button" data-testid="pwg-other" onClick={() => restart(mode === 'hammer' ? 'hidden' : 'hammer')} className={`${BTN} ${W.sky}`}>다른 게임</button>
