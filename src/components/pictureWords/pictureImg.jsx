@@ -72,10 +72,14 @@ const CSS = `
 .pbp-bubble{width:7rem;height:7rem;border-radius:9999px;font-size:3rem;font-weight:900;line-height:1;border:3px solid var(--pw-edge);background:radial-gradient(circle at 30% 28%,#fff 0,var(--pw-bg) 62%);color:#1F2937;box-shadow:0 4px 0 var(--pw-edge);transition:transform .28s ease-out,opacity .28s ease-out}
 .pbp-bubble[data-tried=true]{opacity:.35}
 .pbp-bubble.pbp-pop{transform:scale(1.5);opacity:0;pointer-events:none}
-.pwt-track{overflow:hidden;padding:6px 4px}
-.pwt-train{display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;transition:transform .6s ease-in .25s}
-.pwt-train.pwt-depart{transform:translateX(120%)}
+@keyframes pwt-go{from{transform:translateX(0)}to{transform:translateX(130%);visibility:hidden}}
+@keyframes pwt-in{from{opacity:0}to{opacity:1}}
+.pwt-track{display:grid;overflow:hidden;padding:6px 4px}
+.pwt-track>*{grid-area:1/1}
+.pwt-train,.pwt-result{display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px}
+.pwt-train.pwt-depart{animation:pwt-go .6s ease-in .25s forwards}
+.pwt-result{animation:pwt-in .3s ease-out .85s both}
 .pwt-engine{display:flex;align-items:center;justify-content:center;min-width:48px;min-height:48px;font-size:1.75rem}
-@media (prefers-reduced-motion: reduce){.pw-swing,.pw-shake,.pw-bounce,.pw-pop,.pw-hop,.pw-click,.pw-glow,.pw-spark{animation:none}.pbp-float,.pbp-wobble,.pbp-pulse{animation:none}.pbp-bubble,.pwt-train{transition:none}.pwt-train.pwt-depart{transform:none}.pw-tile,.pw-letter,.pw-bar-fill{transition:none}.pw-spark-star{display:none}}
+@media (prefers-reduced-motion: reduce){.pw-swing,.pw-shake,.pw-bounce,.pw-pop,.pw-hop,.pw-click,.pw-glow,.pw-spark{animation:none}.pbp-float,.pbp-wobble,.pbp-pulse{animation:none}.pbp-bubble{transition:none}.pwt-train.pwt-depart{animation:none;visibility:hidden}.pwt-result{animation:none}.pw-tile,.pw-letter,.pw-bar-fill{transition:none}.pw-spark-star{display:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>

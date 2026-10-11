@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react'
 import { STATUS_LABEL_KO, objectiveKo, prereqKo, recordableTargets } from '../../data/phonics/curriculum.js'
 import { bubbleRound, summarisePhonemes } from '../../utils/phonics/games.js'
-import { hasGame, missedItems, readyWords, unitContext } from '../../utils/phonics/curriculum.js'
+import { hasGame, missedItems, readyWords, unitContext, unitTestLock } from '../../utils/phonics/curriculum.js'
 import { gameEligible } from '../../utils/pictureWords/games.js'
 import { phonemeClip } from '../../data/phonics/phonemeClips.js'
 import PhonemeListen, { LOCKED_TEXT_KO } from './PhonemeListen.jsx'
@@ -37,7 +37,8 @@ export default function UnitHub({ bookId, unitId, records, onBack, onSession, on
   const hasWords = words.length > 0
   const rec = recordableTargets(unit)
   const allClips = rec.length > 0 && rec.every((x) => phonemeClip(x.ipa))
-  const sess = (game, step, items) => () => onSession(game, items, { bookId, unitId, step, learned: ctx.learned, optionPairs: ctx.optionPairs })
+  const sess = (game, step, items, extra) => () => onSession(game, items, { bookId, unitId, step, learned: ctx.learned, optionPairs: ctx.optionPairs, ...extra })
+  const testLock = unitTestLock(book)
   const none = '단어 준비 중'
   const noSound = '소리 하나를 따로 듣지 않는 Unit이에요'
   const wrongPh = Object.entries(summarisePhonemes(mine)).filter(([, s]) => s.wrong > 0 && !s.improvedAfterReview).map(([ph]) => `/${ph}/`)
@@ -68,9 +69,9 @@ export default function UnitHub({ bookId, unitId, records, onBack, onSession, on
         {allClips && hasWords && <div className="mt-2 space-y-1">{rec.map((x) => <PhonemeListen key={x.pair} target={x} repeat />)}</div>}
       </Step>
       <Step n={3} title="그림과 단어" state={ready.length ? 'ready' : 'locked'} reason={ready.length ? '그림을 보고 단어를 듣고 따라 말해요' : '그림이 준비된 단어가 없어요'} go={() => onPractice(ready)} />
-      <Step n={4} title="Sound Bubble Pop" state={bubbleWords.length ? 'ready' : 'locked'} reason={bubbleWords.length ? '소리를 듣고 풍선을 터뜨려요' : bubbleLock} go={sess('bubble', 'bubble', bubbleWords)} />
+      <Step n={4} title="Sound Bubble Pop" state={bubbleWords.length ? 'ready' : 'locked'} reason={bubbleWords.length ? '소리를 듣고 풍선을 터뜨려요' : bubbleLock} go={sess('bubble', 'bubble', bubbleWords, unit.review ? undefined : { interleave: true })} />
       <Step n={5} title="Word Train" state={trainWords.length ? 'ready' : 'locked'} reason={trainWords.length ? '소리 블록으로 단어를 만들어요' : trainLock} go={sess('train', 'train', trainWords)} />
-      <Step n={6} title="Unit Test" state={ready.length >= MIN_TEST_WORDS ? 'ready' : 'locked'} reason={ready.length >= MIN_TEST_WORDS ? '그림을 보고 단어를 골라요' : '그림이 준비된 단어가 4개 이상일 때 열려요'} go={() => onTest(ready)} />
+      <Step n={6} title="Unit Test" state={!testLock && ready.length >= MIN_TEST_WORDS ? 'ready' : 'locked'} reason={testLock || (ready.length >= MIN_TEST_WORDS ? '그림을 보고 단어를 골라요' : '그림이 준비된 단어가 4개 이상일 때 열려요')} go={() => onTest(ready)} />
       <Step n={7} title="틀린 소리 복습" state={missed.length ? 'ready' : 'locked'} reason={missed.length ? `다시 볼 단어 ${missed.length}개` : '틀린 소리가 없어요'} go={sess('bubble', 'review', missed)} />
 
       {(hammerOk || hiddenOk) && (

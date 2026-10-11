@@ -4,9 +4,9 @@
   "task_id": "paul-phonics-quality-pass-2026-10-11",
   "task": "유닛/단어 품질 수정, Bubble Pop 복습 섞기, Word Train 출발 버그, 녹음 42개 등록·검증 구조",
   "status": "working",
-  "progress": 45,
+  "progress": 55,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T07:56:16.000Z",
+  "updated_at": "2026-10-11T07:56:17.000Z",
   "files_owned": [
     ".ai-status/orchestrator-phonics-adventure-2026-10-11.json",
     "TESTING.md",
@@ -46,5 +46,5 @@
   "summary": "43 Unit 적용·관리자 검토 탭·정적 258/258·브라우저 135+23·그림 스펙 3종 green·문서 append",
   "blocker": null,
   "next_action": "",
-  "checkpoint": "commit 2: bubble pop"
+  "checkpoint": "commit 3: word train + hub"
 }
