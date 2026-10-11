@@ -1,4 +1,13 @@
 # Paul Easy Voca — Handoff
+## 260차 (2026-10-11): 녹음 등록 미리보기 + 이미지 우선순위 + 학습 발달 샘플 화면 v2
+- **먼저 고친 것**: `testTownKitAssets`가 `imageCandidates.js`의 kit 참조 때문에 FAIL이던 것(257차 도입). 허용 목록은 건드리지 않고, kit 후보 4개(duck·fox·tent·gate)는 import 없이 경로 글자만 보인다("마을 kit 그림 — 파일 경로만 표시", 경로는 `TOWN + 'kit/...'`로 조합 — 가드가 소스 글자를 검색하므로). 썸네일은 cat·tree·lamp 3개. `testTownKitAssets` 1421/1421.
+- **이미지 우선순위**: `imagePriority(bookNo)`(P1 = Book 1, P2 = Book 2, P3 = Book 3~5), 제작 대기 105개 = P1 13 / P2 14 / P3 78. `PHONICS_IMAGE_SPEC` 부록에 P1 그리기 지시. **이미지는 만들지 않았다**(생성 도구 없음). 재확인에서 진짜 중복 0 — `dog`/`rope`/`boot`는 dog bowl·hot dog / skipping rope / wellington boot와 다른 그림이라 계속 제작 대기. **관리자 표의 P1/P2/P3 열·필터 UI는 번들 한도 때문에 못 붙였다**(약 0.4 KB 필요).
+- **녹음 등록 미리보기(관리자, 메모리 전용)**: `utils/phonics/recordingUpload.js`의 `validateUpload`, 기존 42행 녹음 표에 "미리보기" 열을 합쳤다(표를 둘로 두지 않아 -774 B). 실제 등록 줄은 0 / 42 · 0 / 42 그대로, 학생 화면 누출 없음(정적 핀 + 같은 컨텍스트 학생 화면에서 2단계 잠김 확인).
+- **학습 발달 v2**: `progress.js`에 8개 순수 함수 + 빈 샘플 학생 G + 두 번 시험 본 샘플(A·B). 학생 화면: 단원 상태 칸 · 변화 문구 · 복습 추천 · 철자+대표 단어(발음 기호 없음) · 샘플 전환/빈 상태 · "지금은 점수가 저장되지 않아요". 관리자: 기록 없음 행 · 취약 영역 · 음소별 오답 표(`ppa-weak`를 대체). **번들 때문에 못 붙인 관리자 UI**: Book별 시험 표(≈0.9 KB), 반복해서 틀리는 문제(≈0.7 KB), 오답 표 정렬 버튼(≈0.3 KB), 학부모 요약 변화 문장(≈0.1 KB). 함수·정적 테스트·문서는 완료.
+- **검증**: dummy-env build OK; `testPhonicsProgress` 94, `testPhonicsGames` 371, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 33, `testLazyChunkGuards`, `testRegistryCoverage` 8, `testQaGate` 17, `testTownKitAssets` 1421, `validateRecordings` 오류 없음. 브라우저: phonicsReview 44/44, phonicsProgress 62/62, phonicsGames 197/197, pictureWordReview 29/29.
+- **번들**: 핵심 JS 합계 2,191,846 → 2,199,984 B(예산 2.2 MB, 남은 여유 16 B). 예산·제외 규칙은 건드리지 않았다. 다음 작업은 번들을 먼저 줄여야 한다.
+- 설계 문서 `PHONICS_PROGRESS` 8절(접근 권한 검토; SQL 초안 불변), `PHONICS_ADVENTURE`에 실제 등록 절차. SQL·push·DB·네트워크·새 저장소 키 0. `dist-r15/`, `tests/e2e/_r15.spec.mjs`는 이전 에이전트 산출물이라 그대로 두었다.
+
 ## 259차 (2026-10-11): PAUL PHONICS Book 1 — 소리 알아듣기와 단어 읽기를 나누고 10단계 흐름·게임 다듬기
 - **무엇**: Book 1(단모음)은 자음 전이라 `skill: 'sound'`(자음은 회색 도우미 글자), Book 2~5는 `'reading'`. 허브는 10단계를 3묶음(만나요·말해요·놀아요)으로 보이고 purple "시작하기"는 다음 1개뿐, 한 행은 "✓ 오늘 했어요"(메모리 기록에서만 파생 — 저장·완료 아님), 잠긴 행은 버튼 없는 한 줄, 발음 기호 숨김. 2단계 "선생님 소리 듣기"는 녹음 0개라 조용히 잠김("선생님 목소리는 곧 만나요", 발음·오디오 0).
 - **게임**: Unit 1 Bubble Pop은 감지 과제(두 풍선 [a, 다른 소리], 8문제 = a 있는 단어 5 + 없는 단어 3) — **교육학 판단이라 needsReview**. 모든 풍선은 단어를 한 번 듣기 전에는 잠김, 정답 뒤 작은 카드로 `다음`이 360×640에 보임, 칭찬 3문구 순환, 연습/도전 토글 제거(소리 확인만 힌트 없음·한 번만 고름). Book 1 Word Train = 회색 도우미 칸 + 빈 모음 칸 1개 + 모음 타일 5개. 소리 확인 5문제 → `unitTest { score, total }` 메모리 기록 1건, "다시 만나기". 망치: 글자 이름/소리 음성을 넣지 않음(이유는 설계 문서), `aria-label`·완성 시 포커스. 숨은 글자: Unit 목표 글자 칸 먼저 가림. 그림 시험 오답은 amber.

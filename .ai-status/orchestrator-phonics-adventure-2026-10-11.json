@@ -1,12 +1,12 @@
 {
   "agent_name": "implementer",
-  "role": "PAUL PHONICS Book 1 학습 흐름·게임 다듬기 (259차, 이전 257차 항목 포함)",
-  "task_id": "paul-phonics-book1-2026-10-11",
+  "role": "녹음 등록 미리보기·이미지 우선순위·학습 발달 v2 (260차)",
+  "task_id": "paul-phonics-audio-progress-v2-2026-10-11",
   "task": "Book 1 10단계 3묶음 허브, 감지 과제, 모음 Word Train, 소리 확인, 망치/숨은 글자 다듬기 (257차 이미지 감사·학습 발달 항목은 이전 summary 참고)",
   "status": "completed",
   "progress": 100,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T10:20:58.584Z",
+  "updated_at": "2026-10-11T12:00:00.000Z",
   "files_owned": [
     "DATABASE.md",
     "TESTING.md",
@@ -38,6 +38,7 @@
     "src/utils/phonics/curriculum.js",
     "src/utils/phonics/games.js",
     "src/utils/phonics/progress.js",
+    "src/utils/phonics/recordingUpload.js",
     "src/utils/pictureWords/games.js",
     "supabase_v3_51_phonics_progress_DRAFT.sql",
     "tests/e2e/phonicsGames.spec.mjs",
@@ -51,8 +52,7 @@
     "src/utils/pictureWords/*",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "259차: Book 1 skill sound/reading, 10단계 3묶음 허브(next 1개, 오늘 했어요, 조용한 잠금), Unit 1 감지 과제(needsReview), Book 1 Word Train 모음 칸, 소리 확인 5문제, 망치 aria-label/포커스, 숨은 글자 prefer, amber. 정적 368/142/59/754, 브라우저 197/150/107 PASS. 번들 +~9KB(여유 8.0KB). 이전: 이미지 105=7후보+98신규, 검토 패널 확장, 글자 카드, progress.js+샘플+샘플 화면 2개, SQL 초안(미실행). 정적 60/352, 브라우저 7 spec green",
+  "summary": "260차: kit 가드 수정, 녹음 미리보기, P1/P2/P3 함수+문서, 진도 v2 함수·학생 화면·관리자 일부. 번들 여유 16 B. 못 붙인 UI: 우선순위 열, Book 시험 표, 반복 오답, 정렬, 학부모 변화 문장.",
   "blocker": null,
-  "next_action": "",
   "checkpoint": "commit 7: docs; all verification green"
 }
