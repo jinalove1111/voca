@@ -24,7 +24,7 @@ function Clip({ target, clip, repeat }) {
 }
 
 export default function PhonemeListen({ target, repeat = false, clips }) {
-  const clip = phonemeClip(target.pair, clips)
+  const clip = phonemeClip(target.ipa, clips)
   return (
     <div data-testid="pph-phoneme" data-pair={target.pair} data-state={clip ? 'ready' : 'locked'} className="rounded-2xl border-2 border-sky-100 bg-white p-2">
       <p className="break-words text-center text-lg font-black text-gray-800">

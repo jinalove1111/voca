@@ -4,9 +4,9 @@
   "task_id": "paul-phonics-43-units-2026-10-11",
   "task": "24 Unit 초안 -> 43 Unit(구조 승인, 전부 임시) + 그림 없는 단어 + 읽기 전용 관리자 검토 탭",
   "status": "working",
-  "progress": 25,
+  "progress": 45,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T07:11:07.000Z",
+  "updated_at": "2026-10-11T07:11:29.000Z",
   "files_owned": [
     "TESTING.md",
     "docs/design/PHONICS_ADVENTURE_2026-10-11.md",
@@ -35,7 +35,7 @@
     "src/utils/pictureWords/*",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "43 Unit 데이터·규칙·정적 테스트 작성(정적 257/257)",
+  "summary": "학생 화면: 그림 없는 단어 지원·게임 가용성·43 Unit 표시",
   "blocker": null,
   "next_action": ""
 }
