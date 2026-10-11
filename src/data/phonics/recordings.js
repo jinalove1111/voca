@@ -6,26 +6,27 @@ export const EXTENSIONS = ['mp3', 'm4a', 'wav']
 export const MIN_BYTES = 2 * 1024
 export const MAX_BYTES = 500 * 1024
 
-// [id, ipa, representative grapheme, example word] in teaching order
+// [id, ipa, example word, representative grapheme (omitted when it equals id)] in teaching order
 const ROWS = [
-  ['a', 'æ', 'a', 'cat'], ['e', 'e', 'e', 'pen'], ['i', 'ɪ', 'i', 'pig'], ['o', 'ɒ', 'o', 'dog'], ['u', 'ʌ', 'u', 'cup'],
-  ['m', 'm', 'm', 'mat'], ['s', 's', 's', 'sat'], ['t', 't', 't', 'tap'], ['p', 'p', 'p', 'pot'],
-  ['n', 'n', 'n', 'nut'], ['d', 'd', 'd', 'dog'], ['g', 'ɡ', 'g', 'dig'], ['k', 'k', 'c', 'can'],
-  ['b', 'b', 'b', 'bag'], ['h', 'h', 'h', 'hat'], ['f', 'f', 'f', 'fan'], ['l', 'l', 'l', 'leg'],
-  ['r', 'r', 'r', 'red'], ['j', 'dʒ', 'j', 'jam'], ['w', 'w', 'w', 'wet'], ['v', 'v', 'v', 'van'], ['y', 'j', 'y', 'yes'], ['z', 'z', 'z', 'zip'],
-  ['ai', 'eɪ', 'ai', 'train'], ['ie', 'aɪ', 'i_e', 'kite'], ['oa', 'əʊ', 'oa', 'boat'], ['ue', 'juː', 'u_e', 'cube'], ['oo-long', 'uː', 'oo', 'moon'],
-  ['sh', 'ʃ', 'sh', 'ship'], ['ch', 'tʃ', 'ch', 'chip'], ['th-thin', 'θ', 'th', 'thin'], ['th-this', 'ð', 'th', 'this'], ['ng', 'ŋ', 'ng', 'ring'],
-  ['ee', 'iː', 'ee', 'green'], ['ow', 'aʊ', 'ow', 'cow'], ['oi', 'ɔɪ', 'oi', 'coin'], ['oo-short', 'ʊ', 'oo', 'book'], ['ar', 'ɑː', 'ar', 'car'], ['or', 'ɔː', 'or', 'fork'], ['er', 'ɜː', 'er', 'her'], ['schwa', 'ə', 'er', 'butter'], ['air', 'eə', 'air', 'chair'],
+  ['a', 'æ', 'cat'], ['e', 'e', 'pen'], ['i', 'ɪ', 'pig'], ['o', 'ɒ', 'dog'], ['u', 'ʌ', 'cup'],
+  ['m', 'm', 'mat'], ['s', 's', 'sat'], ['t', 't', 'tap'], ['p', 'p', 'pot'], ['n', 'n', 'nut'],
+  ['d', 'd', 'dog'], ['g', 'ɡ', 'dig'], ['k', 'k', 'can', 'c'], ['b', 'b', 'bag'], ['h', 'h', 'hat'],
+  ['f', 'f', 'fan'], ['l', 'l', 'leg'], ['r', 'r', 'red'], ['j', 'dʒ', 'jam'], ['w', 'w', 'wet'],
+  ['v', 'v', 'van'], ['y', 'j', 'yes'], ['z', 'z', 'zip'], ['ai', 'eɪ', 'train'], ['ie', 'aɪ', 'kite', 'i_e'],
+  ['oa', 'əʊ', 'boat'], ['ue', 'juː', 'cube', 'u_e'], ['oo-long', 'uː', 'moon', 'oo'], ['sh', 'ʃ', 'ship'], ['ch', 'tʃ', 'chip'],
+  ['th-thin', 'θ', 'thin', 'th'], ['th-this', 'ð', 'this', 'th'], ['ng', 'ŋ', 'ring'], ['ee', 'iː', 'green'], ['ow', 'aʊ', 'cow'],
+  ['oi', 'ɔɪ', 'coin'], ['oo-short', 'ʊ', 'book', 'oo'], ['ar', 'ɑː', 'car'], ['or', 'ɔː', 'fork'], ['er', 'ɜː', 'her'],
+  ['schwa', 'ə', 'butter', 'er'], ['air', 'eə', 'chair'],
 ]
 const two = (n) => String(n).padStart(2, '0')
-export const RECORDINGS = ROWS.map(([id, ipa, grapheme, exampleWord], i) => ({ no: i + 1, id, ipa, grapheme, exampleWord, fileBase: `ph-${two(i + 1)}-${id}` }))
+export const RECORDINGS = ROWS.map(([id, ipa, exampleWord, grapheme = id], i) => ({ no: i + 1, id, ipa, grapheme, exampleWord, fileBase: `ph-${two(i + 1)}-${id}` }))
 
 // id -> { approvedBy, approvedOn }. EMPTY: no recording has been listened to and approved yet.
 export const PHONEME_APPROVALS = {}
 
 const NAME = /^ph-(\d\d)-([a-z0-9-]+)\.([A-Za-z0-9]+)$/
 const BY_ID = new Map(RECORDINGS.map((r) => [r.id, r]))
-export const approvalComplete = (a) => !!a && typeof a.approvedBy === 'string' && a.approvedBy.trim() !== '' && typeof a.approvedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.approvedOn) && !Number.isNaN(Date.parse(a.approvedOn)) && new Date(a.approvedOn).toISOString().slice(0, 10) === a.approvedOn
+export const approvalComplete = (a) => !!a && typeof a.approvedBy === 'string' && a.approvedBy.trim() !== '' && typeof a.approvedOn === 'string' && !Number.isNaN(Date.parse(a.approvedOn)) && new Date(a.approvedOn).toISOString().slice(0, 10) === a.approvedOn
 
 // a file name -> { rec, ext } when it is a correct clip name of a known recording; else null
 function parseName(name) {
