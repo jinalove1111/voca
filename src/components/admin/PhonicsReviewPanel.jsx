@@ -17,6 +17,7 @@ const REC_STATE = { missing: '파일 없음', uploaded: '승인 대기', approve
 const FILTERS = [['all', '전체'], ['ready', '그림 준비'], ['needed', '제작 대기'], ['candidate', '기존 후보'], ['free', '그림 없이'], ['review', '검토 필요']]
 const CAND_WORDS = new Set(IMAGE_CANDIDATES.map((c) => c.word))
 const CHIP = 'rounded-full bg-purple-100 px-2 py-1 text-xs font-black text-purple-800'
+const BTN = 'mr-1 min-h-[32px] rounded-full bg-purple-100 px-2 font-black text-purple-800 disabled:opacity-40'
 const TH = 'whitespace-nowrap border-b-2 border-gray-200 bg-gray-50 px-2 py-1 text-left text-xs font-black text-gray-600'
 const TD = 'border-b border-gray-100 px-2 py-2 align-top text-xs text-gray-700'
 
@@ -171,9 +172,9 @@ function RecordingPreview() {
                         <audio src={x.url} preload="metadata" onLoadedMetadata={(e) => set(r.id, { duration: e.currentTarget.duration })} onError={() => set(r.id, { duration: null })} />
                         {v.errors.map((m) => <p key={m} className="font-black text-rose-700">{m}</p>)}
                         {v.warnings.map((m) => <p key={m} className="font-black text-amber-700">{m}</p>)}
-                        <button type="button" data-testid={`phr-rec-play-${r.id}`} disabled={!v.ok} onClick={(e) => e.currentTarget.parentNode.querySelector('audio').play()} className="min-h-[32px] rounded-full bg-purple-100 px-3 font-black text-purple-800 disabled:opacity-40">재생</button>
+                        <button type="button" data-testid={`phr-rec-play-${r.id}`} disabled={!v.ok} onClick={(e) => e.currentTarget.parentNode.querySelector('audio').play()} className={BTN}>재생</button>
                         <span data-testid={`phr-rec-verdict-${r.id}`} className="mx-1 font-black">{VERDICT[v.ok ? x.verdict : 'pending']}</span>
-                        {['approved', 'rejected'].map((k) => <button key={k} type="button" data-testid={`phr-rec-${k}-${r.id}`} disabled={!v.ok} onClick={() => set(r.id, { verdict: k })} className="mr-1 min-h-[32px] rounded-full bg-gray-100 px-2 font-black text-gray-700 disabled:opacity-40">{VERDICT[k]}</button>)}
+                        {['approved', 'rejected'].map((k) => <button key={k} type="button" data-testid={`phr-rec-${k}-${r.id}`} disabled={!v.ok} onClick={() => set(r.id, { verdict: k })} className={BTN}>{VERDICT[k]}</button>)}
                       </div>
                     ) : null}
                   </td>
