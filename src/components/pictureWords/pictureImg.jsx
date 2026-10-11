@@ -51,6 +51,8 @@ const CSS = `
 @media (min-width:390px){.pw-cell{min-width:56px;min-height:56px}}
 .pw-card{position:relative;box-sizing:border-box;width:min(100%,15rem);margin:0 auto;padding:12px;border:3px solid #F472B6;border-radius:24px;background:linear-gradient(160deg,#FFE4EF 0%,#FFF8EC 100%);box-shadow:0 6px 0 #F9A8D4,0 10px 18px rgba(244,114,182,.25)}
 @media (min-width:640px){.pw-card{width:min(100%,19rem)}}
+.pw-card--text{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:6rem;text-align:center}
+.pw-card-tag{display:inline-block;padding:2px 10px;border-radius:999px;background:#fff;border:2px solid #F9A8D4;font-size:.75rem;font-weight:900;color:#BE185D}
 .pw-card-sm{width:100%;padding:6px;border-width:2px;border-radius:16px;box-shadow:0 3px 0 #F9A8D4}
 .pw-pic{display:block;width:100%;height:auto;aspect-ratio:1/1;object-fit:contain;border-radius:14px;background:#fff}
 .pw-card-sm .pw-pic{width:6rem;height:6rem;margin:0 auto;aspect-ratio:auto}

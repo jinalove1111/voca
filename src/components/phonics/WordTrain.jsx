@@ -89,7 +89,10 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
         </div>
       ) : (
         <div className="relative">
-          <p data-testid="pwt-listen-only" className="rounded-2xl bg-sky-50 p-3 text-center text-base font-black text-sky-800">잘 듣고 소리 블록을 이어 보세요</p>
+          <div data-testid="pwt-text-card" className="pw-card pw-card--text">
+            <span className="pw-card-tag">듣기 단어</span>
+            <p data-testid="pwt-listen-only" className="text-base font-black text-gray-800">잘 듣고 소리 블록을 이어 보세요</p>
+          </div>
           {st.done && !reduced && <Sparkles />}
         </div>
       )}

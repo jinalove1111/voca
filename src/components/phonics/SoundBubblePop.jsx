@@ -88,7 +88,10 @@ export default function SoundBubblePop({ item, seed, index, total, mode, onMode,
       {reveal && (
         <div data-testid="pbp-reveal" className="space-y-2">
           {item.asset && <GamePicture word={item} testid="pbp-picture" glow={st.done && !reduced} />}
-          <p data-testid="pbp-word" className="text-center text-3xl font-black text-gray-900 break-words">{parts.map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
+          {(() => {
+            const word = <p data-testid="pbp-word" className="text-center text-3xl font-black text-gray-900 break-words">{parts.map((x, k) => (x.hl ? <span key={k} data-hl="true" className="text-pink-600">{x.t}</span> : <React.Fragment key={k}>{x.t}</React.Fragment>))}</p>
+            return item.asset ? word : <div data-testid="pbp-text-card" className="pw-card pw-card--text"><span className="pw-card-tag">듣기 단어</span>{word}</div>
+          })()}
           {item.ko && <p data-testid="pbp-ko" className="text-center text-lg font-bold text-gray-700 break-words">{item.ko}</p>}
         </div>
       )}
