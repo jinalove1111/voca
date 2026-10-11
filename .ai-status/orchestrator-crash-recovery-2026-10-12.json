@@ -1,0 +1,30 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PC 비정상 종료 복구 + 16개 뜻 승인 반영 마무리 + 전체 회귀 (265차)",
+  "task_id": "paul-phonics-crash-recovery-2026-10-12",
+  "task": "로컬 커밋 백업, 미완성 승인 반영 완료, 낡은 단언 5건 교체, 브라우저 16종 회귀",
+  "status": "completed",
+  "progress": 100,
+  "updated_at": "2026-10-12",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "files_owned": [
+    "src/data/phonics/phonicsWords.js",
+    "src/components/admin/PhonicsReviewPanel.jsx",
+    "scripts/testPhonicsGames.mjs",
+    "tests/e2e/phonicsGames.spec.mjs",
+    "tests/e2e/phonicsReview.spec.mjs",
+    "handoff.md"
+  ],
+  "verification": {
+    "build": "OK (dummy env)",
+    "static": "testPhonicsGames 419/419 + 9 other suites PASS, verify:quiz, verify:audio-tts PASS",
+    "browser": "16 specs run one at a time, FAIL 0, SKIP 2 (pre-existing)"
+  },
+  "blocked_on_operator": [
+    "교사 음소 녹음 5개 (ph-01-a ~ ph-05-u.mp3)",
+    "Book 1 그림 13개 제작·승인",
+    "번들 예산 기준 결정 (2.2 MB 한도 도달)",
+    "C:\\voca VS Code 미저장 탭 15개 처리"
+  ],
+  "not_done": "새 UI/게임 효과/이미지/녹음 0, DB/SQL/Production/main 0"
+}

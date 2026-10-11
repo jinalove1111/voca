@@ -1,4 +1,17 @@
 # Paul Easy Voca — Handoff
+## 265차 (2026-10-12): PC 비정상 종료 복구 + 16개 뜻 승인 반영 마무리 + 전체 회귀
+- **상황**: 2026-10-12 03:49 PC가 비정상 종료·재부팅됐다. 마지막 커밋 `3cd9d37b`(03:47), 마지막 파일 저장 03:48. 264차 커밋 5개는 로컬에만 있었고, "16개 뜻 승인" 반영(5개 파일)이 저장만 된 채 미커밋·미완성이었다.
+- **복구(직접 확인)**: 저장소 손상 없음(진행 중 merge/rebase·index.lock·stash 0, 수정 파일 0바이트/NUL 0). 로컬 커밋 5개를 일반 push로 백업(`f8cbde54..3cd9d37b`). 미커밋 diff와 커밋 번들을 `C:\Users\jinal\voca-wip-backup-2026-10-12\`에 따로 보관(비밀값 0 확인).
+- **승인 근거**: 이전 세션 기록에 운영자 입력 "16개 뜻 승인합니다"(2026-10-12 02:57 KST)가 있음을 확인한 뒤 진행. `APPROVED_KO` = 16개 전부. 게이트 자체는 그대로(빈 집합·불일치 집합이면 뜻 0).
+- **실패 테스트의 정체(코드가 아니라 낡은 단언)**: 정적 3건은 "그림 없는 단어는 `ko === null`"이라는 승인 전 기준이었다 → "승인된 단어만 정확히 그 제안, 나머지 162개는 null"로 교체. 브라우저 2건(Word Train)은 그림 없는 단어의 뜻이 **완성 전에** 보이기를 기대하던 264차 이전 단언이었다 → "완성 전 `pwt-ko` 0개, 완성 뒤 그 뜻 그대로"로 더 엄격하게 교체. 컴포넌트(`item.ko && (item.asset || st.done)`)는 수정하지 않았다. 테스트 삭제·기준 완화 0.
+- **커밋**: `f602292e`(데이터 1줄 + 관리자 표시 "승인" + 테스트 3파일).
+- **검증(전부 직접 실행, dummy-env build)**: build OK. 정적 `testPhonicsGames` 419/419, `testPhonicsProgress` 111, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 33, `testLazyChunkGuards`·`testRegistryCoverage`·`testQaGate` 17·`testTownKitAssets` 1421·`testStudentPathContracts` PASS, `verify:quiz` 16개·`verify:audio-tts` 11개 PASS. 브라우저 16종(하나씩, 여유 메모리 3.2~4.3 GB): phonicsGames 247/0, phonicsReview 50/0, phonicsProgress 62/0, pictureWordPractice 110/0, pictureWordGames 150/0, pictureWordReview 29/0, student 34/0, studentHome 242/0/1 SKIP(기존), admin 21/0, writing 83/0, unit 141/0, speakingExam 216/0, speaking 608/0, townWorld 146/0, townPilotAllowlist 33/0, grammarVillage 53/0/1 SKIP(기존).
+- **Book 1 상태(데이터에서 직접 출력)**: Unit 1 /æ/ bag jam cat hat map · Unit 2 /e/ pen desk egg bed red · Unit 3 /ɪ/ milk ink pig six lip · Unit 4 /ɒ/ sock dog box hot pot · Unit 5 /ʌ/ cup sun bus mug nut. 25단어 전부 뜻 있음(그림 9 + 승인 16), 그림 준비 9 · 제작 대기 13 · 그림 없이 3. 교사 녹음 0 / 5(미등록 유지, 2단계 잠김). 전 Unit `draft`.
+- **화면 확인(캡처, 390×844·1280×800)**: jam 그림 카드는 그림이 흰 매트를 가득 채우고(262차 CSS) 글자 카드(cat + "고양이")와 바깥 크기·분홍 테두리·그림자가 같다. 카드 디자인 추가 수정은 하지 않았다(고칠 문제를 찾지 못함).
+- **이번에 만들지 않은 것**: 새 UI·게임 효과·이미지·녹음 0. 번들이 예산 한도(2.200 / 2.2 MB)라 새 화면 코드는 절감 없이는 들어가지 않는다. 이미지 13개 명세(`PHONICS_IMAGE_SPEC` "Book 1 제작 목록")와 학습 발달 샘플 화면·SQL 초안은 260~262차 그대로다. DB·SQL·Production·main 0.
+- **주의(운영자)**: `C:\voca` 창의 VS Code 미저장 탭 15개(7~10월의 옛 SQL 14개 + `handoff.md` 1개)는 "모두 저장"하면 현재 파일을 옛 내용으로 덮어쓴다. 저장하지 말고 닫을 때 "저장 안 함"을 고를 것(판단은 운영자).
+- **미검증**: 실기기, 실제 소리·마이크, Preview 실로그인 화면.
+
 ## 264차 (2026-10-12): Book 1 글자 카드에 한국어 뜻 (승인 게이트) + 단어 누르면 소리 + 카드 크기 통일
 - **뜻 출처(검증 규칙)**: 저장소에서 운영자가 승인한 한국어 뜻은 승인된 그림 단어의 `ko`뿐이다. 그림 없는 Book 1 단어 16개는 `ko: null`. 문법 단원 데이터의 cat/dog/box는 교사 검수 전이라 출처로 쓰지 않았다. 그래서 `src/data/phonics/phonicsWords.js`에 단일 표 `PROPOSED_KO`(리드 제안, 미승인)와 `APPROVED_KO = new Set([])`(지금 비어 있음)를 두었다. 아이템 `ko` = 그림 항목의 `ko`, 없으면 `APPROVED_KO`에 든 단어의 제안, 아니면 `null`. `koProposed`(제안 그대로)는 관리자 화면 전용이다.
 - **승인하는 법(코드 변경 없음)**: `phonicsWords.js`의 `export const APPROVED_KO = new Set([])` 한 줄에 단어를 넣는다. 예 `new Set(['cat', 'dog'])`. 넣은 단어만 학생 카드에 뜻이 나온다. 정적 테스트가 이 경로를 매개변수 도우미 `koOf(word, pic, approved)`로 증명한다.
