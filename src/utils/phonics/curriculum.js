@@ -1,7 +1,9 @@
-// PAUL PHONICS unit logic (255차). Pure: no React, DOM, storage or network.
+// PAUL PHONICS unit logic (255차, 256차: target balancing, two-sound exclusion, bubble session, word difficulty). Pure: no React, DOM, storage or network.
 // A unit's words are its OWN explicit list (data/phonics/curriculum.js); the static test proves every word is decodable from learnedPairs (Book 1 is exempt: the child only listens for the vowel).
 import { BOOKS, DEF, bookById, reviewUnit, recordableTargets } from '../../data/phonics/curriculum.js'
 import { itemOfSlot } from '../../data/phonics/phonicsWords.js'
+import { bubbleRound } from './games.js'
+import { rng, shuffled } from '../pictureWords/practice.js'
 
 export const pairOf = (item, i) => `${item.graphemes[i]}|${item.phonemes[i]}`
 export const BOOK1_VOWELS = ['a|æ', 'e|e', 'i|ɪ', 'o|ɒ', 'u|ʌ']
@@ -35,15 +37,28 @@ const isVowelG = (g) => /^[aeiou](_e)?$/.test(g)
 const counterpart = (g) => (g.includes('_') ? g[0] : `${g}_e`)
 
 // slots of ONE unit as table items. targetIndex = the grapheme the unit teaches (-1 when it teaches no single sound, e.g. clusters);
+// a word with several matching targets takes the one used least so far in this unit (ties: earliest in the word), so EVERY target of a multi-target unit is exercised (b2u2 g via dig).
+// A word whose matched target is two sounds (qu, x, nk) is never offered as Sound Bubble Pop (B is dropped from its games).
 // a contrast unit targets the vowel and restricts the bubble options to the two contrasted spellings (a vs a_e).
 function slotsOf(unit) {
-  const targets = unit.targets.map((x) => x.pair)
+  const used = new Map()
   return unit.words.flatMap((n) => {
     const it = itemOfSlot(n)
     if (!it) return []
     const pairs = it.graphemes.map((_, i) => pairOf(it, i))
-    let targetIndex = pairs.findIndex((p) => targets.includes(p))
-    const out = { ...it, targetIndex, games: unit.games }
+    let targetIndex = -1
+    let least = Infinity
+    pairs.forEach((p, i) => {
+      if (!unit.targets.some((x) => x.pair === p)) return
+      const c = used.get(p) || 0
+      if (c < least) { least = c; targetIndex = i }
+    })
+    let games = unit.games
+    if (targetIndex >= 0) {
+      used.set(pairs[targetIndex], least + 1)
+      if (unit.targets.find((x) => x.pair === pairs[targetIndex]).twoSounds) games = games.replace('B', '')
+    }
+    const out = { ...it, targetIndex, games }
     if (unit.kind === 'contrast' && unit.games.includes('B')) {
       targetIndex = it.graphemes.findIndex(isVowelG)
       const g = it.graphemes[targetIndex]
@@ -107,4 +122,67 @@ export function reusedIpas(bookId, unitId) {
     }
   }
   return []
+}
+
+// The Book 1 picture Unit Test reads whole words with consonants the child has not been taught yet: it is locked there (the sound bubbles check Book 1 instead). null = not locked.
+export const BOOK1_TEST_LOCK_KO = 'Book 1은 소리 풍선으로 확인해요'
+export const unitTestLock = (book) => (book.focus === 'vowel-recognition' ? BOOK1_TEST_LOCK_KO : null)
+
+// Sound Bubble Pop session of a unit: its own bubble-able words + up to `count` review items from EARLIER units (seeded, each with ITS OWN unit as `origin` and its own target),
+// so a single-target unit is not the same answer all the way through. The first unit of Book 1 has no earlier unit, so it has no review items.
+// Review items prefer target graphemes the unit does not teach itself and each grapheme at most once; contrast units are not drawn from. Order is shuffled.
+// Every earlier-unit bubble word a unit's session may draw review items from (book order, unit order; deduped by id; carries its own `origin`).
+export function bubbleReviewPool(bookId, unitId) {
+  const ctx = unitContext(bookId, unitId)
+  if (!ctx || ctx.unit.review) return []
+  const own = new Set(ctx.words.map((w) => w.id))
+  const pool = []
+  for (const b of BOOKS) {
+    for (const u of b.units) {
+      if (b.id === bookId && u.id === unitId) return pool
+      if (u.kind === 'contrast') continue
+      for (const w of slotsOf(u)) {
+        if (own.has(w.id) || !hasGame(w, 'B') || w.targetIndex < 0 || !bubbleOk(w, ctx)) continue
+        own.add(w.id)
+        pool.push({ ...w, origin: { bookId: b.id, unitId: u.id } })
+      }
+    }
+  }
+  return pool
+}
+const bubbleOk = (w, ctx) => !!bubbleRound(w, 0, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctx.optionPairs })
+
+export function bubbleSession(bookId, unitId, seed, count = 3) {
+  const ctx = unitContext(bookId, unitId)
+  if (!ctx || ctx.unit.review) return []
+  const own = ctx.words.filter((w) => hasGame(w, 'B') && w.targetIndex >= 0 && bubbleOk(w, ctx))
+  if (!own.length) return []
+  const r = rng(seed)
+  const taken = new Set(own.map((w) => w.graphemes[w.targetIndex]))
+  const review = []
+  for (const w of shuffled(bubbleReviewPool(bookId, unitId), r)) {
+    const g = w.graphemes[w.targetIndex]
+    if (taken.has(g)) continue
+    taken.add(g)
+    review.push(w)
+    if (review.length === count) break
+  }
+  return shuffled([...own, ...review], r)
+}
+
+// Word difficulty 1-3 (computed). A cluster = two or more consonant graphemes in a row; a syllable = a run of vowel graphemes.
+//  3: 5+ graphemes, or 2+ clusters, or 2+ syllables.   2: 4 graphemes, or a digraph / split digraph / vowel team (grapheme longer than one letter), or one cluster.   1: the rest.
+const vowelG = (g) => /^[aeiou]/.test(g)
+export function wordDifficulty(item) {
+  const gs = item.graphemes
+  let clusters = 0, syllables = 0, run = 0, prevVowel = false
+  gs.forEach((g) => {
+    const v = vowelG(g)
+    if (v && !prevVowel) syllables++
+    if (!v) { run++; if (run === 2) clusters++ } else run = 0
+    prevVowel = v
+  })
+  if (gs.length >= 5 || clusters >= 2 || syllables >= 2) return 3
+  if (gs.length === 4 || clusters === 1 || gs.some((g) => g.length > 1)) return 2
+  return 1
 }

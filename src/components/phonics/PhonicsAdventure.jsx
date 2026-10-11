@@ -2,6 +2,7 @@
 // 항목·게임·맥락(ctx: bookId/unitId/step/learned/optionPairs)은 Unit 허브가 정해서 넘긴다. 교재 순서는 임시이므로 "임시 구성"이라고만 말한다.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { sessionItems } from '../../utils/phonics/games.js'
+import { bubbleSession } from '../../utils/phonics/curriculum.js'
 import { stopSpeaking } from '../../utils/speech'
 import { GameStyle } from '../pictureWords/pictureImg.jsx'
 import SfxControl from '../pictureWords/SfxControl.jsx'
@@ -18,7 +19,8 @@ export default function PhonicsAdventure({ game, items: pool, ctx, studentId, on
   const [records, setRecords] = useState([])
   const [mode, setMode] = useState('practice') // 풍선 터뜨리기: 연습(힌트 있음) | 도전
   const heard = useRef(false) // 세션에서 첫 듣기 탭 이후에만 다음 문제를 자동 재생
-  const items = useMemo(() => sessionItems(seed, SESSION_SIZE, pool), [seed, pool])
+  // Unit 풍선 세션 = 그 Unit의 풍선 단어 + 이전 Unit 복습 문제 최대 3개(정답이 계속 같은 글자가 되지 않게). 그 밖의 세션은 최대 6개.
+  const items = useMemo(() => (game === 'bubble' && ctx?.interleave ? bubbleSession(ctx.bookId, ctx.unitId, seed) : sessionItems(seed, SESSION_SIZE, pool)), [seed, pool, game, ctx])
   useEffect(() => stopSpeaking, [])
 
   const restart = () => { stopSpeaking(); setSeed(newSeed()); setI(0); setRecords([]) }

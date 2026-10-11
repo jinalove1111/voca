@@ -1,11 +1,11 @@
-// tests/e2e/phonicsGames.spec.mjs — PAUL PHONICS(폴 파닉스, 254차 → 255차 43 Unit): 5권 → Unit → 7단계 허브 + Sound Bubble Pop / Word Train / 기존 연습·시험·철자 게임 연결. 네트워크 전체 mock, 저장 0, 보상 0.
+// tests/e2e/phonicsGames.spec.mjs — PAUL PHONICS(폴 파닉스, 254차 → 255차 43 Unit → 256차 품질 개선: 풍선 복습 섞기, 기차 출발 고정, Book 1 시험 잠금): 5권 → Unit → 7단계 허브 + Sound Bubble Pop / Word Train / 기존 연습·시험·철자 게임 연결. 네트워크 전체 mock, 저장 0, 보상 0.
 // Bubble Pop은 정답 전에 단어가 DOM에 없으므로 어떤 단어인지는 발음 요청(speechSynthesis.speak 텍스트)으로만 알아낸다.
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
 import { learnableWords } from '../../src/data/pictureWords/index.js'
 import { PHONICS_ITEMS } from '../../src/data/phonics/phonicsWords.js'
-import { unitWords, learnedPairs, readyWords } from '../../src/utils/phonics/curriculum.js'
+import { unitWords, learnedPairs, readyWords, unitContext, bubbleReviewPool } from '../../src/utils/phonics/curriculum.js'
 import { POSITION_KO } from '../../src/utils/phonics/games.js'
 
 const T = (page, id) => page.locator(`[data-testid="${id}"]`)
@@ -18,6 +18,8 @@ const POOL = learnableWords()
 const WORDS = PHONICS_ITEMS.map((i) => i.word)
 const TESTER_ONLY = 'e2e00000-0000-4000-8000-00000000a002'
 const GENERAL = 'e2e00000-0000-4000-8000-00000000b001'
+// 풍선 세션의 항목 후보 = 그 Unit의 단어 + 이전 Unit 복습 후보(복습 문제는 자기 Unit의 목표 글자를 가진다)
+const bubbleWords = (b, u) => [...unitContext(b, u).words, ...bubbleReviewPool(b, u)]
 const names = (list) => list.map((w) => w.word).sort().join()
 const gset = (b, u) => new Set(learnedPairs(b, u).map((p) => p.split('|')[0]))
 
@@ -86,7 +88,7 @@ const untriedSig = (page) => page.locator('[data-testid^="pbp-bubble-"]').evalua
   attrs: [...e.attributes].map((a) => a.name).filter((n) => n !== 'data-testid').sort(), cls: e.className.replace(/pw-c\d/, '').replace(/\s+/g, ' ').trim(), style: e.getAttribute('style'), dis: e.disabled,
   wrapCls: e.parentElement.className,
 })))
-async function bubbleItem(page, i, { words, allowed = null, vowelOnly = false, touch = false, wrongFirst = false, hint = false, probe = false, autoFrom = null } = {}) {
+async function bubbleItem(page, i, { words, allowed = null, vowelOnly = false, touch = false, wrongFirst = false, hint = false, probe = false, autoFrom = null, ctr = null } = {}) {
   const info = {}
   if ((await T(page, 'pbp-root').getAttribute('data-item-index')) !== String(i)) throw new Error(`bubble index ${i}`)
   const mark = info.mark = await speakLen(page)
@@ -106,6 +108,9 @@ async function bubbleItem(page, i, { words, allowed = null, vowelOnly = false, t
   info.item = item
   info.inUnit = !!uw
   if (!uw) return info
+  info.own = !uw.origin && (!ctr || ctr.own.has(item.id))
+  if (ctr && info.own) { const k = ctr.n++; wrongFirst = k === ctr.wrongAt; hint = k === ctr.hintAt; probe = wrongFirst } // wrongAt/hintAt는 "이 Unit 자기 단어" 순서
+  info.listenSound = await T(page, 'pbp-listen-sound').count()
   const tg = info.tg = uw.graphemes[uw.targetIndex]
   const pos = uw.targetIndex === 0 ? 'initial' : uw.targetIndex === uw.graphemes.length - 1 ? 'final' : 'medial'
   info.pos = (await T(page, 'pbp-root').getAttribute('data-position')) === pos && ((await T(page, 'pbp-root').innerText()) || '').includes(`잘 듣고 ${POSITION_KO[pos]} 소리 풍선을 터뜨려요`)
@@ -141,8 +146,16 @@ async function bubbleItem(page, i, { words, allowed = null, vowelOnly = false, t
   await click(page, T(page, good.id), touch)
   await T(page, 'pbp-next').waitFor({ state: 'visible', timeout: 3000 })
   info.popClass = await T(page, good.id).evaluate((e) => e.classList.contains('pbp-pop'))
-  // 그림이 있는 단어는 카드 1개 + 뜻, 그림 없는 단어는 <img>·카드 0개이고 뜻은 있을 때만
-  info.card = (await T(page, 'pbp-reveal').locator('.pw-card').count()) === (item.picture ? 1 : 0) && (await T(page, 'pbp-reveal').locator('img').count()) === (item.picture ? 1 : 0) && (await T(page, 'pbp-word').textContent()) === item.word
+  // 그림이 있는 단어는 그림 카드 1개 + 뜻, 그림 없는 단어는 <img> 0개의 글자 카드(pw-card--text) 1개이고 뜻은 있을 때만
+  const cardBox = await T(page, 'pbp-reveal').evaluate((el, hasPic) => {
+    // 257차: 그림 없는 단어도 같은 pw-card 가족(pw-card--text, 분홍 테두리, "듣기 단어" 태그, <img> 없음); 그림 단어는 정사각 그림 상자(object-fit: contain)
+    const c = el.querySelector('.pw-card')
+    if (!c) return false
+    const text = c.classList.contains('pw-card--text')
+    if (hasPic) { const img = c.querySelector('img'); const b = img.getBoundingClientRect(); return !text && Math.abs(b.width - b.height) <= 1 && getComputedStyle(img).objectFit === 'contain' }
+    return text && getComputedStyle(c).borderTopColor === 'rgb(244, 114, 182)' && c.textContent.includes('듣기 단어') && !c.querySelector('img') && c.getBoundingClientRect().right <= window.innerWidth + 0.5
+  }, !!item.picture)
+  info.card = cardBox && (await T(page, 'pbp-reveal').locator('.pw-card').count()) === 1 && (await T(page, 'pbp-reveal').locator('img').count()) === (item.picture ? 1 : 0) && (await T(page, 'pbp-word').textContent()) === item.word
     && ((await T(page, 'pbp-ko').count()) === (item.ko ? 1 : 0)) && (!item.ko || (await T(page, 'pbp-ko').textContent()) === item.ko) && (item.picture || (await T(page, 'pbp-root').locator('img').count()) === 0)
   info.hl = await T(page, 'pbp-word').evaluate((e) => [...e.querySelectorAll('[data-hl]')].map((x) => x.textContent).join(''))
   info.hlOk = info.hl === tg.replace('_', '')
@@ -158,12 +171,14 @@ async function bubbleItem(page, i, { words, allowed = null, vowelOnly = false, t
 async function bubbleSession(page, words, n, opts = {}) {
   const out = []
   let preNext = 0
-  for (let i = 0; i < n; i++) {
-    out.push(await bubbleItem(page, i, { words, ...opts, wrongFirst: i === opts.wrongAt, hint: i === opts.hintAt, probe: i === opts.wrongAt, autoFrom: i > 0 ? preNext : null }))
+  const ctr = opts.own ? { n: 0, wrongAt: opts.wrongAt, hintAt: opts.hintAt, own: opts.own } : null
+  for (let i = opts.start || 0; i < (n ?? 99); i++) {
+    out.push(await bubbleItem(page, i, { words, ...opts, ctr, wrongFirst: !ctr && i === opts.wrongAt, hint: !ctr && i === opts.hintAt, probe: !ctr && i === opts.wrongAt, autoFrom: i > 0 ? preNext : null }))
     preNext = await speakLen(page)
     await click(page, T(page, 'pbp-next'), opts.touch)
     await page.waitForFunction(() => !!document.querySelector('[data-testid="pbp-root"], [data-testid="pha-summary"]'), null, { timeout: 5000 })
-    if (i < n - 1) await sleep(700) // 이전 발음이 끝나도록 — 다음 문제의 자동 재생과 구분
+    if (!(await T(page, 'pbp-root').count())) break
+    await sleep(700) // 이전 발음이 끝나도록 — 다음 문제의 자동 재생과 구분
   }
   await T(page, 'pha-summary').waitFor({ state: 'visible', timeout: 5000 })
   return out
@@ -173,7 +188,7 @@ const allOk = (infos, key) => infos.every((x) => x[key] === true)
 // ---- Word Train 한 항목
 const trainTiles = (page) => page.locator('[data-testid^="pwt-tile-"]').evaluateAll((l) => l.map((e) => ({ id: e.getAttribute('data-testid'), t: e.textContent, used: e.getAttribute('data-used') === 'true' })))
 const carsFilled = (page) => page.locator('[data-testid^="pwt-car-"]').evaluateAll((l) => l.map((e) => e.getAttribute('data-filled') === 'true' ? '1' : '0').join(''))
-async function trainItem(page, i, { allowed = null, touch = false, wrongFirst = false, rapid = false } = {}) {
+async function trainItem(page, i, { allowed = null, touch = false, wrongFirst = false, rapid = false, settle = false } = {}) {
   const info = {}
   // 그림이 있으면 그림으로, 없으면(듣기 전용 안내) 듣기 버튼이 읽는 단어 전체로 항목을 알아낸다
   const hasPic = (await T(page, 'pwt-picture').count()) > 0
@@ -192,7 +207,7 @@ async function trainItem(page, i, { allowed = null, touch = false, wrongFirst = 
   if ((await T(page, 'pwt-root').getAttribute('data-item-index')) !== String(i)) throw new Error(`train index ${i}`)
   const L = await leakState(page, 'pwt-root', item)
   info.leak0 = !L.hasWord && L.attrs.length === 0 && (await T(page, 'pwt-word').count()) === 0 && (await T(page, 'pwt-spelled').count()) === 0
-    && (hasPic ? (await T(page, 'pwt-picture').getAttribute('alt')) === '그림' && L.hasKo === !!item.ko : L.imgs === 0 && (await T(page, 'pwt-listen-only').count()) === 1 && ((await T(page, 'pwt-listen-only').textContent()) || '').includes('잘 듣고 소리 블록을 이어 보세요') && (await T(page, 'pwt-ko').count()) === (item.ko ? 1 : 0))
+    && (hasPic ? (await T(page, 'pwt-picture').getAttribute('alt')) === '그림' && L.hasKo === !!item.ko : L.imgs === 0 && (await T(page, 'pwt-text-card').count()) === 1 && (await T(page, 'pwt-text-card').evaluate((c) => c.classList.contains('pw-card--text') && c.textContent.includes('듣기 단어'))) && (await T(page, 'pwt-listen-only').count()) === 1 && ((await T(page, 'pwt-listen-only').textContent()) || '').includes('잘 듣고 소리 블록을 이어 보세요') && (await T(page, 'pwt-ko').count()) === (item.ko ? 1 : 0))
   const ts0 = await trainTiles(page)
   info.tiles = ts0.length === item.graphemes.length + 1 && item.graphemes.every((g) => ts0.some((t) => t.t === g)) && ts0.filter((t) => !item.graphemes.includes(t.t)).length === 1
   info.learnedTiles = !allowed || ts0.every((t) => allowed.has(t.t))
@@ -220,15 +235,26 @@ async function trainItem(page, i, { allowed = null, touch = false, wrongFirst = 
   }
   await T(page, 'pwt-word').waitFor({ state: 'visible', timeout: 5000 })
   info.word = (await T(page, 'pwt-word').textContent()) === need.join(' · ')
-  info.spelled = (await T(page, 'pwt-spelled').textContent()) === item.word
+  info.spelledText = await T(page, 'pwt-spelled').textContent()
+  info.spelled = info.spelledText === item.display
   info.cars = (await page.locator('[data-testid^="pwt-car-"]').evaluateAll((l) => l.map((e) => e.textContent).join('|'))) === need.join('|') && (await carsFilled(page)) === '1'.repeat(need.length)
-  info.depart = await T(page, 'pwt-train').evaluate((e) => ({ cls: e.classList.contains('pwt-depart'), dur: getComputedStyle(e).transitionDuration, delay: getComputedStyle(e).transitionDelay }))
+  info.depart = await T(page, 'pwt-train').evaluate((e) => { const c = getComputedStyle(e); return { cls: e.classList.contains('pwt-depart'), name: c.animationName, dur: c.animationDuration, delay: c.animationDelay, fill: c.animationFillMode } })
+  if (settle) info.btnY0 = await T(page, 'pwt-next').evaluate((e) => e.getBoundingClientRect().top)
   await page.waitForFunction(() => window.__speakT.length >= 1, null, { timeout: 4000 }).catch(() => {})
   const sp = await page.evaluate(() => ({ s: window.__speak.slice(-1)[0], t: window.__speakT[0] }))
   info.speak = sp.s === item.word
   info.speakDelay = sp.t - t0
   const o = await osc(page)
   info.osc = o.length
+  if (settle) { // 출발한 기차는 돌아오지 않고, 같은 자리에 완성한 단어(pwt-result)가 남고, 다음 버튼은 움직이지 않는다
+    await sleep(1500)
+    info.settle = await page.evaluate(() => {
+      const tr = document.querySelector('[data-testid="pwt-train"]'), res = document.querySelector('[data-testid="pwt-result"]'), nx = document.querySelector('[data-testid="pwt-next"]')
+      const cs = getComputedStyle(tr), tb = tr.getBoundingClientRect(), track = tr.parentElement.getBoundingClientRect()
+      return { gone: cs.visibility === 'hidden' || tb.left >= track.right - 1, vis: cs.visibility, resultOpacity: res ? getComputedStyle(res).opacity : null, resultText: res ? [...res.children].map((c) => c.textContent).join('|') : null, btnY1: nx.getBoundingClientRect().top }
+    })
+    info.settleOk = info.settle.gone && info.settle.resultOpacity === '1' && info.settle.resultText === need.join('|') && Math.abs(info.settle.btnY1 - info.btnY0) <= 8
+  }
   return info
 }
 async function trainSession(page, n, opts = {}) {
@@ -344,7 +370,8 @@ export async function run(browser, baseURL) {
     r.check(`${name} Unit 2 허브: data-book/unit, 임시 배지, 단어 5개`, (await T(page, 'pph-unit').getAttribute('data-book')) === 'b1' && (await T(page, 'pph-unit').getAttribute('data-unit')) === 'u2' && (await T(page, 'pph-unit-status').textContent()) === '임시' && (await T(page, 'pph-unit-words').textContent()) === '단어 5개' && words.length === 5 && ((await T(page, 'pph-unit-objective').textContent()) || '').includes('모음') && ((await T(page, 'pph-unit-prereq').textContent()) || '').includes('Book 1 Unit 1'))
     const st = await hubState(page)
     r.check(`${name} 7단계 순서대로: 1·2 잠김("선생님 녹음 준비 중" — 소리 하나는 TTS로 읽지 않음), 3·4 준비됨(그림 3개), 5 잠김("Book 2부터"), 6 잠김(그림 4개 미만), 7 잠김("틀린 소리가 없어요")`,
-      st.map((x) => x.st).join() === 'locked,locked,ready,ready,locked,locked,locked' && st[5].txt.includes('4개 이상일 때 열려요') && st[0].txt.includes('선생님 녹음 준비 중') && st[1].txt.includes('선생님 녹음 준비 중') && st[4].txt.includes('Book 2부터') && st[6].txt.includes('틀린 소리가 없어요') && st[3].txt.includes('Sound Bubble Pop') && st[4].txt.includes('Word Train') && st[5].txt.includes('Unit Test'), JSON.stringify(st.map((x) => x.st)))
+      st.map((x) => x.st).join() === 'locked,locked,ready,ready,locked,locked,locked' && st[5].txt.includes('Book 1은 소리 풍선으로 확인해요') && st[0].txt.includes('선생님 녹음 준비 중') && st[1].txt.includes('선생님 녹음 준비 중') && st[4].txt.includes('Book 2부터') && st[6].txt.includes('틀린 소리가 없어요') && st[3].txt.includes('Sound Bubble Pop') && st[4].txt.includes('Word Train') && st[5].txt.includes('Unit Test'), JSON.stringify(st.map((x) => x.st)))
+    r.check(`${name} Book 1 Unit Test(6단계)는 잠김: "Book 1은 소리 풍선으로 확인해요", 시작 버튼 비활성, 3단계(그림과 단어)는 그대로 준비됨`, st[5].st === 'locked' && st[5].txt.includes('Book 1은 소리 풍선으로 확인해요') && (await T(page, 'pph-step-6-go').isDisabled()) && st[2].st === 'ready', JSON.stringify(st.map((x) => x.txt.slice(0, 30))))
     r.check(`${name} 소리 듣기: 모든 소리가 잠금 상태이고 오디오/녹음 컨트롤 0개 + 발음 요청 0건`, (await T(page, 'pph-phoneme').count()) === 1 && (await page.locator('[data-testid="pph-phoneme"][data-state="locked"]').count()) === 1 && (await T(page, 'pph-clip-audio').count()) === 0 && (await speakLen(page)) === 0)
     r.check(`${name} Book 1은 Bubble Pop 전용이라 철자 게임 버튼 없음 + 진행 요약은 아직 비어 있음(data-records=0)`, (await T(page, 'pph-extra-hammer').count()) === 0 && (await T(page, 'pph-extra-hidden').count()) === 0 && (await T(page, 'pph-progress').getAttribute('data-records')) === '0' && !((await T(page, 'pph-progress').innerText()) || '').includes('다시 볼 소리'))
 
@@ -354,17 +381,20 @@ export async function run(browser, baseURL) {
     await T(page, 'pbp-mode-challenge').click()
     r.check(`${name} 도전 모드: 힌트 버튼이 마운트되지 않음`, (await T(page, 'pbp-mode').getAttribute('data-mode')) === 'challenge' && (await T(page, 'pbp-hint').count()) === 0)
     await T(page, 'pbp-mode-practice').click()
-    const infos = await bubbleSession(page, words, 5, { vowelOnly: true, wrongAt: 0, hintAt: 1 })
-    const seen = infos.map((x) => x.item)
-    r.check(`${name} 5항목 모두 Unit 2의 단어, 서로 다름 (${seen.map((x) => x.word)})`, infos.every((x) => x.inUnit) && new Set(seen.map((x) => x.id)).size === 5 && names(seen) === names(words))
+    const own = new Set(words.map((w) => w.id))
+    const infos = await bubbleSession(page, bubbleWords('b1', 'u2'), null, { vowelOnly: true, wrongAt: 0, hintAt: 1, own })
+    const seen = infos.filter((x) => x.own).map((x) => x.item)
+    r.check(`${name} 세션 = Unit 2 단어 5개 + 이전 Unit 복습 1개(Book 1 Unit 1의 a), 서로 다름 (${infos.map((x) => x.item.word)})`, infos.length === 6 && infos.every((x) => x.inUnit) && new Set(infos.map((x) => x.item.id)).size === 6 && names(seen) === names(words) && infos.filter((x) => !x.own).length === 1)
+    r.check(`${name} 단일 목표 Unit인데도 정답 글자가 2종류 이상(e + 복습 a): ${[...new Set(infos.map((x) => x.tg))]}, 소리 듣기 버튼 0개`, new Set(infos.map((x) => x.tg)).size >= 2 && infos.every((x) => x.listenSound === 0) && (await T(page, 'pbp-listen-sound').count()) === 0)
     r.check(`${name} 모든 풍선은 단모음 글자(a e i o u)뿐이고 정답 1개 포함·서로 다른 소문자 4개`, allOk(infos, 'opts'), JSON.stringify(infos.map((x) => x.opts)))
     r.check(`${name} 안내 문구/data-position이 단어 속 소리 위치(첫/가운데/끝)와 일치`, allOk(infos, 'pos'), JSON.stringify(infos.map((x) => [x.item.word, x.pos])))
     r.check(`${name} 첫 문제 자동 재생 없음, 정답 전 그림·단어·뜻 0개`, infos[0].noAuto === true && allOk(infos, 'leak0'))
-    r.check(`${name} 오답: 풍선 비활성+data-tried, "다시 들어 볼까요?", pulse, 안 누른 풍선 3개 동일, 정답 전 공개 0`, infos[0].wrong && infos[0].pulse && infos[0].sameSig && infos[0].leak1, JSON.stringify(infos[0]))
-    r.check(`${name} 힌트: 그림+단어 공개, 버튼 사라짐, 아직 완료 아님`, infos[1].hint === true)
+    const ownInfos = infos.filter((x) => x.own)
+    r.check(`${name} 오답: 풍선 비활성+data-tried, "다시 들어 볼까요?", pulse, 안 누른 풍선 3개 동일, 정답 전 공개 0`, ownInfos[0].wrong && ownInfos[0].pulse && ownInfos[0].sameSig && ownInfos[0].leak1, JSON.stringify(ownInfos[0]))
+    r.check(`${name} 힌트: 그림+단어 공개, 버튼 사라짐, 아직 완료 아님`, ownInfos[1].hint === true)
     r.check(`${name} 정답: pop 클래스 + 카드 공개 + 목표 글자("e" 등) 강조(data-hl) + pop/right 효과음, 발음은 정답 후 ≥ 300ms`, infos.every((x) => x.popClass && x.card && x.hlOk && x.osc >= 2 && x.popHz && x.rightHz && x.speakDelay >= 300 && x.speakDelay < 2500), JSON.stringify(infos.map((x) => [x.popClass, x.card, x.hl, x.osc, Math.round(x.speakDelay)])))
-    r.check(`${name} 항목 2~4: 이전 듣기 이후 자동 재생`, infos.slice(1).every((x) => x.auto === true))
-    r.check(`${name} 요약: 3 / 5(오답 1 + 힌트 1 제외), data-records=5, 버튼 2개`, (await firstTry(page)) === '3/5' && (await T(page, 'pha-summary').getAttribute('data-records')) === '5' && (await T(page, 'pha-again').count()) + (await T(page, 'pha-exit').count()) === 2, await T(page, 'pha-summary').innerText())
+    r.check(`${name} 항목 2~6: 이전 듣기 이후 자동 재생`, infos.slice(1).every((x) => x.auto === true))
+    r.check(`${name} 요약: 4 / 6(오답 1 + 힌트 1 제외), data-records=6, 버튼 2개`, (await firstTry(page)) === '4/6' && (await T(page, 'pha-summary').getAttribute('data-records')) === '6' && (await T(page, 'pha-again').count()) + (await T(page, 'pha-exit').count()) === 2, await T(page, 'pha-summary').innerText())
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     r.check(`${name} 세션에서 돌아오면 같은 Unit 허브(data-unit=u2)`, (await T(page, 'pph-unit').getAttribute('data-unit')) === 'u2' && (await T(page, 'pph-unit').getAttribute('data-book')) === 'b1')
@@ -374,7 +404,7 @@ export async function run(browser, baseURL) {
     await T(page, 'pph-step-7-go').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
     r.check(`${name} 복습 세션: step=review, 항목은 놓친 2개뿐`, (await T(page, 'pha-root').getAttribute('data-step')) === 'review')
-    const missedWords = [infos[0].item.word, infos[1].item.word].sort().join()
+    const missedWords = infos.filter((x) => x.own).slice(0, 2).map((x) => x.item.word).sort().join()
     const rev = await bubbleSession(page, words, 2, { vowelOnly: true })
     r.check(`${name} 복습 항목 = 틀린 단어 2개와 정확히 일치 (${rev.map((x) => x.item.word)})`, rev.map((x) => x.item.word).sort().join() === missedWords && allOk(rev, 'opts') && (await firstTry(page)) === '2/2' && (await T(page, 'pha-summary').getAttribute('data-records')) === '2')
     await T(page, 'pha-exit').click()
@@ -405,12 +435,14 @@ export async function run(browser, baseURL) {
     await T(page, 'pph-step-5-go').click()
     await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
     r.check(`${name} Word Train 시작만으로는 발음 재생 없음 + 목표 문구/SfxControl`, (await speakLen(page)) === 0 && (await T(page, 'pwsfx-root').count()) === 1 && ((await T(page, 'pwt-root').innerText()) || '').includes('소리 블록을 차례로 이어 보세요'))
-    const tr = await trainSession(page, 5, { allowed, wrongAt: 0, rapidAt: 1 })
+    const tr = await trainSession(page, 5, { allowed, wrongAt: 0, rapidAt: 1, settle: true })
     r.check(`${name} Word Train 5항목 = Unit 단어 전체(${tr.map((x) => x.item.word)})`, names(tr.map((x) => x.item)) === names(words))
     r.check(`${name} 모든 타일(방해 타일 포함)이 익힌 글자 안에서만 나옴`, allOk(tr, 'learnedTiles') && allOk(tr, 'tiles'))
     r.check(`${name} 완성 전 철자 0개·정답 속성 0·alt 그림(그림 없는 단어는 듣기 전용 안내), 완성 뒤에만 단어 + 철자, 칸 내용=자소`, allOk(tr, 'leak0') && allOk(tr, 'word') && allOk(tr, 'spelled') && allOk(tr, 'cars') && tr.every((x) => x.inOrder !== false && x.spelledHidden !== false), JSON.stringify(tr.map((x) => [x.leak0, x.word, x.spelled, x.cars])))
     r.check(`${name} 오답 타일: 흔들림 + 오답 1 + "다시 해 볼까요?" + 칸 변화 없음`, tr[0].shake && tr[0].wrong, JSON.stringify(tr[0]))
-    r.check(`${name} 기차 출발 클래스, 전환 ≤ 900ms, 성공음 후 발음 ≥ 300ms`, tr.every((x) => x.depart.cls && x.depart.dur.startsWith('0.6s') && x.depart.delay.startsWith('0.25s') && x.speak && x.speakDelay >= 300 && x.osc >= 2), JSON.stringify(tr.map((x) => [x.depart, x.speak, Math.round(x.speakDelay)])))
+    r.check(`${name} 기차 출발 애니메이션(pwt-go 0.6s, 지연 0.25s, fill forwards), 성공음 후 발음 ≥ 300ms`, tr.every((x) => x.depart.cls && x.depart.name === 'pwt-go' && x.depart.dur === '0.6s' && x.depart.delay === '0.25s' && x.depart.fill === 'forwards' && x.speak && x.speakDelay >= 300 && x.osc >= 2), JSON.stringify(tr.map((x) => [x.depart, x.speak, Math.round(x.speakDelay)])))
+    r.check(`${name} 출발한 기차는 1.5초 뒤에도 돌아오지 않고(숨김/화면 밖), 같은 자리에 완성한 단어 칸(pwt-result)이 보이며, 다음 버튼 y는 8px 이상 움직이지 않음`, allOk(tr, 'settleOk'), JSON.stringify(tr.map((x) => x.settle)))
+    r.check(`${name} 소리 하나 녹음은 없어서 Word Train은 효과음/단어 발음 외 오디오 요소 0개`, (await page.locator('audio').count()) === 0)
     r.check(`${name} 요약: 4 / 5(오답 1 제외), data-records=5`, (await firstTry(page)) === '4/5' && (await T(page, 'pha-summary').getAttribute('data-records')) === '5', await T(page, 'pha-summary').innerText())
     await T(page, 'pha-again').click()
     await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 5000 })
@@ -420,8 +452,8 @@ export async function run(browser, baseURL) {
     r.check(`${name} 그만하기 → 같은 Unit 허브`, (await T(page, 'pph-unit').getAttribute('data-unit')) === 'u3' && (await T(page, 'pph-unit').getAttribute('data-book')) === 'b2')
     await T(page, 'pph-step-4-go').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
-    const infos = await bubbleSession(page, words, 5, { allowed })
-    r.check(`${name} Bubble Pop 5항목 = Unit 단어 전체, 모든 풍선이 익힌 글자 안에서만, 안내가 위치와 일치`, names(infos.map((x) => x.item)) === names(words) && allOk(infos, 'inUnit') && allOk(infos, 'opts') && allOk(infos, 'pos') && allOk(infos, 'leak0') && infos.every((x) => x.card && x.hlOk), JSON.stringify(infos.map((x) => [x.item.word, x.inUnit, x.opts, x.pos, x.hl])))
+    const infos = await bubbleSession(page, bubbleWords('b2', 'u3'), null, { allowed })
+    r.check(`${name} Bubble Pop = Unit 단어 5개 + 이전 Unit 복습 3개(각자 자기 목표 글자), 모든 풍선이 익힌 글자 안에서만, 안내가 위치와 일치`, infos.length === 8 && names(infos.filter((x) => x.own).map((x) => x.item)) === names(words) && infos.filter((x) => !x.own).length === 3 && new Set(infos.map((x) => x.tg)).size >= 2 && allOk(infos, 'inUnit') && allOk(infos, 'opts') && allOk(infos, 'pos') && allOk(infos, 'leak0') && infos.every((x) => x.card && x.hlOk), JSON.stringify(infos.map((x) => [x.item.word, x.inUnit, x.opts, x.pos, x.hl])))
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
   }, { studentId: TESTER_ONLY })
@@ -441,8 +473,9 @@ export async function run(browser, baseURL) {
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     await T(page, 'pph-step-4-go').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
-    const infos = await bubbleSession(page, words, 5, { allowed: gset('b3', 'u1') })
-    r.check(`${name} Bubble Pop: 목표 a_e(가운데 소리), 풍선 중 정답 1개, 공개된 철자에서 a와 e가 강조됨`, allOk(infos, 'inUnit') && allOk(infos, 'opts') && allOk(infos, 'pos') && infos.every((x) => x.tg === 'a_e' && x.hl === 'ae' && x.card), JSON.stringify(infos.map((x) => [x.item.word, x.tg, x.hl])))
+    const infos = await bubbleSession(page, bubbleWords('b3', 'u1'), null, { allowed: gset('b3', 'u1') })
+    const mine = infos.filter((x) => x.own)
+    r.check(`${name} Bubble Pop: 이 Unit 단어 5개는 목표 a_e(가운데 소리)로 풍선 중 정답 1개, 공개된 철자에서 a와 e가 강조됨 (+ 복습 ${infos.length - mine.length}개)`, mine.length === 5 && infos.length > 5 && allOk(infos, 'inUnit') && allOk(infos, 'opts') && allOk(infos, 'pos') && mine.every((x) => x.tg === 'a_e' && x.hl === 'ae' && x.card), JSON.stringify(infos.map((x) => [x.item.word, x.tg, x.hl])))
   }, { studentId: TESTER_ONLY })
 
   // ---- (d) Book 1 전체 연습: 시험 · 그림과 단어 → 허브로 복귀 / Book 2 전체 연습: 철자 게임 / 그림 0개 Unit 잠금
@@ -454,25 +487,7 @@ export async function run(browser, baseURL) {
     const ready = readyWords(words)
     const ids = new Set(ready.map((w) => w.id))
     const st0 = await hubState(page)
-    r.check(`${name} Book 1 전체 연습: 단어 ${words.length}개(그림 ${ready.length}), 3·6단계 준비됨, 철자 게임 버튼 없음(Book 1은 Bubble Pop 전용)`, words.length === 25 && ready.length >= 4 && st0[2].st === 'ready' && st0[5].st === 'ready' && ((await T(page, 'pph-unit-words').textContent()) === '단어 25개') && (await T(page, 'pph-extra-hammer').count()) === 0 && (await T(page, 'pph-extra-hidden').count()) === 0, JSON.stringify(st0.map((x) => x.st)))
-    await T(page, 'pph-step-6-go').click()
-    await T(page, 'pwp-quiz').waitFor({ state: 'visible', timeout: 10000 })
-    let allIn = true
-    for (let q = 0; q < 6; q++) {
-      const it = await shownItem(page, 'pwp-picture')
-      if (!ids.has(it.id)) allIn = false
-      const opts = await page.locator('[data-testid^="pwp-opt-"]').evaluateAll((l) => l.map((e) => e.textContent))
-      await T(page, `pwp-opt-${opts.indexOf(it.word)}`).click()
-      await T(page, 'pwp-next').click()
-      await page.waitForFunction(() => !!document.querySelector('[data-testid="pwp-quiz"], [data-testid="pwp-review-card"], [data-testid="pwp-summary"]'), null, { timeout: 5000 })
-    }
-    r.check(`${name} Unit Test = 기존 그림 시험 화면, 문제 6개의 그림이 모두 그림이 준비된 이 Unit 단어`, allIn)
-    await T(page, 'pwp-next').click() // 모두 맞힘 → 결과 보기
-    await T(page, 'pwp-summary').waitFor({ state: 'visible', timeout: 5000 })
-    await T(page, 'pwp-exit').click()
-    await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
-    r.check(`${name} 시험을 마치고 나가면 같은 Unit 허브로 돌아옴`, (await T(page, 'pph-unit').getAttribute('data-unit')) === 'review' && (await T(page, 'pph-unit').getAttribute('data-book')) === 'b1')
-
+    r.check(`${name} Book 1 전체 연습: 단어 ${words.length}개(그림 ${ready.length}), 3단계 준비됨, 6단계(Unit Test) 잠김, 철자 게임 버튼 없음(Book 1은 Bubble Pop 전용)`, words.length === 25 && ready.length >= 4 && st0[2].st === 'ready' && st0[5].st === 'locked' && st0[5].txt.includes('Book 1은 소리 풍선으로 확인해요') && ((await T(page, 'pph-unit-words').textContent()) === '단어 25개') && (await T(page, 'pph-extra-hammer').count()) === 0 && (await T(page, 'pph-extra-hidden').count()) === 0, JSON.stringify(st0.map((x) => x.st)))
     await T(page, 'pph-step-3-go').click()
     await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
     const w0 = await shownItem(page, 'pwp-picture')
@@ -494,6 +509,24 @@ export async function run(browser, baseURL) {
     await toUnit(page, 'b2', 'review')
     const ready2 = readyWords(unitWords('b2', 'review'))
     const ids2 = new Set(ready2.map((w) => w.id))
+    await T(page, 'pph-step-6-go').click()
+    await T(page, 'pwp-quiz').waitFor({ state: 'visible', timeout: 10000 })
+    let allIn = true
+    for (let q = 0; q < 6; q++) {
+      const it = await shownItem(page, 'pwp-picture')
+      if (!ids2.has(it.id)) allIn = false
+      const opts = await page.locator('[data-testid^="pwp-opt-"]').evaluateAll((l) => l.map((e) => e.textContent))
+      await T(page, `pwp-opt-${opts.indexOf(it.word)}`).click()
+      await T(page, 'pwp-next').click()
+      await page.waitForFunction(() => !!document.querySelector('[data-testid="pwp-quiz"], [data-testid="pwp-review-card"], [data-testid="pwp-summary"]'), null, { timeout: 5000 })
+    }
+    r.check(`${name} Book 2 전체 연습의 Unit Test = 기존 그림 시험 화면, 문제 6개의 그림이 모두 그림이 준비된 이 Unit 단어`, allIn)
+    await T(page, 'pwp-next').click() // 모두 맞힘 → 결과 보기
+    await T(page, 'pwp-summary').waitFor({ state: 'visible', timeout: 5000 })
+    await T(page, 'pwp-exit').click()
+    await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+    r.check(`${name} 시험을 마치고 나가면 같은 Unit 허브로 돌아옴`, (await T(page, 'pph-unit').getAttribute('data-unit')) === 'review' && (await T(page, 'pph-unit').getAttribute('data-book')) === 'b2')
+
     await T(page, 'pph-extra-hammer').click()
     await T(page, 'pwh-root').waitFor({ state: 'visible', timeout: 10000 })
     const hw = await shownItem(page, 'pwh-picture')
@@ -530,6 +563,8 @@ export async function run(browser, baseURL) {
       const badges = await page.locator('[data-testid$="-badge"]').evaluateAll((l) => l.every((e) => e.textContent === '임시'))
       counts.push(rows === nu && badges)
       if (b === 'b4') {
+        const list = (await T(page, 'pph-book').innerText()) || ''
+        r.check(`${name} Book 4 목록에 th (thin) 와 th (this) 가 따로 보임`, list.includes('th (thin)') && list.includes('th (this)'), list.slice(0, 200))
         const ga = await T(page, 'pph-group-a').locator(ROWS).count()
         const gb = await T(page, 'pph-group-b').locator(ROWS).count()
         r.check(`${name} Book 4: A 글자 둘·소리 하나 7개 / B 자음군 4개 두 묶음, 제목 문구`, ga === 7 && gb === 4 && ((await T(page, 'pph-group-a').innerText()) || '').includes('글자 둘, 소리 하나') && ((await T(page, 'pph-group-b').innerText()) || '').includes('자음군'))
@@ -545,9 +580,9 @@ export async function run(browser, baseURL) {
     r.check(`${name} 자음군 Unit: 1·2 잠김, 4 잠김("이 Unit은 Word Train으로 연습해요"), 5 준비됨`, stC[0].st === 'locked' && stC[1].st === 'locked' && stC[3].st === 'locked' && stC[3].txt.includes('이 Unit은 Word Train으로 연습해요') && stC[4].st === 'ready' && (await T(page, 'pph-step-4-go').isDisabled()) && ((await T(page, 'pph-unit-objective').textContent()) || '').includes('자음군'), JSON.stringify(stC.map((x) => x.st)))
     await T(page, 'pph-step-5-go').click()
     await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
-    const trC = await trainSession(page, 5, { allowed: gset('b4', 'u8') })
+    const trC = await trainSession(page, 6, { allowed: gset('b4', 'u8') })
     const CL = new Set(['bl', 'cl', 'fl', 'gl', 'pl', 'sl'])
-    r.check(`${name} 자음군 Word Train: 5항목 Unit 단어, 타일은 자음군 묶음이 아닌 낱글자(bl·cl·fl 등 타일 0)`, names(trC.map((x) => x.item)) === names(unitWords('b4', 'u8')) && trC.every((x) => x.tiles && x.learnedTiles && x.item.graphemes.every((g) => !CL.has(g))) && allOk(trC, 'word') && allOk(trC, 'spelled'), JSON.stringify(trC.map((x) => [x.item.word, x.tiles])))
+    r.check(`${name} 자음군 Word Train: 6항목 Unit 단어, 타일은 자음군 묶음이 아닌 낱글자(bl·cl·fl 등 타일 0)`, names(trC.map((x) => x.item)) === names(unitWords('b4', 'u8')) && trC.every((x) => x.tiles && x.learnedTiles && x.item.graphemes.every((g) => !CL.has(g))) && allOk(trC, 'word') && allOk(trC, 'spelled'), JSON.stringify(trC.map((x) => [x.item.word, x.tiles])))
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' })
@@ -557,7 +592,7 @@ export async function run(browser, baseURL) {
     await toUnit(page, 'b2', 'u6')
     const w6 = unitWords('b2', 'u6')
     const st6 = await hubState(page)
-    r.check(`${name} Book 2 Unit 6: sock·duck 포함 7단어, 목표 줄에 ck(미리 만나요), Bubble 잠김, Word Train 준비됨`, w6.length === 7 && w6.some((w) => w.word === 'sock') && ((await T(page, 'pph-unit').innerText()) || '').includes('ck (미리 만나요)') && st6[3].st === 'locked' && st6[3].txt.includes('이 Unit은 Word Train으로 연습해요') && st6[4].st === 'ready' && st6[2].st === 'ready' && st6[5].st === 'locked', JSON.stringify(st6.map((x) => x.st)))
+    r.check(`${name} Book 2 Unit 6: sock·duck 포함 9단어, 목표 줄에 ck(미리 만나요), Bubble 잠김, Word Train 준비됨`, w6.length === 9 && w6.some((w) => w.word === 'sock') && ((await T(page, 'pph-unit').innerText()) || '').includes('ck (미리 만나요)') && st6[3].st === 'locked' && st6[3].txt.includes('이 Unit은 Word Train으로 연습해요') && st6[4].st === 'ready' && st6[2].st === 'ready' && st6[5].st === 'locked', JSON.stringify(st6.map((x) => x.st)))
     await T(page, 'pph-step-5-go').click()
     await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
     const tr6 = await trainSession(page, 6, { allowed: gset('b2', 'u6') })
@@ -577,11 +612,16 @@ export async function run(browser, baseURL) {
     await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' })
     await T(page, 'pph-unit-u12').click(); await T(page, 'pph-unit').waitFor({ state: 'visible' })
     const st12 = await hubState(page)
-    r.check(`${name} Book 5 Unit 12(끝 -er): Bubble·Word Train 잠김("철자 게임으로 연습해요"), 철자 게임 2개, 그림 4개라 6단계 준비됨, 1·2 잠김`, st12[3].st === 'locked' && st12[4].st === 'locked' && st12[3].txt.includes('철자 게임으로 연습해요') && st12[4].txt.includes('철자 게임으로 연습해요') && st12[5].st === 'ready' && st12[0].st === 'locked' && st12[1].st === 'locked' && (await T(page, 'pph-extra-hammer').isVisible()) && (await T(page, 'pph-extra-hidden').isVisible()), JSON.stringify(st12.map((x) => x.st)))
+    r.check(`${name} Book 5 Unit 12(끝 -er): Bubble 잠김("이 Unit은 Word Train으로 연습해요"), Word Train 준비됨, 철자 게임 2개, 그림 4개라 6단계 준비됨, 1·2 잠김`, st12[3].st === 'locked' && st12[4].st === 'ready' && st12[3].txt.includes('이 Unit은 Word Train으로 연습해요') && st12[5].st === 'ready' && st12[0].st === 'locked' && st12[1].st === 'locked' && (await T(page, 'pph-extra-hammer').isVisible()) && (await T(page, 'pph-extra-hidden').isVisible()), JSON.stringify(st12.map((x) => x.st)))
     await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' })
+    const list5 = (await T(page, 'pph-book').innerText()) || ''
     await T(page, 'pph-unit-u14').click(); await T(page, 'pph-unit').waitFor({ state: 'visible' })
     const st14 = await hubState(page)
-    r.check(`${name} Book 5 Unit 14(같은 철자, 다른 소리): Bubble 잠김, Word Train 준비됨, 목표 줄에 철자 비교, 소리 구별 복습`, st14[3].st === 'locked' && st14[4].st === 'ready' && ((await T(page, 'pph-unit').innerText()) || '').includes('ow snow/cow') && ((await T(page, 'pph-unit-objective').textContent()) || '').includes('소리 구별 복습'))
+    r.check(`${name} Book 5 Unit 14 = ea /e/ (bread): 목록에 "ea (bread)", Sound Bubble Pop·Word Train 준비됨, 소리 구별 복습 아님`, list5.includes('ea (bread)') && st14[3].st === 'ready' && st14[4].st === 'ready' && ((await T(page, 'pph-unit').innerText()) || '').includes('ea /e/') && !((await T(page, 'pph-unit-objective').textContent()) || '').includes('소리 구별 복습'))
+    await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' })
+    await T(page, 'pph-unit-review').click(); await T(page, 'pph-unit').waitFor({ state: 'visible' })
+    const note5 = (await T(page, 'pph-unit').innerText()) || ''
+    r.check(`${name} Book 5 전체 연습에 같은 철자·다른 소리 안내(snow/cow · moon/book · sea/bread · cloud/soup)`, ['snow/cow', 'moon/book', 'sea/bread', 'cloud/soup'].every((t) => note5.includes(t)))
   }, { studentId: TESTER_ONLY })
 
   // ---- (k) 그림 없는 단어: Book 2 Unit 1(그림 0개)의 Bubble Pop · Word Train 전체 세션
@@ -593,9 +633,9 @@ export async function run(browser, baseURL) {
     const allowed = gset('b2', 'u1')
     await T(page, 'pph-step-4-go').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
-    const infos = await bubbleSession(page, words, 5, { allowed, wrongAt: 0, hintAt: 1 })
-    r.check(`${name} 그림 없는 Bubble Pop 5항목: Unit 단어 전체, 풍선은 익힌 글자뿐, 정답 전 단어·뜻 공개 0, 정답 뒤 단어만(그림·뜻 없음, <img> 0)`, names(infos.map((x) => x.item)) === names(words) && allOk(infos, 'inUnit') && allOk(infos, 'opts') && allOk(infos, 'pos') && allOk(infos, 'leak0') && infos.every((x) => x.card && x.hlOk), JSON.stringify(infos.map((x) => [x.item.word, x.inUnit, x.opts, x.card, x.hl])))
-    r.check(`${name} 그림 없는 Bubble Pop: 힌트는 단어만 공개하고 <img> 0, 오답 흐름 정상, 요약 3 / 5`, infos[0].wrong && infos[0].sameSig && infos[1].hint === true && (await firstTry(page)) === '3/5' && (await T(page, 'pha-summary').locator('img').count()) === 0)
+    const infos = await bubbleSession(page, bubbleWords('b2', 'u1'), null, { allowed, wrongAt: 0, hintAt: 1, own: new Set(words.map((w) => w.id)) })
+    r.check(`${name} 그림 없는 Bubble Pop(Unit 5 + 복습 3): 풍선은 익힌 글자뿐, 정답 전 단어·뜻 공개 0, 정답 뒤 단어만(그림·뜻 없음, <img> 0)`, infos.length === 8 && names(infos.filter((x) => x.own).map((x) => x.item)) === names(words) && allOk(infos, 'inUnit') && allOk(infos, 'opts') && allOk(infos, 'pos') && allOk(infos, 'leak0') && infos.every((x) => x.card && x.hlOk), JSON.stringify(infos.map((x) => [x.item.word, x.inUnit, x.opts, x.card, x.hl])))
+    r.check(`${name} 그림 없는 Bubble Pop: 힌트는 단어만 공개하고 <img> 0, 오답 흐름 정상, 요약 6 / 8`, infos.filter((x) => x.own)[0].wrong && infos.filter((x) => x.own)[0].sameSig && infos.filter((x) => x.own)[1].hint === true && (await firstTry(page)) === '6/8' && (await T(page, 'pha-summary').locator('img').count()) === 0)
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     await T(page, 'pph-step-5-go').click()
@@ -628,7 +668,7 @@ export async function run(browser, baseURL) {
     cov = false
     for (const id of ['pbp-listen', 'pbp-bubble-0', 'pbp-bubble-1', 'pbp-bubble-2', 'pbp-bubble-3', 'pha-quit']) if (await covered(T(page, id))) cov = true
     r.check(`${name} Bubble Pop: 넘침 0 / 가림 0 / 풍선 ≥ 96px / 작은 버튼 0`, (await overflow(page)) <= 0 && !cov && (await page.locator('[data-testid^="pbp-bubble-"]').evaluateAll((l) => l.every((e) => e.getBoundingClientRect().width >= 95.9 && e.getBoundingClientRect().height >= 95.9))) && (await smallButtons(page)) === 0, `${await overflow(page)}/${cov}`)
-    const b = await bubbleItem(page, 0, { words: unitWords('b1', 'u2'), vowelOnly: true, touch: true, wrongFirst: true })
+    const b = await bubbleItem(page, 0, { words: bubbleWords('b1', 'u2'), vowelOnly: true, touch: true, wrongFirst: true })
     r.check(`${name} 터치로 오답 → 정답: 공개는 정답 뒤에만, 안 누른 풍선 동일, 다음 버튼 가림 0`, b.wrong && b.sameSig && b.leak0 && b.opts && b.card && !(await covered(T(page, 'pbp-next'))) && (await overflow(page)) <= 0, JSON.stringify({ ...b, item: b.item.word }))
     await click(page, T(page, 'pha-quit'), true)
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
@@ -679,7 +719,7 @@ export async function run(browser, baseURL) {
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
     r.check(`${name} 소리 컨트롤이 꺼짐 상태로 이어짐`, (await T(page, 'pwsfx-root').getAttribute('data-sfx-on')) === 'false')
     await resetFx(page)
-    const b = await bubbleItem(page, 0, { words: unitWords('b2', 'u3'), wrongFirst: true })
+    const b = await bubbleItem(page, 0, { words: bubbleWords('b2', 'u3'), wrongFirst: true })
     r.check(`${name} Bubble Pop 오답+정답 동안 오실레이터 시작 0 (${b.osc})`, b.osc === 0 && (await osc(page)).length === 0)
     await T(page, 'pbp-next').click()
     await sleep(300)
@@ -699,17 +739,90 @@ export async function run(browser, baseURL) {
     await toUnit(page, 'b2', 'u3')
     await T(page, 'pph-step-4-go').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
-    const b = await bubbleItem(page, 0, { words: unitWords('b2', 'u3'), wrongFirst: true })
+    const b = await bubbleItem(page, 0, { words: bubbleWords('b2', 'u3'), wrongFirst: true })
     const fx1 = await page.evaluate(() => ({ float: document.querySelectorAll('.pbp-float').length, wobble: document.querySelectorAll('.pbp-wobble').length, glow: document.querySelectorAll('.pw-glow').length, fx: window.__fx }))
     r.check(`${name} Bubble Pop: 둥둥 float/흔들림/빛 0 이어도 완료되고 공개됨(소리는 설정대로, ${b.osc})`, fx1.float === 0 && fx1.wobble === 0 && fx1.glow === 0 && fx1.fx.float === 0 && b.card && b.wrong && b.osc >= 2, JSON.stringify(fx1))
     await T(page, 'pha-quit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible' })
     await T(page, 'pph-step-5-go').click()
     await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
-    const t = await trainItem(page, 0, { wrongFirst: true })
-    const fx2 = await page.evaluate(() => ({ fx: window.__fx, depart: getComputedStyle(document.querySelector('[data-testid="pwt-train"]')).transitionDuration, tf: getComputedStyle(document.querySelector('[data-testid="pwt-train"]')).transform }))
-    r.check(`${name} Word Train: 날아가기 0 / 흔들림 0 / 출발 전환 없음 이어도 완성되고 단어 공개(소리 ${t.osc})`, fx2.fx.flyMax === 0 && fx2.fx.shake.length === 0 && /^0s/.test(fx2.depart) && t.word && t.cars && t.osc >= 2, JSON.stringify(fx2))
+    const t = await trainItem(page, 0, { wrongFirst: true, settle: true })
+    const fx2 = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('[data-testid="pwt-train"]')); return { fx: window.__fx, anim: c.animationName, vis: c.visibility, resultOp: getComputedStyle(document.querySelector('[data-testid="pwt-result"]')).opacity } })
+    r.check(`${name} Word Train: 날아가기 0 / 흔들림 0 / 출발 애니메이션 없음 이어도 완성되고 단어 공개, 기차는 바로 사라지고 완성한 단어 칸이 즉시 보임(소리 ${t.osc})`, fx2.fx.flyMax === 0 && fx2.fx.shake.length === 0 && fx2.anim === 'none' && fx2.vis === 'hidden' && fx2.resultOp === '1' && t.settleOk && t.word && t.cars && t.osc >= 2, JSON.stringify(fx2))
   }, { studentId: TESTER_ONLY, reduced: true })
+
+  // ---- (l) 256차 품질: Book 1 시험 잠금 / nk 단어 제외 / 급속 클릭 / June 대문자 / 출발한 기차
+  await scenario('(l) 256차 품질', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    await openPhonics(page)
+    await toUnit(page, 'b1', 'review')
+    const stR = await hubState(page)
+    r.check(`${name} Book 1 전체 연습도 Unit Test 잠김("Book 1은 소리 풍선으로 확인해요"), 3단계는 열림`, stR[5].st === 'locked' && stR[5].txt.includes('Book 1은 소리 풍선으로 확인해요') && stR[2].st === 'ready' && (await T(page, 'pph-step-6-go').isDisabled()))
+    await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' })
+    await T(page, 'pph-back').click(); await T(page, 'pph-main').waitFor({ state: 'visible' })
+
+    // Book 4 Unit 7: ng 단어만 풍선(ink·pink는 nk = 소리 둘)
+    await toUnit(page, 'b4', 'u7')
+    const own7 = new Set(unitWords('b4', 'u7').filter((w) => w.games.includes('B')).map((w) => w.id))
+    await T(page, 'pph-step-4-go').click()
+    await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
+    const i7 = await bubbleSession(page, bubbleWords('b4', 'u7'), null, { allowed: gset('b4', 'u7'), own: own7 })
+    r.check(`${name} Book 4 Unit 7 풍선: 이 Unit 단어는 ng 단어 4개뿐(${i7.filter((x) => x.own).map((x) => x.item.word)}), ink·pink(nk)는 한 번도 안 나옴, 복습 ${i7.filter((x) => !x.own).length}개`, names(i7.filter((x) => x.own).map((x) => x.item)) === 'king,ring,song,wing' && i7.every((x) => !['ink', 'pink'].includes(x.item.word) && x.inUnit))
+    await T(page, 'pha-exit').click()
+    await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+    await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' })
+    await T(page, 'pph-back').click(); await T(page, 'pph-main').waitFor({ state: 'visible' })
+
+    // 빠르게 연타: 같은 오답 풍선 반복 + 정답 뒤 클릭
+    await toUnit(page, 'b2', 'u3')
+    await T(page, 'pph-step-4-go').click()
+    await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
+    const W3 = bubbleWords('b2', 'u3')
+    const before = await speakLen(page)
+    await click(page, T(page, 'pbp-listen'))
+    await page.waitForFunction((m) => window.__speak.length > m, before, { timeout: 4000 })
+    const spoken = await page.evaluate(() => window.__speak.slice(-1)[0])
+    const uw = W3.find((x) => x.word === spoken)
+    const tg = uw.graphemes[uw.targetIndex]
+    const bs = await bubbleList(page)
+    const wrong = bs.filter((b) => b.t !== tg)
+    const good = bs.find((b) => b.t === tg)
+    const seq = [wrong[0].id, wrong[0].id, wrong[1].id, good.id, good.id, wrong[2].id]
+    await page.evaluate((ids) => { for (const id of ids) document.querySelector(`[data-testid="${id}"]`).click() }, seq)
+    const after = await bubbleList(page)
+    r.check(`${name} 연타 6번(같은 오답 2번 · 정답 · 정답 뒤 클릭 2번): 오답 수 = 서로 다른 오답 풍선 2개, 완료 1번, 정답 뒤에 누른 풍선은 안 눌린 상태`, (await T(page, 'pbp-root').getAttribute('data-wrong')) === '2' && (await T(page, 'pbp-root').getAttribute('data-done')) === 'true' && (await T(page, 'pbp-next').count()) === 1 && (await T(page, 'pbp-feedback').getAttribute('data-result')) === 'right' && after.find((b) => b.id === wrong[2].id).tried === 'false', JSON.stringify(after))
+    await page.evaluate(() => { const b = document.querySelector('[data-testid="pbp-next"]'); b.click(); b.click() })
+    await page.waitForFunction(() => document.querySelector('[data-testid="pbp-root"]')?.getAttribute('data-item-index') === '1', null, { timeout: 5000 })
+    const rest = await bubbleSession(page, W3, null, { allowed: gset('b2', 'u3'), start: 1 })
+    r.check(`${name} 연타 뒤에도 기록은 항목마다 정확히 1건(요약 data-records = 항목 수 ${rest.length + 1})`, (await T(page, 'pha-summary').getAttribute('data-records')) === String(rest.length + 1) && rest.length + 1 === 8)
+    await T(page, 'pha-exit').click()
+    await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+    await T(page, 'pph-back').click(); await T(page, 'pph-book').waitFor({ state: 'visible' })
+    await T(page, 'pph-back').click(); await T(page, 'pph-main').waitFor({ state: 'visible' })
+
+    // Book 3 Unit 5: June은 대문자로 보이고, 출발한 기차는 돌아오지 않음
+    await toUnit(page, 'b3', 'u5')
+    await T(page, 'pph-step-5-go').click()
+    await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
+    const tr = await trainSession(page, 5, { allowed: gset('b3', 'u5'), settle: true })
+    const june = tr.find((x) => x.item.word === 'june')
+    r.check(`${name} Book 3 Unit 5 Word Train: June은 결과에 "June"(대문자)로 보이고 나머지는 소문자 철자`, !!june && june.spelledText === 'June' && tr.filter((x) => x !== june).every((x) => x.spelledText === x.item.word), JSON.stringify(tr.map((x) => x.spelledText)))
+    r.check(`${name} Book 3 Unit 5: 기차는 출발 뒤 돌아오지 않고 완성한 단어 칸이 남으며 다음 버튼은 안 움직임`, allOk(tr, 'settleOk'), JSON.stringify(tr.map((x) => x.settle)))
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (m) 360x640 터치: 자음군 Unit(Book 4 Unit 8) Word Train 전체 세션 (black = b · l · a · ck)
+  await scenario('(m) 모바일 자음군', { width: 360, height: 640 }, async ({ page, name }) => {
+    await openScreen(page)
+    await openPhonics(page, true)
+    await toUnit(page, 'b4', 'u8', true)
+    await click(page, T(page, 'pph-step-5-go'), true)
+    await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
+    r.check(`${name} 자음군 Word Train 시작: 가로 넘침 0, 작은 버튼 0`, (await overflow(page)) <= 0 && (await smallButtons(page)) === 0, `${await overflow(page)}`)
+    const tr = await trainSession(page, 6, { touch: true, allowed: gset('b4', 'u8'), settle: true })
+    const black = tr.find((x) => x.item.word === 'black')
+    r.check(`${name} 터치로 6단어 완주(${tr.map((x) => x.item.word)}): black은 b·l·a·ck 낱글자 타일, 완성 단어·철자·칸 정상, 기차는 돌아오지 않음`, names(tr.map((x) => x.item)) === names(unitWords('b4', 'u8')) && !!black && black.item.graphemes.join() === 'b,l,a,ck' && allOk(tr, 'tiles') && allOk(tr, 'word') && allOk(tr, 'spelled') && allOk(tr, 'cars') && allOk(tr, 'settleOk'), JSON.stringify(tr.map((x) => [x.item.word, x.tiles, x.settleOk])))
+    r.check(`${name} 요약 화면 가로 넘침 0`, (await overflow(page)) <= 0)
+  }, { studentId: TESTER_ONLY, hasTouch: true })
 
   // ---- (i) 일반 학생
   await scenario('(i) 일반 학생', { width: 1280, height: 800 }, async ({ page, name, reqs }) => {

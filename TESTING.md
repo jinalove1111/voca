@@ -2120,3 +2120,13 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 255차 추가 (2026-10-11): PAUL PHONICS 43 Unit
 - `scripts/testPhonicsGames.mjs`(258): 43 Unit = 5/7/6/11/14·제목·전부 draft·아홉 숫자(`units 43 slots 230 withPic 50 uniqueWords 197 uniqueNoPic 165 needImage 94 noImageNeeded 71 flags 0 recordings 42`)·모든 Unit 단어가 `learnedPairs`로 해독 가능(0 flags)·Unit × 시드 0..19 풍선/타일이 배운 쌍 안·자음군/겹자음/qu·x/b5u12/b5u14는 풍선 미제공·Book 1 풍선 전용·철자 비교 Unit 보기 2개·그림 없는 단어 라운드 유효·H/L/연습/시험 목록은 `image:'ready'`만·녹음 42개 전부 대기·`phonemeClip` ipa 키·ck 보조 규칙·소스 핀(관리자 패널 포함). 변이 검사: `u.aux.forEach` 제거 시 b2u6 sock/duck 해독 검사 포함 5건 FAIL.
 - `tests/e2e/phonicsGames.spec.mjs`(135)·`tests/e2e/phonicsReview.spec.mjs`(23): 위 변경의 브라우저 검증. 둘 다 `scripts/testBrowserE2E.mjs`에는 등록돼 있지 않다(기존 phonicsGames와 같음) — 단독 실행.
+
+
+### 256차 추가 (2026-10-11): PAUL PHONICS 품질 개선
+- `scripts/testPhonicsGames.mjs`(337): 아홉 숫자 `units 43 slots 236 withPic 48 uniqueWords 210 uniqueNoPic 178 needImage 105 noImageNeeded 73 flags 0 recordings 42`; 두 소리 목표(qu/x/nk)는 풍선에 없음·b4u7 풍선 = ng 단어; 다중 목표 Unit이 목표를 모두 사용(b2u2 g); b5u14 `ea|e`; Book 안 라벨 유일; 방언 메모; `REVIEW_WORDS` ⊆ Unit 단어; `wordDifficulty` 고정값(규칙에서 유도); Book 1 Unit Test 잠금 술어; `bubbleSession` 복습 섞기(모든 풍선 Unit × 시드 0..19에서 정답 글자 ≥ 2, 복습 ≤ 3, 앞 Unit 출처, Book 1 보기는 단모음); 녹음 42개 등록·파일 규칙·상태 전이·검증 오류 8종·`buildClips`; `playPhonemes`가 승인 없으면 아무것도 안 함. 별도 CLI: `node scripts/phonics/validateRecordings.mjs`.
+- `tests/e2e/phonicsGames.spec.mjs`(158)·`phonicsReview.spec.mjs`(23): 위 변경의 브라우저 검증 — Book 1 Unit 2 풍선 세션의 정답 글자 ≥ 2종류, Book 1 6단계 잠금 문구, Book 4 목록의 `th (thin)`/`th (this)`, b4u7 풍선에 nk 단어 없음, Word Train 출발 뒤 1.5초에 기차 숨김 + `pwt-result` + 다음 버튼 y ≤ 8px(동작 줄이기 변형 포함), `pbp-listen-sound` 0개, 연타 6번(같은 오답 반복·정답 뒤 클릭), b5u12 Word Train, b5u14 `ea (bread)`, b3u5 June 대문자, 360×640 자음군 Word Train 터치 완주. 실행: 스크래치 `runOne.mjs`(vite preview 4193), 둘 다 `testBrowserE2E`에는 미등록.
+
+
+### 257차 추가 (2026-10-11): PAUL PHONICS 이미지 감사·학습 발달 설계
+- `scripts/testPhonicsProgress.mjs`(60, 신규, `tests/harness/registry.mjs` extra:false): `progress.js` 순수 함수 전부를 손계산 fixture로 검증, 가상 샘플 데이터(6명·결정적·UUID 아님·30~80건·실제 Unit/음소), 이미지 후보 격리(105/7/98, 관리자 패널만 import), SQL 초안(파괴 문구 0·if not exists·RLS·src/api 참조 0), 소스 핀(네트워크·저장소·시계·랜덤 없음).
+- `tests/e2e/phonicsReview.spec.mjs`(33)·`phonicsProgress.spec.mjs`(53, 신규)·`phonicsGames.spec.mjs`(158, 글자 카드 확인 추가): 필터별 행 수, 후보 썸네일 로드, 녹음 42행, 샘플 화면 학생/관리자(360·768·1280), 쓰기 0·저장소 키 0. 실행은 `runOne` 방식으로 한 번에 하나씩.
