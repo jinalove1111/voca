@@ -101,7 +101,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
           {st.done && !reduced && <Sparkles />}
         </div>
       )}
-      {item.ko && <p data-testid="pwt-ko" className={KO}>{item.ko}</p>}
+      {item.ko && (item.asset || st.done) && <p data-testid="pwt-ko" className={KO}>{item.ko}</p>}
       <button type="button" data-testid="pwt-listen" onClick={() => playEn(item.word)} className={`${BTN} ${W.sky}`}>🔊 듣기</button>
       <p className="text-center text-sm font-bold text-gray-600">{vowelMode ? '회색 글자는 도우미예요. 빈 칸의 모음을 골라요' : '소리 블록을 차례로 이어 보세요'}</p>
       <div className="pwt-track">

@@ -540,7 +540,61 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
 {
   const hub = read('src/components/phonics/UnitHub.jsx'), pwp = read('src/components/pictureWords/PictureWordPractice.jsx')
   ok(/key: 'say'[^\n]*ok: hasWords[^\n]*onPractice\(words\)/.test(hub) && /key: 'pic'[^\n]*ok: ready\.length > 0[^\n]*onPractice\(ready\)/.test(hub), 'hub: Book 1 say row offers all unit words; Books 2-5 pic row still ready-only')
-  ok(/w\.asset \? <Picture word=\{w\} \/> : <div data-testid="pwp-text-card" className="pw-card pw-card--text">/.test(pwp) && /all.filter\(\(x\) => x\.asset\)/.test(pwp) && /PracticeCards words=\{all\}/.test(pwp), 'practice: text card for picture-less words; quiz/games use the picture-only list')
+  ok(/w\.asset \? <GamePicture word=\{w\} testid="pwp-picture" \/> : <div data-testid="pwp-text-card" className="pw-card"><div className="pw-pic /.test(pwp) && /all.filter\(\(x\) => x\.asset\)/.test(pwp) && /PracticeCards words=\{all\}/.test(pwp), 'practice: text card for picture-less words; quiz/games use the picture-only list')
+}
+// 264차: Korean meaning for picture-less Book 1 words, behind an approval gate (PROPOSED_KO = lead proposals, APPROVED_KO = operator approvals, empty today)
+{
+  const b1 = [...new Set(C.BOOKS[0].units.flatMap((u) => u.words.map((w) => D.itemOfSlot(w).word)))].map((w) => D.itemOfWord(w))
+  const noPic = b1.filter((w) => !w.asset), withPic = b1.filter((w) => w.asset)
+  ok(b1.length === 25 && noPic.length === 16 && withPic.length === 9, 'ko: Book 1 still has 25 words = 9 picture + 16 picture-less')
+  ok(noPic.every((w) => typeof D.PROPOSED_KO[w.word] === 'string' && D.PROPOSED_KO[w.word]) && Object.keys(D.PROPOSED_KO).length === 16, 'ko: all 16 picture-less Book 1 words have a proposal, and nothing else does')
+  ok([...D.APPROVED_KO].every((w) => w in D.PROPOSED_KO), 'ko: APPROVED_KO is a subset of the PROPOSED_KO keys')
+  ok(D.APPROVED_KO.size === 0 && noPic.every((w) => w.ko === null && w.koProposed === D.PROPOSED_KO[w.word]), 'ko: with the default (empty) approval set all 16 picture-less words have ko === null (no meaning is shown)')
+  ok(withPic.every((w) => w.ko && w.ko === w.picture.ko && w.koProposed === null) && ITEMS.filter((i) => i.picture).every((i) => i.ko === i.picture.ko), 'ko: picture words keep their picture ko unchanged')
+  const some = new Set(['cat', 'dog', 'zzz'])
+  ok(noPic.every((w) => D.koOf(w.word, null, some) === (some.has(w.word) ? D.PROPOSED_KO[w.word] : null)) && D.koOf('cat', null, new Set(['cat'])) === '고양이' && D.koOf('cat', null) === null && D.koOf('cat', { ko: '그림뜻' }, some) === '그림뜻', 'ko: the parameterised helper yields the proposal only for words in the passed approved set, and a picture ko always wins')
+  const stu = ['src/components/phonics', 'src/components/pictureWords'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).map((f) => `${d}/${f}`)).filter((f) => /\.jsx?$/.test(f))
+  ok(stu.length > 10 && stu.every((f) => !/koProposed|PROPOSED_KO/.test(read(f))), 'ko: student code never reads koProposed / PROPOSED_KO')
+  ok(/koProposed/.test(read('src/components/admin/PhonicsReviewPanel.jsx')) && /phr-b1-ko/.test(read('src/components/admin/PhonicsReviewPanel.jsx')), 'ko: only the admin review panel shows the proposals')
+  ok(C.BOOKS[0].units.map((u) => u.words.map((w) => D.itemOfSlot(w).word).join(' ')).join(' | ') === 'bag jam cat hat map | pen desk egg bed red | milk ink pig six lip | sock dog box hot pot | cup sun bus mug nut', 'ko: Book 1 word list unchanged (25 words)')
+  const wt = read('src/components/phonics/WordTrain.jsx'), sbp = read('src/components/phonics/SoundBubblePop.jsx'), pwp = read('src/components/pictureWords/PictureWordPractice.jsx')
+  ok(/item\.ko && \(item\.asset \|\| st\.done\) && <p data-testid="pwt-ko"/.test(wt), 'ko: Word Train shows a picture-less word\'s meaning only after the answer')
+  ok(/const reveal = st\.done \|\| hinted/.test(sbp) && sbp.indexOf('pbp-ko') > sbp.indexOf('{reveal && ('), 'ko: Sound Bubble Pop shows the meaning only inside the reveal block (after the answer or a practice hint)')
+  const quizCard = pwp.slice(pwp.indexOf('function QuizCard'), pwp.indexOf('// stage:'))
+  ok(quizCard.indexOf('<WordText') > quizCard.indexOf('{answered && ('), 'ko: the picture-word quiz renders word/meaning only after answering')
+  ok(/<WordBtn word=\{w\} className="break-words text-4xl/.test(pwp) && /<WordText word=\{w\} hide=\{!w\.asset\} \/>/.test(pwp) && /onClick=\{\(\) => playEn\(word\.en\)\}/.test(pwp) && /<button type="button" data-testid="pwp-listen" onClick=\{\(\) => playEn\(word\.en\)\}/.test(pwp), 'ko: tapping the word (a real button) calls the same playEn as the 발음 듣기 button; the text card keeps the word once, inside the mat')
+}
+// 264차: SSR of the practice card with the real component (stubbed browser-only deps) — default state and an approved-meaning state, without touching product data
+{
+  const esbuild = await import('esbuild'), { pathToFileURL } = await import('node:url')
+  const TMP = path.join(ROOT, 'scripts/.tmp/pwp-ssr'); fs.mkdirSync(TMP, { recursive: true })
+  const STUBS = [
+    [/pictureImg\.jsx$/, `import React from 'react'
+export const BTN = '', W = {}, T2 = '', T3 = '', MUTED = '', GameStyle = () => null, PwProgress = () => null, playEn = () => {}
+export const GamePicture = ({ testid }) => React.createElement('div', { 'data-testid': testid + '-card', className: 'pw-card' })`],
+    [/SpeakingPracticeItem$/, 'export const RecorderControls = () => null'],
+    [/hooks[\/]useLocalRecorder$/, 'export default () => ({ st: { status: \'idle\' }, elapsed: 0, reset() {}, stop() {} })'],
+    [/utils[\/]speech$/, 'export const stopSpeaking = () => {}, playWordAudio = () => {}'],
+    [/pictureWords[\/]sfx\.js$/, 'export const playSfx = () => {}'],
+    [/SfxControl\.jsx$/, 'export default () => null'],
+    [/\.\/PictureGames$/, 'export default () => null'],
+    [/phonics[\/]PaulPhonics$/, 'export default () => null'],
+  ]
+  await esbuild.build({ entryPoints: ['src/components/pictureWords/PictureWordPractice.jsx'], bundle: true, format: 'esm', platform: 'node', outfile: path.join(TMP, 'pwp.mjs'), jsx: 'automatic', external: ['react', 'react/jsx-runtime'], absWorkingDir: ROOT,
+    plugins: [{ name: 'stubs', setup(b) {
+      b.onResolve({ filter: /.*/ }, (a) => { const hit = STUBS.findIndex(([re]) => re.test(a.path)); return hit < 0 ? null : { path: String(hit), namespace: 'stub' } })
+      b.onLoad({ filter: /.*/, namespace: 'stub' }, (a) => ({ contents: STUBS[+a.path][1], loader: 'jsx', resolveDir: ROOT }))
+    } }] })
+  const { PracticeCards } = await import(pathToFileURL(path.join(TMP, 'pwp.mjs')).href)
+  const React = (await import('react')).default, { renderToStaticMarkup } = await import('react-dom/server')
+  const html = (w) => renderToStaticMarkup(React.createElement(PracticeCards, { words: [w], onDone() {} }))
+  const dog = D.itemOfWord('dog'), jam = D.itemOfWord('jam')
+  const none = html(dog), appr = html({ ...dog, ko: D.koOf('dog', dog.picture, new Set(['dog'])) }), pic = html(jam)
+  const count = (h, id) => h.split(`data-testid="${id}"`).length - 1
+  ok(count(none, 'pwp-text-card') === 1 && count(none, 'pwp-word') === 1 && count(none, 'pwp-ko') === 0 && !/개|준비 중/.test(none), 'ssr: unapproved picture-less word -> one text card, the word once (a button inside the mat), no meaning line and no placeholder')
+  ok(/<button type="button" data-testid="pwp-word"[^>]*>dog<\/button>/.test(none) && none.indexOf('pwp-text-card') < none.indexOf('pwp-word') && none.indexOf('pwp-word') < none.indexOf('pwp-listen'), 'ssr: the word is a real button inside the text card, before the 발음 듣기 button')
+  ok(count(appr, 'pwp-text-card') === 1 && count(appr, 'pwp-word') === 1 && count(appr, 'pwp-ko') === 1 && />개<\/p>/.test(appr) && appr.indexOf('pwp-word') < appr.indexOf('pwp-ko'), 'ssr: once the word is approved its meaning renders under the card (data change only)')
+  ok(count(pic, 'pwp-picture-card') === 1 && count(pic, 'pwp-text-card') === 0 && count(pic, 'pwp-word') === 1 && count(pic, 'pwp-ko') === 1 && pic.includes(`>${jam.ko}</p>`), 'ssr: a picture word keeps picture card + word button + its picture meaning')
 }
 console.log(`${fail ? 'FAIL' : 'PASS'} ${n - fail}/${n} testPhonicsGames`)
 process.exit(fail ? 1 : 0)

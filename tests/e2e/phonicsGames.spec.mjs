@@ -4,7 +4,7 @@ import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
 import { learnableWords } from '../../src/data/pictureWords/index.js'
-import { PHONICS_ITEMS } from '../../src/data/phonics/phonicsWords.js'
+import { PHONICS_ITEMS, PROPOSED_KO } from '../../src/data/phonics/phonicsWords.js'
 import { unitWords, learnedPairs, readyWords, unitContext, bubbleReviewPool } from '../../src/utils/phonics/curriculum.js'
 import { POSITION_KO, spellParts } from '../../src/utils/phonics/games.js'
 import { BOOKS } from '../../src/data/phonics/curriculum.js'
@@ -1184,6 +1184,102 @@ export async function run(browser, baseURL) {
       await T(page, 'pwp-exit').click()
       await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     }
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (q) 264차: 글자 카드 = 그림 카드와 같은 크기·디자인, 단어를 누르면 전체 단어 소리, 안 승인된 뜻은 보이지 않음 (360 / 768 / 1280)
+  const B1_ITEMS = BOOKS[0].units.flatMap((u) => unitWords('b1', u.id))
+  const B1_WORDS = B1_ITEMS.map((w) => w.word)
+  const B1_KO = [...new Set([...B1_WORDS.map((w) => PROPOSED_KO[w]), ...B1_ITEMS.map((w) => w.ko)].filter(Boolean))]
+  for (const vp of [{ width: 360, height: 640 }, { width: 768, height: 1024 }, { width: 1280, height: 800 }]) {
+    const touch = vp.width < 768
+    await scenario('(q) 글자 카드 크기·디자인·탭', vp, async ({ page, name }) => {
+      await openScreen(page)
+      await openPhonics(page, touch)
+      await toUnit(page, 'b1', 'u4', touch)
+      await click(page, T(page, 'pph-step-3-go'), touch)
+      await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
+      const geo = []
+      let tapOk = true, dblOk = true, koCount = 0
+      for (let k = 0; k < 5; k++) {
+        const g = await page.evaluate(() => {
+          const c = document.querySelector('[data-testid="pwp-text-card"],[data-testid="pwp-picture-card"]'), cs = getComputedStyle(c), b = c.getBoundingClientRect()
+          const mat = c.querySelector('.pw-pic'), mb = mat.getBoundingClientRect(), ms = getComputedStyle(mat)
+          const w = c.querySelector('[data-testid="pwp-word"]'), wb = w && w.getBoundingClientRect()
+          return { text: c.dataset.testid === 'pwp-text-card', w: b.width, h: b.height, mw: mb.width, mh: mb.height, border: cs.borderTopColor + cs.borderTopWidth, radius: cs.borderTopLeftRadius, shadow: cs.boxShadow, bg: cs.backgroundImage, matBg: ms.backgroundColor + ms.boxShadow + ms.borderTopLeftRadius,
+            inside: !w || (wb.left >= mb.left - 0.5 && wb.right <= mb.right + 0.5 && wb.top >= mb.top - 0.5 && wb.bottom <= mb.bottom + 0.5 && w.scrollWidth <= w.clientWidth + 1 && mat.scrollWidth <= mat.clientWidth + 1 && getComputedStyle(w).textOverflow !== 'ellipsis'), fits: b.left >= 0 && b.right <= innerWidth + 0.5, ko: document.querySelectorAll('[data-testid="pwp-ko"]').length }
+        })
+        geo.push(g); koCount += g.ko
+        const shown = (await T(page, 'pwp-word').textContent()) || ''
+        const before = await speakLen(page)
+        await click(page, T(page, 'pwp-word'), touch)
+        await page.waitForFunction((m) => window.__speak.length > m, before, { timeout: 4000 })
+        await sleep(300)
+        const one = await page.evaluate((m) => window.__speak.slice(m), before)
+        if (one.length !== 1 || one[0] !== shown) tapOk = false
+        const b2 = await speakLen(page)
+        await T(page, 'pwp-word').dblclick()
+        await sleep(400)
+        const two = await page.evaluate((m) => window.__speak.slice(m), b2)
+        if (two.length < 1 || two.length > 2 || two.some((x) => x !== shown)) dblOk = false
+        await click(page, T(page, 'pwp-next'), touch)
+        await page.waitForFunction(() => !!document.querySelector('[data-testid="pwp-card"], [data-testid="pwp-end"]'), null, { timeout: 5000 })
+      }
+      const P = geo.filter((x) => !x.text), X = geo.filter((x) => x.text)
+      const same = (a, b) => Math.abs(a.w - b.w) <= 1 && Math.abs(a.h - b.h) <= 1 && Math.abs(a.mw - b.mw) <= 1 && Math.abs(a.mh - b.mh) <= 1 && a.border === b.border && a.radius === b.radius && a.shadow === b.shadow && a.bg === b.bg && a.matBg === b.matBg
+      r.check(`${name} Unit 4: 그림 카드 ${P.length}장 + 글자 카드 ${X.length}장, 겉 크기(±1px)·테두리·모서리·그림자·배경·안쪽 매트가 같음`, P.length === 1 && X.length === 4 && geo.every((x) => same(x, P[0])) && P[0].border.startsWith('rgb(244, 114, 182)'), JSON.stringify(geo.map((x) => [x.text, Math.round(x.w), Math.round(x.h)])))
+      r.check(`${name} 큰 단어가 매트 안에 전부 보임(잘림·말줄임·가로 넘침 0), 카드가 화면 안`, geo.every((x) => x.inside && x.fits) && (await overflow(page)) <= 0, JSON.stringify(geo.map((x) => x.inside)))
+      r.check(`${name} 단어를 누르면 그 단어 전체 소리가 정확히 1번(5장 모두); 빠르게 두 번 눌러도 같은 단어만, 최대 2번`, tapOk && dblOk, `${tapOk}/${dblOk}`)
+      r.check(`${name} 승인 전 뜻은 한 줄도 없음(pwp-ko는 그림 단어 뜻뿐 = 1개), 빈 자리표시 문구 없음`, koCount === 1 && !/준비 중|뜻 없음/.test(await T(page, 'pwp-root').innerText()), String(koCount))
+    }, { studentId: TESTER_ONLY, hasTouch: touch })
+  }
+
+  // ---- (r) 264차: 시험·게임 화면은 답하기 전에 영어 단어·뜻을 글자·aria·alt 어디에도 내놓지 않는다(Book 1 Unit 4 한 세션 전체)
+  await scenario('(r) 답 전 단어·뜻 숨김', { width: 1280, height: 800 }, async ({ page, name }) => {
+    await openScreen(page)
+    await openPhonics(page)
+    await toUnit(page, 'b1', 'u4')
+    const leak = () => page.evaluate(({ words, kos }) => {
+      const root = document.querySelector('[data-testid="pph-root"]') || document.body
+      const blob = [root.innerText, ...[...root.querySelectorAll('[aria-label],[alt],[title],[placeholder]')].map((e) => ['aria-label', 'alt', 'title', 'placeholder'].map((a) => e.getAttribute(a) || '').join(' '))].join(' ')
+      return [...words.filter((w) => new RegExp(`\\b${w}\\b`, 'i').test(blob)), ...kos.filter((k) => blob.includes(k))]
+    }, { words: B1_WORDS, kos: B1_KO })
+    await click(page, T(page, 'pph-step-7-go'), false)
+    await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
+    const leaks = [], shown = []
+    const nB = +(await T(page, 'pbp-progress').getAttribute('data-total'))
+    for (let i = 0; i < nB; i++) {
+      await T(page, 'pbp-listen').waitFor({ state: 'visible' })
+      leaks.push(...(await leak()))
+      await click(page, T(page, 'pbp-listen'), false)
+      await page.waitForFunction(() => !document.querySelector('[data-testid="pbp-bubble-0"]')?.disabled, null, { timeout: 5000 })
+      leaks.push(...(await leak()))
+      for (const id of ['pbp-bubble-0', 'pbp-bubble-1', 'pbp-bubble-2', 'pbp-bubble-3', 'pbp-bubble-other']) { if (await T(page, 'pbp-next').count()) break; if (await T(page, id).count()) await click(page, T(page, id), false); await sleep(150) }
+      await T(page, 'pbp-next').waitFor({ state: 'visible', timeout: 5000 })
+      shown.push((await T(page, 'pbp-word').textContent()) || '')
+      await click(page, T(page, 'pbp-next'), false)
+      await sleep(100)
+    }
+    r.check(`${name} Sound Bubble Pop: ${nB}문제 모두 답하기 전(듣기 전·후) 단어·뜻 노출 0, 답한 뒤에는 단어가 보임(${shown.join(' ')})`, leaks.length === 0 && nB >= 5 && shown.length === nB && shown.every((x) => x), JSON.stringify(leaks))
+    await T(page, 'pha-exit').waitFor({ state: 'visible', timeout: 5000 })
+    await click(page, T(page, 'pha-exit'), false)
+    await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+    await click(page, T(page, 'pph-step-8-go'), false)
+    await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
+    const tl = [], done = []
+    const nT = +(await T(page, 'pwt-progress').getAttribute('data-total'))
+    for (let i = 0; i < nT; i++) {
+      await T(page, 'pwt-listen').waitFor({ state: 'visible' })
+      const pic = (await T(page, 'pwt-picture').count()) > 0
+      const lk = await leak()
+      // 그림 단어는 그림이 이미 보이므로 기존 동작(뜻 표시)을 그대로 두고, 그림 없는 단어만 엄격히 본다
+      if (!pic) tl.push(...lk, ...((await T(page, 'pwt-ko').count()) ? ['ko'] : []))
+      for (const t of await T(page, 'pwt-root').locator('[data-testid^="pwt-tile-"]').all()) { if (await T(page, 'pwt-next').count()) break; await t.click().catch(() => {}); await sleep(120) }
+      await T(page, 'pwt-next').waitFor({ state: 'visible', timeout: 8000 })
+      done.push(pic ? 'P' : 'T')
+      await click(page, T(page, 'pwt-next'), false)
+      await sleep(100)
+    }
+    r.check(`${name} Word Train: 그림 없는 단어는 답하기 전 단어·뜻 노출 0 (${done.join('')})`, tl.length === 0 && done.includes('T'), JSON.stringify(tl))
   }, { studentId: TESTER_ONLY })
 
   // ---- (i) 일반 학생

@@ -12,6 +12,12 @@ export const NOIMG = new Set('boil brown clap cute day dig fight five game group
 // Words the teacher must confirm before the unit can be approved (British usage / rare words). jumper = sweater, rubber = eraser in British English.
 export const REVIEW_WORDS = new Set('mule prune tenth cub moth vet rude yum cloth globe horn thread spread breath head jumper rubber'.split(' '))
 
+// 264차: Korean meaning for picture-less words. PROPOSED_KO = lead proposals, NOT teacher-reviewed. A proposal reaches students only when its word is in APPROVED_KO (add the word there, no code change).
+export const PROPOSED_KO = { cat: '고양이', hat: '모자', map: '지도', bed: '침대', red: '빨간색', pig: '돼지', six: '여섯', lip: '입술', dog: '개', box: '상자', hot: '뜨거운', pot: '냄비', sun: '해', bus: '버스', mug: '머그컵', nut: '견과' }
+export const APPROVED_KO = new Set([])
+// picture meaning first; else the proposal only if approved (approved is a parameter so tests can pass their own set)
+export const koOf = (word, pic, approved = APPROVED_KO) => (pic ? pic.ko : approved.has(word) ? PROPOSED_KO[word] ?? null : null)
+
 const LEARN = learnableWords()
 const PICTURE_BY_EN = new Map()
 for (const e of LEARN) { const k = e.en.toLowerCase(); if (!PICTURE_BY_EN.has(k)) PICTURE_BY_EN.set(k, e) }
@@ -20,7 +26,7 @@ function build(notation) {
   const { graphemes, phonemes, raw } = parseWord(notation)
   const word = spell(graphemes)
   const pic = PICTURE_BY_EN.get(word) || null
-  const item = { id: pic ? pic.id : `word:${word}`, word, en: word, ko: pic ? pic.ko : null, asset: pic ? pic.asset : null, display: spell(raw), needsReview: REVIEW_WORDS.has(word), graphemes, phonemes, picture: pic, image: pic ? 'ready' : NOIMG.has(word) ? 'not-needed' : 'needed' }
+  const item = { id: pic ? pic.id : `word:${word}`, word, en: word, ko: koOf(word, pic), koProposed: PROPOSED_KO[word] ?? null, asset: pic ? pic.asset : null, display: spell(raw), needsReview: REVIEW_WORDS.has(word), graphemes, phonemes, picture: pic, image: pic ? 'ready' : NOIMG.has(word) ? 'not-needed' : 'needed' }
   return item
 }
 
