@@ -4,17 +4,20 @@
   "task_id": "paul-phonics-5-books-2026-10-11",
   "task": "5권 -> Unit -> 7단계 허브 + 기존 게임 연결(테스터 전용, 저장/네트워크/보상 0)",
   "status": "working",
-  "progress": 25,
+  "progress": 55,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T05:45:17.000Z",
+  "updated_at": "2026-10-11T05:48:10.000Z",
   "files_owned": [
     "TESTING.md",
     "docs/design/PHONICS_ADVENTURE_2026-10-11.md",
     "handoff.md",
     "scripts/testPhonicsGames.mjs",
     "src/App.jsx",
+    "src/components/phonics/PaulPhonics.jsx",
+    "src/components/phonics/PhonemeListen.jsx",
     "src/components/phonics/PhonicsAdventure.jsx",
     "src/components/phonics/SoundBubblePop.jsx",
+    "src/components/phonics/UnitHub.jsx",
     "src/components/phonics/WordTrain.jsx",
     "src/components/pictureWords/PictureWordPractice.jsx",
     "src/components/pictureWords/pictureImg.jsx",
@@ -32,7 +35,7 @@
     "src/utils/pictureWords/*",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "1/5 커밋: 커리큘럼 데이터+자격 규칙+게임 규칙+정적 테스트",
+  "summary": "3/5: 세션 배선 + 화면 + 진입 교체 완료, 브라우저 스펙 작업 전",
   "blocker": null,
   "next_action": ""
 }

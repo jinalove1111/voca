@@ -1,0 +1,100 @@
+// PAUL PHONICS (폴 파닉스) 진입 화면 (254차, 테스터 전용): 책장(5권) → Book(Unit 목록) → Unit 허브 → 게임 세션.
+// 화면 위치와 이번 방문의 기록(phonicsAttempt)은 React state뿐 — 저장·네트워크·보상 0. Unit과 단어 목록은 아직 운영자 승인 전 임시 구성이다.
+import React, { useState } from 'react'
+import { BOOKS, STATUS_LABEL_KO, bookById, unitsOf } from '../../data/phonics/curriculum.js'
+import { unitWords } from '../../utils/phonics/curriculum.js'
+import { GameStyle } from '../pictureWords/pictureImg.jsx'
+import PhonicsAdventure from './PhonicsAdventure.jsx'
+import UnitHub from './UnitHub.jsx'
+
+const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
+export const DRAFT_NOTICE_KO = 'Unit과 단어 목록은 관리자 승인 전 임시 구성입니다'
+// 책 표지 색(분홍/민트/하늘/노랑/연보라) — 순수 CSS로 그린 표지와 책등
+const COVER = {
+  b1: 'border-pink-400 bg-pink-50',
+  b2: 'border-emerald-400 bg-emerald-50',
+  b3: 'border-sky-400 bg-sky-50',
+  b4: 'border-yellow-400 bg-yellow-50',
+  b5: 'border-purple-400 bg-purple-50',
+}
+
+function Main({ onOpen, onExit }) {
+  return (
+    <div data-testid="pph-main" className="space-y-3">
+      <div className="text-center">
+        <p className="text-2xl font-black text-gray-900">PAUL PHONICS · 폴 파닉스</p>
+        <p data-testid="pph-draft-notice" className="mt-1 rounded-2xl bg-amber-50 p-2 text-sm font-bold text-amber-800">{DRAFT_NOTICE_KO}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {BOOKS.map((b) => {
+          const n = unitWords(b.id, 'review').length
+          return (
+            <button key={b.id} type="button" data-testid={`pph-book-${b.id}`} onClick={() => onOpen(b.id)}
+              className={`min-h-[120px] min-w-0 break-words rounded-xl border-l-[14px] p-3 text-left shadow btn-press ${COVER[b.id]}`}>
+              <span className="block text-xs font-black text-gray-500">Book {b.no}</span>
+              <span className="block text-base font-black leading-tight text-gray-900">{b.titleEn}</span>
+              <span className="block text-sm font-bold text-gray-700">{b.titleKo}</span>
+              <span className="mt-1 block text-xs font-bold text-gray-600">Unit {b.units.length}개 · {n ? `단어 ${n}개` : '단어 준비 중'}</span>
+            </button>
+          )
+        })}
+      </div>
+      <button type="button" data-testid="pph-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
+    </div>
+  )
+}
+
+function Book({ bookId, onOpen, onBack }) {
+  const book = bookById(bookId)
+  const row = (id, label, targets, status) => {
+    const n = unitWords(bookId, id).length
+    return (
+      <button key={id} type="button" data-testid={`pph-unit-${id}`} data-words={n} onClick={() => onOpen(id)} className="flex min-h-[56px] w-full items-center gap-2 rounded-2xl border-2 border-purple-200 bg-white p-3 text-left btn-press">
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-black text-gray-800">{label}</span>
+          <span className="block break-words text-sm font-bold text-pink-600">{targets}</span>
+          <span data-testid={`pph-unit-${id}-count`} className="block text-xs font-bold text-gray-600">{n ? `단어 ${n}개` : '단어 준비 중'}</span>
+        </span>
+        <span data-testid={`pph-unit-${id}-badge`} className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">{STATUS_LABEL_KO[status]}</span>
+      </button>
+    )
+  }
+  return (
+    <div data-testid="pph-book" data-book={bookId} className="space-y-3">
+      <div className={`rounded-xl border-l-[14px] p-3 ${COVER[bookId]}`}>
+        <p className="text-xs font-black text-gray-500">Book {book.no}</p>
+        <p className="text-xl font-black text-gray-900">{book.titleEn} · {book.titleKo}</p>
+        <p className="text-xs font-bold text-amber-800">{DRAFT_NOTICE_KO}</p>
+      </div>
+      {book.notes.map((t, i) => <p key={i} data-testid="pph-book-note" className="rounded-2xl bg-sky-50 p-2 text-sm font-bold text-sky-800">{t}</p>)}
+      <div className="space-y-2">
+        {unitsOf(bookId, { includeDraft: true }).map((u) => row(u.id, `Unit ${u.id.slice(1)}`, u.targets.map((x) => x.grapheme).join(' · '), u.status))}
+        {row('review', 'Book 전체 연습', `Book ${book.no} 전체`, 'draft')}
+      </div>
+      <button type="button" data-testid="pph-back" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-gray-700`}>책장으로 돌아가기</button>
+    </div>
+  )
+}
+
+export default function PaulPhonics({ studentId, onExit, onPractice, onTest, onGame }) {
+  const [nav, setNav] = useState({ screen: 'main' }) // main | book | unit | session
+  const [records, setRecords] = useState([])
+  const toUnit = () => setNav({ screen: 'unit', bookId: nav.bookId, unitId: nav.unitId })
+  let body
+  if (nav.screen === 'session') {
+    body = <PhonicsAdventure key={nav.key} game={nav.game} items={nav.items} ctx={nav.ctx} studentId={studentId} onRecord={(r) => setRecords((x) => [...x, r])} onBack={toUnit} />
+  } else if (nav.screen === 'unit') {
+    body = <UnitHub bookId={nav.bookId} unitId={nav.unitId} records={records} onBack={() => setNav({ screen: 'book', bookId: nav.bookId })}
+      onSession={(game, items, ctx) => setNav({ ...nav, screen: 'session', game, items, ctx, key: Date.now() })} onPractice={onPractice} onTest={onTest} onGame={onGame} />
+  } else if (nav.screen === 'book') {
+    body = <Book bookId={nav.bookId} onOpen={(unitId) => setNav({ screen: 'unit', bookId: nav.bookId, unitId })} onBack={() => setNav({ screen: 'main' })} />
+  } else {
+    body = <Main onOpen={(bookId) => setNav({ screen: 'book', bookId })} onExit={onExit} />
+  }
+  return (
+    <div data-testid="pph-root" data-screen={nav.screen} className="space-y-3">
+      <GameStyle />
+      {body}
+    </div>
+  )
+}

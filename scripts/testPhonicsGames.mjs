@@ -209,5 +209,8 @@ ok(U.missedItems(rs, 'b1', 'u2').join() === 'pics2/ink' && U.missedItems(rs, 'b1
 // ---- source pins (254차)
 const srcFiles = fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).filter((f) => /\.(jsx?|css)$/.test(f))
 
+ok(srcFiles.length > 100 && !srcFiles.some((f) => /Phonics Adventure/.test(read(path.join('src', f)))), `the name "Phonics Adventure" appears nowhere in src/ (${srcFiles.length} files)`)
+ok(!/playEn|playWordAudio|speak/.test(stripC(read('src/components/phonics/PhonemeListen.jsx'))), 'PhonemeListen never calls TTS')
+ok(['PaulPhonics', 'UnitHub', 'PhonemeListen', 'PhonicsAdventure', 'SoundBubblePop', 'WordTrain'].every((n) => fs.existsSync(path.join(ROOT, `src/components/phonics/${n}.jsx`))), 'phonics components present')
 console.log(`${fail ? 'FAIL' : 'PASS'} ${n - fail}/${n} testPhonicsGames`)
 process.exit(fail ? 1 : 0)
