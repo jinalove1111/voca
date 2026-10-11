@@ -1,4 +1,10 @@
 # Paul Easy Voca — Handoff
+## 261차 리드 검증 메모 (2026-10-11, 브라우저 통합 검사 재실행 + 합격선)
+- **브라우저 16종 재실행(리드 직접, 저메모리 러너로 하나씩, 260차 빌드 기준)**: townPilotAllowlist 33/0, phonicsGames 197/0, phonicsReview 44/0(1차 43/1 — 리드가 kit 후보 표기를 바꾸고 spec 핀을 안 맞춘 탓, 핀을 새 표기에 맞춰 재실행), phonicsProgress 62/0, pictureWordGames 150/0, pictureWordPractice 107/0, pictureWordReview 29/0, student 34/0, studentHome 242/0/1 SKIP(기존 streak fixture), admin 21/0, speaking 608/0, speakingExam 216/0, writing 83/0, unit 141/0, townWorld 146/0, grammarVillage 53/0/1 SKIP(기존 soft 지연 로드). 미실행 0.
+- **261차 뒤 리드 재확인**: build OK; 정적 `testPhonicsGames` 389, `testPhonicsProgress` 94, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget`·`testLazyChunkGuards`·`testRegistryCoverage`·`testQaGate` 17·`testTownKitAssets` 1421·`testStudentPathContracts` PASS. 브라우저(261차가 바꾼 파닉스 파일 대상): phonicsGames 203/0, phonicsReview 44/0, phonicsProgress 62/0, pictureWordGames 150/0, pictureWordPractice 107/0, student 34/0. 나머지 10종은 261차에서 해당 소스 변경 0이라 260차 빌드 결과를 그대로 둠.
+- **합격선**: `src/data/phonics/settings.js`의 `testPassRatio: 0.8` 한 곳. 관리자 설정 화면·저장은 없음(저장소·DB 미승인). 점수·통과 여부는 메모리에만 있고 저장되지 않음.
+- **미검증**: Preview 실로그인 화면, 실기기, 실제로 들리는 소리.
+
 ## 261차 (2026-10-11): Book 1 소리 확인 통과 기준 80% + 틀린 소리 복습
 - **통과 기준**: `data/phonics/settings.js`의 `PHONICS_SETTINGS = { testPassRatio: 0.8 }`가 유일한 출처. `passMark(total, settings)` = `ceil(total * ratio)`(5문제 → 4), `testPassed(score, total, settings)` (`utils/phonics/games.js`). 설정 객체는 항상 매개변수(기본값 = 위 상수). 관리자 설정 화면·저장소·DB는 만들지 않았다.
 - **결과 표시**: 소리 확인 요약에 "통과! 5문제 중 4개 이상 맞혔어요" / "조금만 더! 4개를 맞히면 통과예요"(빨강·실패 문구 없음), `pha-summary`에 `data-passed`·`data-pass-mark`. 메모리 기록 `unitTest: { score, total, passMark, passed }`. 허브 9단계에 이번 방문 최근 결과("통과"/"다시 도전").
