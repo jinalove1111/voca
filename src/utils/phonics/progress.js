@@ -91,7 +91,7 @@ export function improvement(records) {
   })
 }
 
-const unitName = (bookId, unitId) => { const b = BOOKS.find((x) => x.id === bookId); return b ? `Book ${b.no} Unit ${String(unitId).slice(1)}` : '' }
+export const unitName = (bookId, unitId) => { const b = BOOKS.find((x) => x.id === bookId); return b ? `Book ${b.no} Unit ${String(unitId).slice(1)}` : '' }
 const slash = (p) => `/${p}/`
 
 // rule-based Korean sentences (no AI call): what to review next

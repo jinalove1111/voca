@@ -5,6 +5,7 @@ import { BOOKS, STATUS_LABEL_KO, bookById, unitLabel, unitsOf } from '../../data
 import { unitWords } from '../../utils/phonics/curriculum.js'
 import { GameStyle } from '../pictureWords/pictureImg.jsx'
 import PhonicsAdventure from './PhonicsAdventure.jsx'
+import PhonicsProgress from './PhonicsProgress.jsx'
 import UnitHub from './UnitHub.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
@@ -18,7 +19,7 @@ const COVER = {
   b5: 'border-purple-400 bg-purple-50',
 }
 
-function Main({ onOpen, onExit }) {
+function Main({ onOpen, onProgress, onExit }) {
   return (
     <div data-testid="pph-main" className="space-y-3">
       <div className="text-center">
@@ -39,6 +40,7 @@ function Main({ onOpen, onExit }) {
           )
         })}
       </div>
+      <button type="button" data-testid="pph-open-progress" onClick={onProgress} className={`${BTN} w-full bg-sky-100 text-sky-800`}>나의 학습 발달상황 (샘플)</button>
       <button type="button" data-testid="pph-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
     </div>
   )
@@ -92,7 +94,7 @@ function Book({ bookId, onOpen, onBack }) {
 }
 
 export default function PaulPhonics({ studentId, onExit, onPractice, onTest, onGame }) {
-  const [nav, setNav] = useState({ screen: 'main' }) // main | book | unit | session
+  const [nav, setNav] = useState({ screen: 'main' }) // main | book | unit | session | progress
   const [records, setRecords] = useState([])
   const toUnit = () => setNav({ screen: 'unit', bookId: nav.bookId, unitId: nav.unitId })
   let body
@@ -103,8 +105,10 @@ export default function PaulPhonics({ studentId, onExit, onPractice, onTest, onG
       onSession={(game, items, ctx) => setNav({ ...nav, screen: 'session', game, items, ctx, key: Date.now() })} onPractice={onPractice} onTest={onTest} onGame={onGame} />
   } else if (nav.screen === 'book') {
     body = <Book bookId={nav.bookId} onOpen={(unitId) => setNav({ screen: 'unit', bookId: nav.bookId, unitId })} onBack={() => setNav({ screen: 'main' })} />
+  } else if (nav.screen === 'progress') {
+    body = <PhonicsProgress onBack={() => setNav({ screen: 'main' })} />
   } else {
-    body = <Main onOpen={(bookId) => setNav({ screen: 'book', bookId })} onExit={onExit} />
+    body = <Main onOpen={(bookId) => setNav({ screen: 'book', bookId })} onProgress={() => setNav({ screen: 'progress' })} onExit={onExit} />
   }
   return (
     <div data-testid="pph-root" data-screen={nav.screen} className="space-y-3">
