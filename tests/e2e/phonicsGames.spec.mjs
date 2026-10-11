@@ -218,7 +218,7 @@ async function trainItem(page, i, { allowed = null, touch = false, wrongFirst = 
   if ((await T(page, 'pwt-root').getAttribute('data-item-index')) !== String(i)) throw new Error(`train index ${i}`)
   const L = await leakState(page, 'pwt-root', item)
   info.leak0 = !L.hasWord && L.attrs.length === 0 && (await T(page, 'pwt-word').count()) === 0 && (await T(page, 'pwt-spelled').count()) === 0
-    && (hasPic ? (await T(page, 'pwt-picture').getAttribute('alt')) === '그림' && L.hasKo === !!item.ko : L.imgs === 0 && (await T(page, 'pwt-text-card').count()) === 1 && (await T(page, 'pwt-text-card').evaluate((c) => c.classList.contains('pw-card--text') && c.textContent.includes('듣기 단어'))) && (await T(page, 'pwt-listen-only').count()) === 1 && ((await T(page, 'pwt-listen-only').textContent()) || '').includes('잘 듣고 소리 블록을 이어 보세요') && (await T(page, 'pwt-ko').count()) === (item.ko ? 1 : 0))
+    && (hasPic ? (await T(page, 'pwt-picture').getAttribute('alt')) === '그림' && L.hasKo === !!item.ko : L.imgs === 0 && (await T(page, 'pwt-text-card').count()) === 1 && (await T(page, 'pwt-text-card').evaluate((c) => c.classList.contains('pw-card--text') && c.textContent.includes('듣기 단어'))) && (await T(page, 'pwt-listen-only').count()) === 1 && ((await T(page, 'pwt-listen-only').textContent()) || '').includes('잘 듣고 소리 블록을 이어 보세요') && (await T(page, 'pwt-ko').count()) === 0) // 그림 없는 단어의 뜻(승인돼 있어도)은 완성 전에는 안 보인다
   const ts0 = await trainTiles(page)
   info.tiles = ts0.length === item.graphemes.length + 1 && item.graphemes.every((g) => ts0.some((t) => t.t === g)) && ts0.filter((t) => !item.graphemes.includes(t.t)).length === 1
   info.learnedTiles = !allowed || ts0.every((t) => allowed.has(t.t))
@@ -247,7 +247,7 @@ async function trainItem(page, i, { allowed = null, touch = false, wrongFirst = 
   await T(page, 'pwt-word').waitFor({ state: 'visible', timeout: 5000 })
   info.word = (await T(page, 'pwt-word').textContent()) === need.join(' · ')
   info.spelledText = await T(page, 'pwt-spelled').textContent()
-  info.spelled = info.spelledText === item.display
+  info.spelled = info.spelledText === item.display && (item.ko ? (await T(page, 'pwt-ko').textContent()) === item.ko : (await T(page, 'pwt-ko').count()) === 0) // 완성 뒤: 뜻이 있으면 그 뜻 그대로, 없으면 줄 자체가 없음
   info.cars = (await page.locator('[data-testid^="pwt-car-"]').evaluateAll((l) => l.map((e) => e.textContent).join('|'))) === need.join('|') && (await carsFilled(page)) === '1'.repeat(need.length)
   info.depart = await T(page, 'pwt-train').evaluate((e) => { const c = getComputedStyle(e); return { cls: e.classList.contains('pwt-depart'), name: c.animationName, dur: c.animationDuration, delay: c.animationDelay, fill: c.animationFillMode } })
   if (settle) info.btnY0 = await T(page, 'pwt-next').evaluate((e) => e.getBoundingClientRect().top)
@@ -837,7 +837,7 @@ export async function run(browser, baseURL) {
     await T(page, 'pph-step-5-go').click()
     await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
     const tr = await trainSession(page, 5, { allowed, wrongAt: 0 })
-    r.check(`${name} 그림 없는 Word Train 5항목: 듣기 전용 안내("잘 듣고 소리 블록을 이어 보세요"), <img> 0, 뜻 없음, 완성 뒤 단어·철자`, names(tr.map((x) => x.item)) === names(words) && tr.every((x) => x.hasPic === false) && allOk(tr, 'leak0') && allOk(tr, 'tiles') && allOk(tr, 'learnedTiles') && allOk(tr, 'word') && allOk(tr, 'spelled') && allOk(tr, 'cars'), JSON.stringify(tr.map((x) => [x.item.word, x.hasPic, x.leak0])))
+    r.check(`${name} 그림 없는 Word Train 5항목: 듣기 전용 안내("잘 듣고 소리 블록을 이어 보세요"), <img> 0, 완성 전 뜻 없음, 완성 뒤 단어·철자(+승인된 뜻)`, names(tr.map((x) => x.item)) === names(words) && tr.every((x) => x.hasPic === false) && allOk(tr, 'leak0') && allOk(tr, 'tiles') && allOk(tr, 'learnedTiles') && allOk(tr, 'word') && allOk(tr, 'spelled') && allOk(tr, 'cars'), JSON.stringify(tr.map((x) => [x.item.word, x.hasPic, x.leak0])))
     r.check(`${name} 그림 없는 Word Train: 오답 흔들림 + 요약 4 / 5, 발음은 단어 전체`, tr[0].shake && tr[0].wrong && tr.every((x) => x.speak) && (await firstTry(page)) === '4/5', JSON.stringify(tr[0]))
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
@@ -1200,6 +1200,7 @@ export async function run(browser, baseURL) {
       await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
       const geo = []
       let tapOk = true, dblOk = true, koCount = 0
+      const kos = []
       for (let k = 0; k < 5; k++) {
         const g = await page.evaluate(() => {
           const c = document.querySelector('[data-testid="pwp-text-card"],[data-testid="pwp-picture-card"]'), cs = getComputedStyle(c), b = c.getBoundingClientRect()
@@ -1209,6 +1210,7 @@ export async function run(browser, baseURL) {
             inside: !w || (wb.left >= mb.left - 0.5 && wb.right <= mb.right + 0.5 && wb.top >= mb.top - 0.5 && wb.bottom <= mb.bottom + 0.5 && w.scrollWidth <= w.clientWidth + 1 && mat.scrollWidth <= mat.clientWidth + 1 && getComputedStyle(w).textOverflow !== 'ellipsis'), fits: b.left >= 0 && b.right <= innerWidth + 0.5, ko: document.querySelectorAll('[data-testid="pwp-ko"]').length }
         })
         geo.push(g); koCount += g.ko
+        if (g.text) kos.push(`${(await T(page, 'pwp-word').textContent())}:${(await T(page, 'pwp-ko').textContent().catch(() => ''))}`)
         const shown = (await T(page, 'pwp-word').textContent()) || ''
         const before = await speakLen(page)
         await click(page, T(page, 'pwp-word'), touch)
@@ -1229,7 +1231,7 @@ export async function run(browser, baseURL) {
       r.check(`${name} Unit 4: 그림 카드 ${P.length}장 + 글자 카드 ${X.length}장, 겉 크기(±1px)·테두리·모서리·그림자·배경·안쪽 매트가 같음`, P.length === 1 && X.length === 4 && geo.every((x) => same(x, P[0])) && P[0].border.startsWith('rgb(244, 114, 182)'), JSON.stringify(geo.map((x) => [x.text, Math.round(x.w), Math.round(x.h)])))
       r.check(`${name} 큰 단어가 매트 안에 전부 보임(잘림·말줄임·가로 넘침 0), 카드가 화면 안`, geo.every((x) => x.inside && x.fits) && (await overflow(page)) <= 0, JSON.stringify(geo.map((x) => x.inside)))
       r.check(`${name} 단어를 누르면 그 단어 전체 소리가 정확히 1번(5장 모두); 빠르게 두 번 눌러도 같은 단어만, 최대 2번`, tapOk && dblOk, `${tapOk}/${dblOk}`)
-      r.check(`${name} 승인 전 뜻은 한 줄도 없음(pwp-ko는 그림 단어 뜻뿐 = 1개), 빈 자리표시 문구 없음`, koCount === 1 && !/준비 중|뜻 없음/.test(await T(page, 'pwp-root').innerText()), String(koCount))
+      r.check(`${name} 승인된 뜻이 글자 카드 4장에 보임(box 상자·pot 냄비·hot 뜨거운·dog 개) + 그림 단어 뜻 1개 = 5줄, 자리표시 문구 없음`, koCount === 5 && ['box:상자', 'pot:냄비', 'hot:뜨거운', 'dog:개'].every((x) => kos.includes(x)) && !/준비 중|뜻 없음/.test(await T(page, 'pwp-root').innerText()), kos.join())
     }, { studentId: TESTER_ONLY, hasTouch: touch })
   }
 

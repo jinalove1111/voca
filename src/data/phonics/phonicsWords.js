@@ -14,7 +14,8 @@ export const REVIEW_WORDS = new Set('mule prune tenth cub moth vet rude yum clot
 
 // 264차: Korean meaning for picture-less words. PROPOSED_KO = lead proposals, NOT teacher-reviewed. A proposal reaches students only when its word is in APPROVED_KO (add the word there, no code change).
 export const PROPOSED_KO = { cat: '고양이', hat: '모자', map: '지도', bed: '침대', red: '빨간색', pig: '돼지', six: '여섯', lip: '입술', dog: '개', box: '상자', hot: '뜨거운', pot: '냄비', sun: '해', bus: '버스', mug: '머그컵', nut: '견과' }
-export const APPROVED_KO = new Set([])
+// 운영자 승인 2026-10-12 (16개 전부)
+export const APPROVED_KO = new Set('cat hat map bed red pig six lip dog box hot pot sun bus mug nut'.split(' '))
 // picture meaning first; else the proposal only if approved (approved is a parameter so tests can pass their own set)
 export const koOf = (word, pic, approved = APPROVED_KO) => (pic ? pic.ko : approved.has(word) ? PROPOSED_KO[word] ?? null : null)
 

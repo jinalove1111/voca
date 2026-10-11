@@ -213,7 +213,7 @@ function Book1() {
       {us.map(({ u, w }) => (
         <div key={u.id} data-testid="phr-b1-unit" className="mt-2 text-xs text-gray-700">
           <b className="text-gray-900">Unit {u.id.slice(1)} · {unitLabel(u)} /{u.targets[0].ipa}/</b> <span className={AMBER}>{STATUS_LABEL_KO[u.status]}</span>
-          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <><small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>{x.koProposed && <small data-testid="phr-b1-ko" className={`ml-1 ${ROSE}`}>{x.koProposed}{!x.ko && ' 뜻 검토 필요'}</small>}</>))}</div>
+          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <><small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>{x.koProposed && <small data-testid="phr-b1-ko" className={`ml-1 ${ROSE}`}>{x.koProposed}{x.ko ? ' 승인' : ' 뜻 검토 필요'}</small>}</>))}</div>
           {u.intro.tipKo} <span className={ROSE}>검토 필요</span>
         </div>
       ))}
