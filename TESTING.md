@@ -2151,3 +2151,7 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testPhonicsProgress.mjs`(111): Book 1 숫자가 데이터에서 25 / 9 / 13 / 3, 13개 제작 단어 목록, 앞 5개 녹음 id·파일 이름, 메모리 속 가짜 목록으로 Unit별 해제(파일만·승인만·둘 다·미완 승인·m4a), 이름·짝·형식·크기 오류, 녹음기 동일성(`useLocalRecorder`+`RecorderControls`, `MediaRecorder` 직접 사용 0), 관리자 섹션에 네트워크·저장 없음.
 - `tests/e2e/phonicsReview.spec.mjs`(49): `phr-book1` 맨 위 · Unit 5 · 단어 25 · 요약 숫자 = 데이터 · 녹음 5줄 모두 "파일 없음" · "표에서 보기" 이동 · 미리보기 승인이 실제 상태에 영향 없음. `tests/e2e/pictureWordPractice.spec.mjs`(110): 카드 그림 상자 1280/768/360에서 정사각·contain·분홍 테두리·가로 넘침 0.
 - `scripts/phonics/validateRecordings.mjs --book1`: 파일 0개면 "미등록 5 / 5" 오류 없음(종료 0).
+
+### 263차 추가 (2026-10-12): Book 1 따라 말하기 5단어
+- `scripts/testPhonicsGames.mjs`(401): Book 1 Unit 1–5 단어 5개·Unit 순서, 그림 카드/글자 카드 수, 그림 시험·게임 목록은 그림 있는 단어만, 허브 say 행은 전체 단어·Books 2–5 pic 행은 ready만.
+- `tests/e2e/phonicsGames.spec.mjs`(217): 시나리오 (p) Unit 1–5 3–5단계 카드 5장, 글자 카드 img 0, 듣기 1단어, 글자 카드 녹음→재생→다시 말하기.
