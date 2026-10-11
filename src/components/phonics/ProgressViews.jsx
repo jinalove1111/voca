@@ -1,14 +1,19 @@
 // PAUL PHONICS learning-progress sections (257차) shared by the student sample screen and the admin sample tab. Presentational only: it gets records and draws CSS bars.
 // No network, storage or chart library. The records it is given today are always the FICTIONAL sample (data/phonics/sampleProgress.js).
 import React from 'react'
-import { GAME_NAME } from '../../data/phonics/curriculum.js'
-import { bookProgress, recentActivity, reviewWords, unitName, unitTestResults, weakPhonemes } from '../../utils/phonics/progress.js'
+import { BOOKS, GAME_NAME } from '../../data/phonics/curriculum.js'
+import { RECORDINGS } from '../../data/phonics/recordings.js'
+import { bookProgress, recentActivity, recommendations, reviewWords, testTrend, unitName, unitStates, unitTestResults, weakPhonemes } from '../../utils/phonics/progress.js'
 
 const BAR_COLOR = { b1: 'bg-pink-400', b2: 'bg-emerald-400', b3: 'bg-sky-400', b4: 'bg-yellow-400', b5: 'bg-purple-400' }
 const BOX = 'min-w-0 rounded-2xl border-2 border-purple-100 bg-white p-3'
 const H = 'text-base font-black text-gray-800'
 const GAME_KO = { bubble: GAME_NAME.B, train: GAME_NAME.T }
 export const slash = (p) => `/${p}/`
+// child screens show a letter and a key word instead of the phonetic symbol
+const KEY = new Map(RECORDINGS.slice().reverse().map((r) => [r.ipa, `${r.grapheme} (${r.exampleWord})`]))
+const STATE = { 'not-started': ['아직', 'bg-gray-200'], 'in-progress': ['하는 중', 'bg-amber-300'], done: ['했어요', 'bg-emerald-400'], 'needs-review': ['다시 보기', 'bg-sky-400'] }
+const trendKo = (t) => (!t ? '' : t.first ? '첫 시험' : t.delta > 0 ? `지난번보다 +${t.delta}` : t.delta === 0 ? '지난번과 같아요' : '다시 해 보면 좋아요')
 export const Empty = ({ children }) => <p className="text-sm font-bold text-gray-500">{children}</p>
 
 export function Bar({ percent, color }) {
@@ -19,7 +24,10 @@ export function Bar({ percent, color }) {
   )
 }
 
-export default function ProgressViews({ records, prefix }) {
+export default function ProgressViews({ records, prefix, kid }) {
+  const L = kid ? (p) => KEY.get(p) || p : slash
+  const states = unitStates(records)
+  const trend = testTrend(records).overall
   const books = bookProgress(records)
   const tests = unitTestResults(records)
   const weak = weakPhonemes(records)
@@ -39,8 +47,15 @@ export default function ProgressViews({ records, prefix }) {
         </ul>
       </section>
 
+      <section data-testid={`${prefix}-units`} className={BOX}>
+        <p className={H}>Unit별 학습 상태</p>
+        {BOOKS.map((b) => <p key={b.id} className="mt-1 flex flex-wrap items-center gap-1 text-xs font-bold text-gray-600"><span className="w-12">Book {b.no}</span>{states.filter((x) => x.bookId === b.id).map((x) => <span key={x.unitId} data-testid={`${prefix}-unit`} data-state={x.state} title={`${unitName(x.bookId, x.unitId)} · ${STATE[x.state][0]}`} className={`h-4 w-4 rounded ${STATE[x.state][1]}`} />)}</p>)}
+        <p className="mt-2 flex flex-wrap gap-x-3 text-xs font-bold text-gray-500">{Object.values(STATE).map(([t, c]) => <span key={t}><span className={`mr-1 inline-block h-3 w-3 rounded align-middle ${c}`} />{t}</span>)}</p>
+      </section>
+
       <section data-testid={`${prefix}-tests`} className={BOX}>
         <p className={H}>Unit별 시험 결과</p>
+        {trend ? <p data-testid={`${prefix}-trend`} className="mt-1 text-sm font-black text-emerald-700">{trendKo(trend)}</p> : null}
         {tests.length ? (
           <ul className="mt-2 space-y-1">
             {tests.map((t) => <li key={`${t.bookId}${t.unitId}`} data-testid={`${prefix}-test`} className="flex justify-between gap-2 text-sm font-bold text-gray-700"><span>{unitName(t.bookId, t.unitId)}</span><span>{t.score} / {t.total}</span></li>)}
@@ -53,9 +68,14 @@ export default function ProgressViews({ records, prefix }) {
         <p className={H}>반복해서 틀린 소리</p>
         {weak.length ? (
           <ul className="mt-2 flex flex-wrap gap-2">
-            {weak.map((w) => <li key={w.phoneme} data-testid={`${prefix}-weak-item`} className="rounded-full bg-rose-50 px-3 py-1 text-sm font-black text-rose-700">{slash(w.phoneme)} · {w.attempts}번 중 {w.wrong}번 틀렸어요</li>)}
+            {weak.map((w) => <li key={w.phoneme} data-testid={`${prefix}-weak-item`} className="rounded-full bg-rose-50 px-3 py-1 text-sm font-black text-rose-700">{L(w.phoneme)} · {w.attempts}번 중 {w.wrong}번 틀렸어요</li>)}
           </ul>
         ) : <Empty>반복해서 틀린 소리는 아직 없어요.</Empty>}
+      </section>
+
+      <section data-testid={`${prefix}-recommend`} className={BOX}>
+        <p className={H}>복습 추천</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-bold text-gray-700">{recommendations(records, L).slice(0, 3).map((t) => <li key={t} className="break-words">{t}</li>)}</ul>
       </section>
 
       <section data-testid={`${prefix}-review-words`} className={BOX}>

@@ -95,7 +95,7 @@ export const unitName = (bookId, unitId) => { const b = BOOKS.find((x) => x.id =
 const slash = (p) => `/${p}/`
 
 // rule-based Korean sentences (no AI call): what to review next
-export function recommendations(records) {
+export function recommendations(records, label = slash) {
   const out = []
   const attempts = records.filter(isAttempt)
   if (!attempts.length && !records.some(isTest)) return ['아직 학습 기록이 없어요. Book 1 Unit 1부터 시작해 보세요.']
@@ -104,7 +104,7 @@ export function recommendations(records) {
     for (const r of attempts) if (!r.correct && r.targetPhonemes.includes(w.phoneme)) miss.set(`${r.bookId}/${r.unitId}`, (miss.get(`${r.bookId}/${r.unitId}`) || 0) + 1)
     const [top] = [...miss.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     const where = top ? ` (${unitName(...top[0].split('/'))}에서 많이 틀렸어요)` : ''
-    out.push(`${slash(w.phoneme)} 소리를 다시 들어 보세요${where}.`)
+    out.push(`${label(w.phoneme)} 소리를 다시 들어 보세요${where}.`)
   }
   for (const t of unitTestResults(records)) if (t.percent < 60) out.push(`${unitName(t.bookId, t.unitId)} 시험 점수가 ${t.score}/${t.total}예요. 한 번 더 연습한 뒤 다시 풀어 보세요.`)
   if (!out.length) {
