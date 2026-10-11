@@ -40,11 +40,13 @@ export function hammerTap(state, tileId) {
 const HIDE = { easy: () => 1, normal: (n) => Math.max(2, Math.round(n / 3)), hard: (n) => Math.max(2, Math.round(n / 2)) }
 export const hiddenCount = (n, difficulty) => Math.max(1, Math.min(n - 1, (HIDE[difficulty] || HIDE.easy)(n)))
 
-export function hiddenRound(word, { difficulty = 'easy', seed = 0 } = {}) {
+// prefer = cell indexes to hide first (a phonics unit's target letters); without it the round is exactly the old one
+export function hiddenRound(word, { difficulty = 'easy', seed = 0, prefer } = {}) {
   const cells = letterCells(word.en)
   const idx = cells.map((c, i) => (c.playable ? i : -1)).filter((i) => i >= 0)
   const r = rng(seed)
-  const hidden = shuffled(idx, r).slice(0, hiddenCount(idx.length, difficulty)).sort((a, b) => a - b)
+  const order = shuffled(idx, r)
+  const hidden = (prefer ? [...prefer.filter((i) => idx.includes(i)), ...order.filter((i) => !prefer.includes(i))] : order).slice(0, hiddenCount(idx.length, difficulty)).sort((a, b) => a - b)
   const positions = []
   const blanks = hidden.map((index, b) => {
     const ch = cells[index].ch

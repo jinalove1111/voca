@@ -233,5 +233,22 @@ if (exists('src/components/pictureWords/PictureGames.jsx')) {
   ok(!/sfx|Sfx/.test(read('src/utils/pictureWords/games.js') + read('src/utils/pictureWords/practice.js')), 'rules: games.js/practice.js know nothing about sound')
 }
 
+// ---- 259차: hiddenRound prefer (a phonics unit's target letters hide first); the default round is byte-identical
+{
+  const w = LEARN.find((x) => x.en === 'cake') || { id: 'x', en: 'cake' }
+  let same = true, pref = true
+  for (const d of ['easy', 'normal', 'hard']) {
+    for (let seed = 0; seed < 20; seed++) {
+      const base = G.hiddenRound(w, { difficulty: d, seed })
+      if (JSON.stringify(base) !== JSON.stringify(G.hiddenRound(w, { difficulty: d, seed, prefer: undefined }))) same = false
+      const p = G.hiddenRound(w, { difficulty: d, seed, prefer: [1] })
+      if (!p.hidden.includes(1) || p.hidden.length !== base.hidden.length || JSON.stringify(p) !== JSON.stringify(G.hiddenRound(w, { difficulty: d, seed, prefer: [1] }))) pref = false
+      if (G.hiddenRound(w, { difficulty: d, seed, prefer: [99] }).hidden.length !== base.hidden.length) pref = false
+    }
+  }
+  ok(same, 'hiddenRound: prefer undefined = unchanged default round (3 difficulties x seeds 0..19)')
+  ok(pref, 'hiddenRound: prefer [1] always hides cell 1 first (same count, deterministic); unknown indexes are ignored')
+}
+
 console.log(fail ? `FAIL ${fail}/${n}` : `PASS ${n}/${n} picture-word game checks`)
 process.exit(fail ? 1 : 0)

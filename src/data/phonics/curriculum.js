@@ -58,20 +58,23 @@ function unit(id, learn, words, m) {
   return { id, status: 'draft', targets, aux, words: words.split(' '), ...rest }
 }
 
+// Book 1 mouth tips are lead-authored DRAFTS (needsReview: admin shows them later; the child screen does not mark them). No Hangul transliteration of a sound.
+const tip = (tipKo) => ({ tipKo, tipNeedsReview: true })
+
 export const BOOKS = [
   {
-    id: 'b1', no: 1, titleEn: 'Short Vowels', titleKo: '단모음', focus: 'vowel-recognition',
+    id: 'b1', no: 1, titleEn: 'Short Vowels', titleKo: '단모음', focus: 'vowel-recognition', skill: 'sound',
     notes: ['모음 소리를 알아듣는 Book이에요. 자음은 도우미 소리일 뿐이고 Book 2에서 정식으로 배워요'],
     units: [
-      unit('u1', 'a', 'b-a-g j-a-m c-a-t h-a-t m-a-p', { difficulty: 2, games: 'B' }),
-      unit('u2', 'e', 'p-e-n d-e-s-k e-gg b-e-d r-e-d', { difficulty: 2, games: 'B' }),
-      unit('u3', 'i', 'm-i-l-k i-nk p-i-g s-i-x l-i-p', { difficulty: 2, games: 'B' }),
-      unit('u4', 'o', 's-o-ck d-o-g b-o-x h-o-t p-o-t', { difficulty: 2, games: 'B', dialect: D_O }),
-      unit('u5', 'u', 'c-u-p s-u-n b-u-s m-u-g n-u-t', { difficulty: 3, games: 'B', dialect: D_U }),
+      unit('u1', 'a', 'b-a-g j-a-m c-a-t h-a-t m-a-p', { difficulty: 2, games: 'BT', intro: tip('입을 크게 벌리고 혀를 낮게, 짧게 소리 내요') }),
+      unit('u2', 'e', 'p-e-n d-e-s-k e-gg b-e-d r-e-d', { difficulty: 2, games: 'BT', intro: tip('입을 조금 벌리고 입꼬리를 살짝 옆으로, 짧게') }),
+      unit('u3', 'i', 'm-i-l-k i-nk p-i-g s-i-x l-i-p', { difficulty: 2, games: 'BT', intro: tip('입에 힘을 빼고 살짝만 벌려 짧게') }),
+      unit('u4', 'o', 's-o-ck d-o-g b-o-x h-o-t p-o-t', { difficulty: 2, games: 'BT', intro: tip('입을 둥글게 하고 턱을 내려 짧게'), dialect: D_O }),
+      unit('u5', 'u', 'c-u-p s-u-n b-u-s m-u-g n-u-t', { difficulty: 3, games: 'BT', intro: tip('입을 편하게 반쯤 벌리고 짧게'), dialect: D_U }),
     ],
   },
   {
-    id: 'b2', no: 2, titleEn: 'Single Consonants', titleKo: '단자음', focus: 'sound-letter', notes: [],
+    id: 'b2', no: 2, titleEn: 'Single Consonants', titleKo: '단자음', focus: 'sound-letter', skill: 'reading', notes: [],
     units: [
       unit('u1', 'm s t p', 'm-a-t s-a-t t-a-p p-o-t s-i-p', { difficulty: 1, games: 'BTHL' }),
       unit('u2', 'n d g c', 'p-e-n c-u-p d-o-g c-a-n d-i-g g-u-m', { difficulty: 1, games: 'BTHL' }),
@@ -83,7 +86,7 @@ export const BOOKS = [
     ],
   },
   {
-    id: 'b3', no: 3, titleEn: 'Long Vowels', titleKo: '장모음', focus: 'sound-letter', notes: [],
+    id: 'b3', no: 3, titleEn: 'Long Vowels', titleKo: '장모음', focus: 'sound-letter', skill: 'reading', notes: [],
     units: [
       unit('u1', 'a_e', 'c-a_e-k t-a_e-p g-a_e-t n-a_e-m g-a_e-m', { difficulty: 2, games: 'BTHL' }),
       unit('u2', 'i_e', 'k-i_e-t s-l-i_e-d b-i_e-k f-i_e-v t-i_e-m', { difficulty: 2, games: 'BTHL' }),
@@ -94,7 +97,7 @@ export const BOOKS = [
     ],
   },
   {
-    id: 'b4', no: 4, titleEn: 'Consonant Teams', titleKo: '이중자음', focus: 'sound-letter',
+    id: 'b4', no: 4, titleEn: 'Consonant Teams', titleKo: '이중자음', focus: 'sound-letter', skill: 'reading',
     notes: ['A: 글자 둘이 소리 하나를 내요 (digraph).  B: 자음군은 글자마다 제 소리를 내고 이어서 읽어요 (cluster) — 소리 하나를 따로 듣지 않아요'],
     groups: [{ id: 'a', titleKo: `A. ${DIGRAPH}`, unitIds: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7'] }, { id: 'b', titleKo: `B. ${CLUSTER}`, unitIds: ['u8', 'u9', 'u10', 'u11'] }],
     units: [
@@ -112,7 +115,7 @@ export const BOOKS = [
     ],
   },
   {
-    id: 'b5', no: 5, titleEn: 'Vowel Teams', titleKo: '모음 조합 및 확장 음가', focus: 'sound-letter', notes: [],
+    id: 'b5', no: 5, titleEn: 'Vowel Teams', titleKo: '모음 조합 및 확장 음가', focus: 'sound-letter', skill: 'reading', notes: [],
     reviewNote: '같은 철자, 다른 소리 — ow: snow/cow · oo: moon/book · ea: sea/bread · ou: cloud/soup',
     units: [
       unit('u1', 'ai ay', 't-r-ai-n r-ai-n s-n-ai-l d-ay p-l-ay', { difficulty: 2, games: 'BTHL' }),

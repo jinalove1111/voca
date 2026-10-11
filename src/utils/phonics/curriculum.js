@@ -104,7 +104,7 @@ export function unitContext(bookId, unitId) {
 export function missedItems(records, bookId, unitId) {
   const state = new Map()
   for (const r of records) {
-    if (r.bookId !== bookId || r.unitId !== unitId) continue
+    if (r.bookId !== bookId || r.unitId !== unitId || r.unitTest) continue
     if (r.step === 'review') { if (r.correct) state.delete(r.itemId); continue }
     if (!r.correct) state.set(r.itemId, true)
   }
@@ -152,22 +152,50 @@ export function bubbleReviewPool(bookId, unitId) {
 }
 const bubbleOk = (w, ctx) => !!bubbleRound(w, 0, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctx.optionPairs })
 
-export function bubbleSession(bookId, unitId, seed, count = 3) {
+// Book 1 Unit 1 has no earlier unit to mix in, so it is a DETECTION task: the unit's words (they have the unit vowel) + words of the other Book 1 units (they do not);
+// every item is tagged { detect, vowel } and records stay with the unit being played. needsReview (pedagogy call by the lead).
+export const detectUnit = (bookId, unitId) => { const n = nodeOf(bookId, unitId); return !!n && !n.unit.review && n.book.focus === 'vowel-recognition' && n.book.units[0].id === unitId }
+export function detectWords(bookId, unitId) {
+  const { book, unit, words } = unitContext(bookId, unitId)
+  const vowel = unit.targets[0].grapheme
+  const tag = (w) => ({ ...w, detect: true, vowel })
+  const ok = (w) => hasGame(w, 'B') && w.targetIndex >= 0
+  const far = new Map()
+  for (const u of book.units) if (u.id !== unitId) for (const w of slotsOf(u)) if (ok(w) && !w.graphemes.includes(vowel)) far.set(w.id, tag(w))
+  return { own: words.filter(ok).map(tag), far: [...far.values()] }
+}
+
+function sessionParts(bookId, unitId, seed, count) {
   const ctx = unitContext(bookId, unitId)
-  if (!ctx || ctx.unit.review) return []
-  const own = ctx.words.filter((w) => hasGame(w, 'B') && w.targetIndex >= 0 && bubbleOk(w, ctx))
-  if (!own.length) return []
+  if (!ctx || ctx.unit.review) return null
   const r = rng(seed)
-  const taken = new Set(own.map((w) => w.graphemes[w.targetIndex]))
+  const detect = detectUnit(bookId, unitId)
+  const d = detect ? detectWords(bookId, unitId) : null
+  const own = d ? d.own : ctx.words.filter((w) => hasGame(w, 'B') && w.targetIndex >= 0 && bubbleOk(w, ctx))
+  if (!own.length) return null
+  const taken = new Set(d ? [] : own.map((w) => w.graphemes[w.targetIndex]))
   const review = []
-  for (const w of shuffled(bubbleReviewPool(bookId, unitId), r)) {
+  for (const w of shuffled(d ? d.far : bubbleReviewPool(bookId, unitId), r)) {
     const g = w.graphemes[w.targetIndex]
     if (taken.has(g)) continue
     taken.add(g)
     review.push(w)
     if (review.length === count) break
   }
-  return shuffled([...own, ...review], r)
+  return { own, review, r }
+}
+
+export function bubbleSession(bookId, unitId, seed, count = 3) {
+  const p = sessionParts(bookId, unitId, seed, count)
+  return p ? shuffled([...p.own, ...p.review], p.r) : []
+}
+
+// Book 1 sound test (소리 확인): 5 items = up to 2 review/contrast items + the unit's own words, one pick each. Nothing stored.
+export function testSession(bookId, unitId, seed, size = 5) {
+  const p = sessionParts(bookId, unitId, seed, 3)
+  if (!p) return []
+  const rev = p.review.slice(0, 2)
+  return shuffled([...rev, ...shuffled(p.own, p.r).slice(0, size - rev.length)], p.r)
 }
 
 // Word difficulty 1-3 (computed). A cluster = two or more consonant graphemes in a row; a syllable = a run of vowel graphemes.

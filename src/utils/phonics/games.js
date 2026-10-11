@@ -6,14 +6,22 @@ import { PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
 export const POSITION_KO = { initial: '첫', medial: '가운데', final: '끝' }
 export const BUBBLE_OBJECTIVE_KO = '단어의 첫 소리를 듣고 글자 고르기'
 export const TRAIN_OBJECTIVE_KO = '소리 블록을 차례로 이어 단어 만들기'
+export const OTHER_SOUND_KO = '다른 소리'
+export const VOWEL_TRAIN_OBJECTIVE_KO = '들리는 모음 소리를 빈 칸에 끼우기'
+export const VOWELS = ['a', 'e', 'i', 'o', 'u']
 
 // ---- Sound Bubble Pop: hear the word, pick the grapheme of the target sound (default: the FIRST sound)
 // opts.targetIndex = which grapheme of the word is the target; opts.optionPairs = 'grapheme|ipa' pairs the distractors may come from
 // (the caller passes the learned pairs, Book 1 passes the five short vowels). Without opts the distractors come from the pool's first sounds.
 const position = (i, n) => (i === 0 ? 'initial' : i === n - 1 ? 'final' : 'medial')
-export function bubbleRound(item, seed, pool = PHONICS_ITEMS, { targetIndex = 0, optionPairs } = {}) {
+// opts.detect + opts.vowel = Book 1 first-sound task: two options [vowel, 다른 소리]; right = the vowel when the word has it, else 다른 소리 (no consonant decides anything).
+export function bubbleRound(item, seed, pool = PHONICS_ITEMS, { targetIndex = 0, optionPairs, detect = false, vowel } = {}) {
   const grapheme = item.graphemes[targetIndex]
   const ipa = item.phonemes[targetIndex]
+  if (detect) {
+    const has = item.graphemes.includes(vowel)
+    return { itemId: item.id, target: { grapheme: has ? vowel : OTHER_SOUND_KO, ipa, position: position(targetIndex, item.graphemes.length) }, objectiveKo: vowel + ' 소리가 들리는지 골라요', options: shuffled([vowel, OTHER_SOUND_KO], rng(seed + 7)), detect: true }
+  }
   const seen = new Set([grapheme])
   const distractors = []
   const source = optionPairs ? optionPairs.map((p) => p.split('|')) : pool.map((o) => [o.graphemes[0], o.phonemes[0]])
@@ -31,10 +39,11 @@ export function bubbleRound(item, seed, pool = PHONICS_ITEMS, { targetIndex = 0,
 }
 export const bubbleStart = (round) => ({ round, wrong: 0, tried: [], done: false, last: null })
 
-export function bubblePick(state, optionIndex) {
+// once = the sound test: ONE pick, no retry (a miss ends the item with wrong = 1)
+export function bubblePick(state, optionIndex, { once = false } = {}) {
   const { round } = state
   if (state.done || state.tried.includes(optionIndex) || optionIndex < 0 || optionIndex >= round.options.length) return state
-  if (round.options[optionIndex] !== round.target.grapheme) return { ...state, wrong: state.wrong + 1, tried: [...state.tried, optionIndex], last: 'wrong' }
+  if (round.options[optionIndex] !== round.target.grapheme) return once ? { ...state, wrong: 1, tried: [optionIndex], done: true, last: 'wrong' } : { ...state, wrong: state.wrong + 1, tried: [...state.tried, optionIndex], last: 'wrong' }
   return { ...state, done: true, last: 'right' }
 }
 
@@ -70,6 +79,21 @@ export function trainRound(item, seed, { learned } = {}) {
   if (extra) tiles.splice(r.int(tiles.length + 1), 0, { id: `x${answer.length}`, grapheme: extra })
   return { itemId: item.id, target: { graphemes: answer, phonemes: item.phonemes }, objectiveKo: TRAIN_OBJECTIVE_KO, tiles }
 }
+// ---- Book 1 Word Train: every consonant grapheme is a grey helper, ONE carriage (the vowel) is empty, the tiles are the five vowels.
+export function trainRoundVowel(item, seed) {
+  const slot = item.graphemes.findIndex((g) => VOWELS.includes(g))
+  if (slot < 0) return null
+  const vowel = item.graphemes[slot]
+  const tiles = shuffled(VOWELS.map((grapheme) => ({ id: 'v' + grapheme, grapheme })), rng(seed))
+  return { itemId: item.id, target: { graphemes: item.graphemes, phonemes: item.phonemes, slot, vowel }, objectiveKo: VOWEL_TRAIN_OBJECTIVE_KO, tiles }
+}
+export function vowelTap(state, tileId) {
+  const { round } = state
+  const tile = round.tiles.find((t) => t.id === tileId)
+  if (!tile || state.done) return state
+  if (tile.grapheme !== round.target.vowel) return { ...state, wrong: state.wrong + 1, last: 'wrong' }
+  return { ...state, placed: 1, usedTileIds: [tileId], last: 'right', done: true }
+}
 export const trainStart = (round) => ({ round, placed: 0, usedTileIds: [], wrong: 0, last: null, done: false })
 
 export function trainTap(state, tileId) {
@@ -94,7 +118,7 @@ export function summarisePhonemes(records) {
   const out = {}
   const missed = new Set()
   for (const r of records) {
-    for (const ph of r.targetPhonemes) {
+    for (const ph of r.targetPhonemes || []) {
       const s = out[ph] || (out[ph] = { attempts: 0, wrong: 0, retries: 0, improvedAfterReview: false })
       s.attempts++
       s.retries += r.retries
