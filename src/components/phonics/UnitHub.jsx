@@ -7,7 +7,7 @@ import { bubbleRound, spellParts, summarisePhonemes } from '../../utils/phonics/
 import { detectUnit, detectWords, hasGame, missedItems, readyWords, testSession, unitContext, unitTestLock } from '../../utils/phonics/curriculum.js'
 import { gameEligible } from '../../utils/pictureWords/games.js'
 import { phonemeClip } from '../../data/phonics/phonemeClips.js'
-import { imgUrl, playEn } from '../pictureWords/pictureImg.jsx'
+import { imgUrl, playEn, W } from '../pictureWords/pictureImg.jsx'
 import PhonemeListen, { LOCKED_TEXT_KO } from './PhonemeListen.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
@@ -195,7 +195,7 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
       <div data-testid="pph-progress" data-records={attempts.length} className="text-center">
         {wrongPh.length > 0 && <p className="rounded-2xl bg-amber-50 p-2 text-sm font-black text-amber-800">다시 볼 소리: {wrongPh.join(', ')}</p>}
       </div>
-      <button type="button" data-testid="pph-back" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-gray-700`}>Book으로 돌아가기</button>
+      <button type="button" data-testid="pph-back" onClick={onBack} className={`${BTN} ${W.gray}`}>Book으로 돌아가기</button>
     </div>
   )
 }

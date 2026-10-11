@@ -5,13 +5,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { passMark, sessionItems, testPassed } from '../../utils/phonics/games.js'
 import { bubbleSession, reviewForMisses, testSession } from '../../utils/phonics/curriculum.js'
 import { stopSpeaking } from '../../utils/speech'
-import { GameStyle } from '../pictureWords/pictureImg.jsx'
+import { GameStyle, W } from '../pictureWords/pictureImg.jsx'
 import SfxControl from '../pictureWords/SfxControl.jsx'
 import SoundBubblePop from './SoundBubblePop.jsx'
 import WordTrain from './WordTrain.jsx'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
-const PUR = `${BTN} w-full bg-purple-600 text-white`
+const PUR = `${BTN} ${W.purple}`
 const newSeed = () => Date.now() % 2147483647
 const SESSION_SIZE = 6
 
@@ -55,7 +55,7 @@ export default function PhonicsAdventure({ game, items: pool, ctx, studentId, on
         {ctx?.retest && <button type="button" data-testid="pha-retest" onClick={() => onStart('bubble', [], ctx.retest)} className={PUR}>소리 확인 다시 하기</button>}
         <button type="button" data-testid="pha-again" onClick={restart} className={`${BTN} w-full ${nxt || !passed || ctx?.retest ? 'bg-sky-100 text-sky-800' : 'bg-purple-600 text-white'}`}>다시 하기</button>
         {test && passed && review}
-        <button type="button" data-testid="pha-exit" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-gray-700`}>돌아가기</button>
+        <button type="button" data-testid="pha-exit" onClick={onBack} className={`${BTN} ${W.gray}`}>돌아가기</button>
       </div>
     )
   }

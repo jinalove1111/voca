@@ -7,7 +7,7 @@ import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise 
 import { playWordAudio, stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls } from '../SpeakingPracticeItem'
-import { GameStyle, PwProgress, imgUrl } from './pictureImg.jsx'
+import { GameStyle, PwProgress, imgUrl, W } from './pictureImg.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { PICTURE_REC_LABELS } from './recLabels.js'
@@ -159,7 +159,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
         <p className="text-base text-gray-600">같은 단어로 게임을 하거나 시험을 볼 수 있어요</p>
         {gameBtns('알파벳 망치로', '숨은 글자로')}
         <button type="button" data-testid="pwp-go-test" onClick={startTest} className={`${PRIMARY} w-full`}>시험 보기</button>
-        <button type="button" data-testid="pwp-skip" onClick={() => setStage('summary')} className={`${BTN} w-full bg-gray-200 text-gray-700`}>건너뛰고 끝내기</button>
+        <button type="button" data-testid="pwp-skip" onClick={() => setStage('summary')} className={`${BTN} ${W.gray}`}>건너뛰고 끝내기</button>
       </div>
     )
   } else if (stage === 'quiz') {
@@ -200,7 +200,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
         {gameBtns('이 단어로 알파벳 망치', '이 단어로 숨은 글자')}
         <button type="button" data-testid="pwp-again" onClick={onAgain} className={`${PRIMARY} w-full`}>다시 하기</button>
         <button type="button" data-testid="pwp-other-set" onClick={onOther} className={`${SOFT} w-full`}>다른 묶음</button>
-        <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
+        <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
       </div>
     )
   }
@@ -271,7 +271,7 @@ export default function PictureWordPractice({ onExit, studentId }) {
             </div>
           ))}
         </div>
-        <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} w-full bg-gray-200 text-gray-700`}>나가기</button>
+        <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
       </div>
     )
   }

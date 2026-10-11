@@ -35,27 +35,29 @@ export function useReducedMotion() {
   return r
 }
 
+// full-width button colours shared by the phonics and picture-word screens (used as `${BTN} ${W.gray}`)
+export const W = { gray: 'w-full bg-gray-200 text-gray-700', purple: 'w-full bg-purple-600 text-white', sky: 'w-full bg-sky-100 text-sky-700' }
+
 const CSS = `
 @keyframes pw-swing{0%{transform:rotate(-70deg) translateY(-6px)}60%{transform:rotate(25deg) translateY(4px)}100%{transform:rotate(0) translateY(0)}}
 @keyframes pw-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 @keyframes pw-bounce{0%{transform:scale(1)}40%{transform:scale(1.15)}100%{transform:scale(1)}}
-@keyframes pw-pop{0%{transform:scale(.4);opacity:.2}100%{transform:scale(1);opacity:1}}
 @keyframes pw-hop{0%{transform:translateY(0)}50%{transform:translateY(-10px)}100%{transform:translateY(0)}}
 @keyframes pw-click{0%{transform:scale(1.25)}100%{transform:scale(1)}}
 @keyframes pw-glow{0%{box-shadow:0 6px 0 #F9A8D4,0 0 0 0 rgba(244,114,182,.6)}50%{box-shadow:0 6px 0 #F9A8D4,0 0 18px 6px rgba(244,114,182,.55)}100%{box-shadow:0 6px 0 #F9A8D4,0 0 0 0 rgba(244,114,182,0)}}
 @keyframes pw-spark{0%{transform:scale(.3) rotate(0);opacity:0}30%{opacity:1}100%{transform:scale(1.2) rotate(90deg) translateY(-14px);opacity:0}}
-.pw-swing{animation:pw-swing .18s ease-out both}.pw-shake{animation:pw-shake .25s ease-in-out}.pw-bounce{animation:pw-bounce .3s ease-out}.pw-pop{animation:pw-pop .25s ease-out both}
+.pw-swing{animation:pw-swing .18s ease-out both}.pw-shake{animation:pw-shake .25s ease-in-out}.pw-bounce{animation:pw-bounce .3s ease-out}
 .pw-hop{animation:pw-hop .15s ease-out}.pw-click{animation:pw-click .18s ease-out .12s}.pw-glow{animation:pw-glow .28s ease-out}.pw-spark{animation:pw-spark .55s ease-out both}
 .pw-tile{transition:transform .25s ease,opacity .25s ease}
 .pw-cell{min-width:48px;min-height:48px}
 @media (min-width:390px){.pw-cell{min-width:56px;min-height:56px}}
-.pw-card{position:relative;box-sizing:border-box;width:min(100%,15rem);margin:0 auto;padding:12px;border:3px solid #F472B6;border-radius:24px;background:linear-gradient(160deg,#FFE4EF 0%,#FFF8EC 100%);box-shadow:0 6px 0 #F9A8D4,0 10px 18px rgba(244,114,182,.25)}
+.pw-card{position:relative;box-sizing:border-box;width:min(100%,15rem);margin:0 auto;padding:14px;border:3px solid #F472B6;border-radius:24px;background:linear-gradient(160deg,#FFE4EF 0%,#FFF8EC 100%);box-shadow:0 6px 0 #F9A8D4,0 10px 18px rgba(244,114,182,.25)}
 @media (min-width:640px){.pw-card{width:min(100%,19rem)}}
-.pw-card--text{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:6rem;text-align:center}
+.pw-card--text{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:6rem;text-align:center}
 .pw-card-tag{display:inline-block;padding:2px 10px;border-radius:999px;background:#fff;border:2px solid #F9A8D4;font-size:.75rem;font-weight:900;color:#BE185D}
-.pw-card-sm{width:100%;padding:6px;border-width:2px;border-radius:16px;box-shadow:0 3px 0 #F9A8D4}
-.pw-pic{display:block;width:100%;height:auto;aspect-ratio:1/1;object-fit:contain;border-radius:14px;background:#fff}
-.pw-card-sm .pw-pic{width:6rem;height:6rem;margin:0 auto;aspect-ratio:auto}
+.pw-card-sm{width:100%;padding:6px;border-width:2px;border-radius:16px;box-shadow:0 3px 0 #F9A8D4,0 5px 10px rgba(244,114,182,.2)}
+.pw-pic{display:block;box-sizing:border-box;width:100%;height:auto;aspect-ratio:1/1;object-fit:contain;padding:8px;border-radius:18px;background:#fff;box-shadow:inset 0 0 0 2px #FCE7F3}
+.pw-card-sm .pw-pic{width:6rem;height:6rem;margin:0 auto;aspect-ratio:auto;padding:6px;border-radius:14px}
 .pw-letter{border:2px solid var(--pw-edge);background:var(--pw-bg);color:#1F2937;box-shadow:0 3px 0 var(--pw-edge);transition:transform .15s ease,box-shadow .15s ease}
 .pw-letter:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 var(--pw-edge)}
 .pw-c0{--pw-bg:#FBCFE8;--pw-edge:#EC4899}.pw-c1{--pw-bg:#BBF7D0;--pw-edge:#22C55E}.pw-c2{--pw-bg:#BAE6FD;--pw-edge:#0EA5E9}.pw-c3{--pw-bg:#FEF08A;--pw-edge:#EAB308}
@@ -82,6 +84,6 @@ const CSS = `
 .pwt-train.pwt-depart{animation:pwt-go .6s ease-in .25s forwards}
 .pwt-result{animation:pwt-in .3s ease-out .85s both}
 .pwt-engine{display:flex;align-items:center;justify-content:center;min-width:48px;min-height:48px;font-size:1.75rem}
-@media (prefers-reduced-motion: reduce){.pw-swing,.pw-shake,.pw-bounce,.pw-pop,.pw-hop,.pw-click,.pw-glow,.pw-spark{animation:none}.pbp-float,.pbp-wobble,.pbp-pulse{animation:none}.pbp-bubble{transition:none}.pwt-train.pwt-depart{animation:none;visibility:hidden}.pwt-result{animation:none}.pw-tile,.pw-letter,.pw-bar-fill{transition:none}.pw-spark-star{display:none}}
+@media (prefers-reduced-motion: reduce){[class*=pw-],[class*=pbp-],[class*=pwt-]{animation:none!important;transition:none!important}.pwt-train.pwt-depart{visibility:hidden}.pw-spark-star{display:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>
