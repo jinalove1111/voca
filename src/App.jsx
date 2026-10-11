@@ -1308,7 +1308,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       {/* 그림 단어 연습(249차) — 테스터만. 비테스터는 이 청크를 요청하지 않는다. */}
       {pictureWordsEnabled && screen === 'pictureWords' && (
         <React.Suspense fallback={null}>
-          <PictureWordPractice onExit={() => setScreen(studentHomeEnabled ? 'home' : 'dashboard')} />
+          <PictureWordPractice studentId={studentId} onExit={() => setScreen(studentHomeEnabled ? 'home' : 'dashboard')} />
         </React.Suspense>
       )}
     </>

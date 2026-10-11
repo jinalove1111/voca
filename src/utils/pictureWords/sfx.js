@@ -42,6 +42,7 @@ const VOICES = {
   tap: [['sine', 190, 95, 0, 0.09, 0.5]], // light "톡"
   right: [['sine', 190, 95, 0, 0.09, 0.4], ['triangle', 660, 990, 0.05, 0.15, 0.45]], // thud + bright rising "팝" (200 ms)
   wrong: [['sine', 190, 95, 0, 0.09, 0.3], ['sine', 230, 165, 0.05, 0.18, 0.3]], // thud + soft low falling "툭" (230 ms), never a buzzer
+  pop: [['sine', 880, 440, 0, 0.07, 0.45]], // short bubble "pop" (70 ms)
   success: [523.25, 659.25, 783.99, 1046.5].map((f, i) => ['triangle', f, f, i * 0.08, 0.17, 0.4]), // C5 E5 G5 C6 arpeggio (410 ms)
 }
 export const SUCCESS_MS = 410

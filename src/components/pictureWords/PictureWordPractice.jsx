@@ -14,6 +14,9 @@ import { PICTURE_REC_LABELS } from './recLabels.js'
 
 // 게임/가게 선반은 열 때만 받는 추가 청크
 const PictureGames = React.lazy(() => import('./PictureGames'))
+// 파닉스 어드벤처 시제품(253차)도 별도 lazy 청크 — 테스터가 해당 버튼을 눌러야만 받는다
+const PhonicsAdventure = React.lazy(() => import('../phonics/PhonicsAdventure'))
+const PHONICS_LABEL_KO = '시제품 묶음 (교재 순서 아님)'
 
 const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 const PRIMARY = `${BTN} bg-purple-600 text-white`
@@ -210,7 +213,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
   )
 }
 
-export default function PictureWordPractice({ onExit }) {
+export default function PictureWordPractice({ onExit, studentId }) {
   const [sel, setSel] = useState(null) // { id, words?, seed, mode } — words가 있으면 그 단어(게임/선반에서 온 것), 없으면 id의 묶음
   const [view, setView] = useState(null) // 게임/선반: { kind:'game', mode, from? } | { kind:'shelf' }
   const [level, setLevel] = useState('phonics')
@@ -224,7 +227,13 @@ export default function PictureWordPractice({ onExit }) {
   const withWords = (list, mode) => { setView(null); setSel({ id: 'words', words: list, seed: newSeed(), mode }) }
   const game = (mode, from) => { setSel(null); setView({ kind: 'game', mode, from }) }
   let body
-  if (view) {
+  if (view && view.kind === 'phonics') {
+    body = (
+      <React.Suspense fallback={<p className="text-center text-sm text-gray-500">불러오는 중...</p>}>
+        <PhonicsAdventure key={view.game} game={view.game} studentId={studentId} onMenu={() => setView(null)} onExit={onExit} />
+      </React.Suspense>
+    )
+  } else if (view) {
     body = (
       <React.Suspense fallback={<p className="text-center text-sm text-gray-500">불러오는 중...</p>}>
         <PictureGames key={view.kind + (view.mode || '')} kind={view.kind} mode={view.mode} level={level} from={view.from} onPractice={(l) => withWords(l, 'practice')} onTest={(l) => withWords(l, 'test')} onMenu={() => setView(null)} onExit={onExit} />
@@ -246,6 +255,14 @@ export default function PictureWordPractice({ onExit }) {
           <button type="button" data-testid="pwg-mode-practice" className={`${SOFT} px-1 text-sm`}>단어 연습</button>
           <button type="button" data-testid="pwg-mode-hammer" onClick={() => game('hammer')} className={`${SOFT} px-1 text-sm`}>알파벳 망치</button>
           <button type="button" data-testid="pwg-mode-hidden" onClick={() => game('hidden')} className={`${SOFT} px-1 text-sm`}>숨은 글자</button>
+        </div>
+        <div data-testid="pha-entry" className="space-y-1 rounded-2xl border-2 border-sky-200 bg-white p-2">
+          <p className="text-center text-base font-black text-sky-700">Phonics Adventure (시제품)</p>
+          <p className="text-center text-xs font-bold text-gray-500">{PHONICS_LABEL_KO}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" data-testid="pwg-mode-bubble" onClick={() => { setSel(null); setView({ kind: 'phonics', game: 'bubble' }) }} className={`${SOFT} px-1 text-sm`}>Sound Bubble Pop</button>
+            <button type="button" data-testid="pwg-mode-train" onClick={() => { setSel(null); setView({ kind: 'phonics', game: 'train' }) }} className={`${SOFT} px-1 text-sm`}>Word Train</button>
+          </div>
         </div>
         <button type="button" data-testid="pwg-mode-shelf" onClick={() => setView({ kind: 'shelf' })} className={`${SOFT} w-full`}>가게 구경</button>
         <p className="text-center text-sm text-gray-600">연습하거나 시험 볼 묶음을 골라요</p>

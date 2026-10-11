@@ -2106,3 +2106,7 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testPictureWordGames.mjs`(140): `sfx.js` 설정 기본값/클램프/구독/저장(가짜 storage, AudioContext 없음에서도 throw 없음, 가짜 AudioContext로 호출당 새 오실레이터·꺼짐/볼륨 0 무음) + 소스 핀(오디오 파일·패키지 0, AudioContext는 playSfx 안에서만, 저장 키 1개, 연습 카드/녹음기에 sfx 없음, `#F472B6` 카드, reduced-motion이 모든 애니메이션을 덮음, 애니메이션 150~300ms / 반짝이 ≤ 600ms). `testPictureWords.mjs`의 저장/AudioContext 금지 핀은 `sfx.js` 한 파일만 예외.
 - 브라우저 `pictureWordGames.spec.mjs`(148): `AudioContext.prototype.createOscillator` 감싸기로 소리 시작/주파수를 센다(sx1~sx4, 동작 줄이기, d1 디자인 3 해상도 x 4 화면). `pictureWordPractice.spec.mjs`(107): 카드 녹음 동안 효과음 오실레이터 0(가짜 마이크의 합성 오실레이터는 제외).
 
+
+### 253차 추가 (2026-10-11): 파닉스 어드벤처 시제품
+- `scripts/testPhonicsGames.mjs`(50): 표 20행이 learnable 그림 단어(id·en·asset·ko)로 전부 해석, 자소 합 = 단어, 자소·음소 1:1, `unitId null`/`orderConfirmed false`; `bubbleRound`(4개 서로 다른 옵션, 정답 1개, 오답의 첫 음소가 목표와 다름) / `bubblePick`(오답 잠금) / `trainRound`(자소+방해 1, 이중자 한 타일, 정답 순서로 시작하지 않음) / `trainTap`(풀이·오답 카운트·사용한 타일 무시)를 전 항목 x 시드 20개로 검증, `phonicsAttempt` 필드, 소스 핀(네트워크·저장·보상·Unit/단원/단계 문구 없음, 발음 호출은 단어 전체만, reduced-motion 분기).
+- 브라우저 `tests/e2e/phonicsGames.spec.mjs`(106): 어떤 단어인지 `speechSynthesis.speak` 텍스트로 알아내므로 답 전 DOM에 단어가 없음을 직접 확인한다. 안 누른 풍선 속성/클래스 동일, 도전 모드 힌트 미마운트, pop/right 효과음 주파수(880/660Hz), 발음 지연 ≥ 300ms, Word Train 순서·흔들림·출발 전환(0.25s+0.6s), 360x640 터치, 3 해상도 레이아웃, 소리 끔 오실레이터 0, 동작 줄이기, 일반 학생 청크 0, TTS q는 항상 단어 전체. 풍선이 계속 떠 있어 마우스 클릭은 force(Playwright "안정됨" 대기 회피).
