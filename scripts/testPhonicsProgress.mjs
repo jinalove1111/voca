@@ -58,12 +58,12 @@ ok(JSON.stringify(F1) === before, 'views do not mutate their input')
 // ---- the FICTIONAL sample
 const ST = S.SAMPLE_STUDENTS
 ok(S.SAMPLE_NOTICE_KO === '샘플 데이터 — 실제 학생 기록이 아닙니다', 'sample notice text')
-ok(S.SAMPLE_CLASS_NAME === '샘플반' && ST.length === 6, 'class 샘플반 with six students')
-eq(ST.map((s) => s.name), ['A', 'B', 'C', 'D', 'E', 'F'].map((x) => `샘플 학생 ${x}`), 'sample names')
-eq(ST.map((s) => s.id), [1, 2, 3, 4, 5, 6].map((x) => `sample-000${x}`), 'sample ids')
+ok(S.SAMPLE_CLASS_NAME === '샘플반' && ST.length === 7, 'class 샘플반 with seven students (G has no records)')
+eq(ST.map((s) => s.name), ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((x) => `샘플 학생 ${x}`), 'sample names')
+eq(ST.map((s) => s.id), [1, 2, 3, 4, 5, 6, 7].map((x) => `sample-000${x}`), 'sample ids')
 ok(ST.every((s) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id) && s.name.startsWith('샘플')), 'no id is UUID-shaped; names start with 샘플')
 ok(JSON.stringify(ST) === JSON.stringify(S2.SAMPLE_STUDENTS), 'sample data is deterministic (two imports equal)')
-ok(ST.every((s) => s.records.length >= 30 && s.records.length <= 80), `30-80 records each: ${ST.map((s) => s.records.length)}`)
+ok(ST.slice(0, 6).every((s) => s.records.length >= 30 && s.records.length <= 80) && ST[6].records.length === 0, `30-80 records each, G none: ${ST.map((s) => s.records.length)}`)
 const UNIT_IDS = new Set(C.BOOKS.flatMap((b) => b.units.map((u) => `${b.id}/${u.id}`)))
 const PHONEMES = new Set(D.PHONICS_ITEMS.flatMap((i) => i.phonemes))
 const ITEM_IDS = new Set(D.PHONICS_ITEMS.map((i) => i.id))
@@ -85,6 +85,35 @@ for (const f of ['src/utils/phonics/progress.js', 'src/data/phonics/sampleProgre
   if (!exists(f)) { ok(false, `${f} missing`); continue }
   ok(!NO_IO.test(read(f)), `${f}: no network, storage, clock or random`)
 }
+
+// ---- 260차 progress v2 functions on hand-computed fixtures
+const att2 = (at, ph, correct, b, u, itemId) => ({ v: 1, studentId: 'fx', gameId: 'bubble', bookId: b, unitId: u, step: 'bubble', targetPhonemes: [ph], itemId, correct, retries: 0, completed: true, at })
+const D1 = 86400000
+const F2 = [
+  att2(1, 'æ', false, 'b1', 'u1', 'word:hat'), att2(D1 + 1, 'æ', false, 'b1', 'u1', 'word:hat'), att2(D1 + 2, 'æ', false, 'b1', 'u1', 'word:hat'), att2(2 * D1, 'e', false, 'b1', 'u2', 'word:bed'),
+  att2(3, 'æ', true, 'b1', 'u1', 'word:map'),
+  test(10, 'b2', 'u1', 3, 5), test(20, 'b2', 'u1', 4, 5), test(30, 'b2', 'u2', 2, 5),
+]
+eq(P.repeatedMisses(F2), [{ itemId: 'word:hat', word: 'hat', sessions: 2, wrong: 3 }], 'repeatedMisses: hat missed on 2 days (3 wrong); bed only 1 day')
+const st = Object.fromEntries(P.unitStates(F2).map((x) => [`${x.bookId}/${x.unitId}`, x.state]))
+eq([st['b1/u1'], st['b1/u2'], st['b2/u1'], st['b2/u2'], st['b3/u1']], ['done', 'in-progress', 'done', 'needs-review', 'not-started'], 'unitStates: Book 1 u1 done (4 finished items >= 3), in-progress, done (test 4/5), needs-review (2/5 < 60 %), not-started')
+eq(P.latestTests(F2, 2).map((t) => [t.unitId, t.score, t.percent]), [['u2', 2, 40], ['u1', 4, 80]], 'latestTests newest first')
+const tt = P.testTrend(F2)
+eq([tt.overall.delta, tt.overall.first, tt.overall.latest.score, tt.overall.previous.score], [-2, false, 2, 4], 'overall trend: last test 2/5 vs previous 4/5 = -2')
+eq(tt.units.map((u) => [u.unitId, u.delta, u.first]), [['u1', 1, false], ['u2', null, true]], 'per-unit trend: b2/u1 +1, b2/u2 first test')
+eq(P.testTrend([]), { overall: null, units: [] }, 'trend of no records')
+const cls = [{ id: 'x1', name: 'x1', records: F2 }, { id: 'x2', name: 'x2', records: [test(1, 'b2', 'u1', 5, 5), test(2, 'b3', 'u1', 1, 5)] }, { id: 'x3', name: 'x3', records: [] }]
+eq(P.bookTestSummary(cls), [{ bookId: 'b2', no: 2, count: 4, avg: 70, min: 40, max: 100 }, { bookId: 'b3', no: 3, count: 1, avg: 20, min: 20, max: 20 }], 'bookTestSummary: b2 = (60+80+40+100)/4 = 70, b3 = 20')
+eq(P.phonemeErrorTable(cls).map((x) => [x.phoneme, x.attempts, x.wrong, x.rate, x.students]), [['e', 1, 1, 100, 1], ['æ', 4, 3, 75, 1]], 'phonemeErrorTable sorted by error rate')
+const wk = P.studentWeakAreas({ records: F2 })
+eq([wk.sounds, wk.units, wk.reason], [['æ'], ['Book 1 Unit 1', 'Book 1 Unit 2'], '/æ/ 3/4번 틀림'], 'studentWeakAreas')
+eq(P.studentWeakAreas({ records: [] }), { sounds: [], units: [], reason: '기록 없음' }, 'weak areas of an empty student')
+eq([P.emptyState([]).empty, P.emptyState([]).message, P.emptyState(F2)], [true, '아직 학습 기록이 없어요 — 첫 Unit을 시작해 볼까요?', { empty: false, message: null }], 'emptyState')
+// sample: G is empty, two students have two tests on one unit, no NaN/Infinity anywhere in the derived views
+ok(ST[6].records.length === 0 && P.emptyState(ST[6].records).empty, 'sample G has no records -> empty state')
+ok(ST.filter((s) => P.testTrend(s.records).units.some((u) => u.previous)).length >= 2, 'at least two sample students have two tests on the same unit')
+const bad = (v) => /NaN|Infinity/.test(JSON.stringify(v, (k, x) => (typeof x === 'number' && !Number.isFinite(x) ? 'NaN' : x)))
+ok(![...ST.map((s) => s.records), []].some((r) => [P.unitStates(r), P.latestTests(r), P.testTrend(r), P.repeatedMisses(r), P.bookProgress(r), P.recommendations(r), P.studentWeakAreas({ records: r })].some(bad)) && !bad([P.bookTestSummary(ST), P.phonemeErrorTable(ST), P.bookTestSummary([]), P.phonemeErrorTable([])]), 'no NaN/Infinity in any derived view (all samples + empty)')
 
 // ---- 257차 image audit numbers and the candidate isolation
 const needed = D.PHONICS_ITEMS.filter((i) => i.image === 'needed')
@@ -127,8 +156,8 @@ eq(vu({ duration: null }).errors, ['재생할 수 없는 파일'], 'unreadable a
 ok(!vu({ duration: NaN }).ok && vu({ duration: undefined }).ok, 'NaN duration is unreadable; undefined = not read yet')
 const wrong = vu({ name: 'my-voice.mp3' })
 ok(wrong.ok && wrong.warnings.length === 1 && wrong.warnings[0].includes('ph-01-a.mp3'), 'wrong file name only warns and shows the expected name')
-const bad = vu({ name: 'x.txt', size: 5, duration: null })
-ok(bad.errors.length === 3, 'each error reported')
+const badUp = vu({ name: 'x.txt', size: 5, duration: null })
+ok(badUp.errors.length === 3, 'each error reported')
 const upSrc = read('src/utils/phonics/recordingUpload.js')
 ok(!/fetch|XMLHttpRequest|localStorage|sessionStorage|indexedDB/.test(upSrc), 'recordingUpload.js has no network or storage')
 const walk = (d) => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${d}/${e.name}`) : [`${d}/${e.name}`]))

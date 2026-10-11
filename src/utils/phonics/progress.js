@@ -153,3 +153,82 @@ export function classWeakPhonemes(students) {
   return [...agg.values()].filter((a) => a.students > 0).map((a) => ({ ...a, rate: pct(a.wrong, a.attempts) }))
     .sort((a, b) => b.students - a.students || b.rate - a.rate || (a.phoneme < b.phoneme ? -1 : 1))
 }
+
+// ---- 260차 sample screens v2 (all pure; the UI uses only what it shows, the rest is tree-shaken)
+const DAY_MS = 86400000
+const testsOf = (records) => records.filter(isTest).sort(byAt)
+const tview = (t) => ({ bookId: t.bookId, unitId: t.unitId, score: t.unitTest.score, total: t.unitTest.total, percent: pct(t.unitTest.score, t.unitTest.total), at: t.at })
+
+// every unit in curriculum order: { bookId, unitId, state } — 'not-started' | 'in-progress' | 'done' | 'needs-review' (latest unit test < 60 %)
+export function unitStates(records) {
+  const done = unitDone(records)
+  const seen = new Set(records.filter((r) => isAttempt(r) || isTest(r)).map((r) => `${r.bookId}/${r.unitId}`))
+  const low = new Set(unitTestResults(records).filter((t) => t.percent < 60).map((t) => `${t.bookId}/${t.unitId}`))
+  return UNITS.map(({ b, u }) => {
+    const k = `${b.id}/${u.id}`
+    return { bookId: b.id, unitId: u.id, state: low.has(k) ? 'needs-review' : done.has(k) ? 'done' : seen.has(k) ? 'in-progress' : 'not-started' }
+  })
+}
+
+// the n newest unit tests, newest first
+export const latestTests = (records, n = 3) => testsOf(records).reverse().slice(0, n).map(tview)
+
+// { overall, units }: each entry { bookId, unitId, latest, previous, delta, first } over the last two tests; delta = score difference (null for a first test); overall = null with no test
+export function testTrend(records) {
+  const entry = (list) => {
+    const [latest, previous] = list.slice(-2).reverse().map(tview)
+    const delta = previous ? (latest.total === previous.total ? latest.score - previous.score : Math.round(((latest.percent - previous.percent) / 100) * latest.total)) : null
+    return { bookId: latest.bookId, unitId: latest.unitId, latest, previous: previous || null, delta, first: !previous }
+  }
+  const all = testsOf(records)
+  return { overall: all.length ? entry(all) : null, units: UNITS.map(({ b, u }) => all.filter((t) => t.bookId === b.id && t.unitId === u.id)).filter((l) => l.length).map(entry) }
+}
+
+// items answered wrong on >= 2 separate days: { itemId, word, sessions, wrong }
+export function repeatedMisses(records) {
+  const by = new Map()
+  for (const r of records.filter(isAttempt)) {
+    if (r.correct) continue
+    const s = by.get(r.itemId) || { itemId: r.itemId, word: ITEM_BY_ID.get(r.itemId)?.word || r.itemId, days: new Set(), wrong: 0 }
+    s.days.add(Math.floor(r.at / DAY_MS)); s.wrong++
+    by.set(r.itemId, s)
+  }
+  return [...by.values()].filter((s) => s.days.size >= 2).map((s) => ({ itemId: s.itemId, word: s.word, sessions: s.days.size, wrong: s.wrong }))
+    .sort((a, b) => b.sessions - a.sessions || b.wrong - a.wrong || (a.word < b.word ? -1 : 1))
+}
+
+// class level, every unit test of every student: [{ bookId, no, count, avg, min, max }] for books with >= 1 test (percent)
+export function bookTestSummary(students) {
+  const tests = students.flatMap((s) => s.records.filter(isTest))
+  return BOOKS.map((b) => {
+    const p = tests.filter((t) => t.bookId === b.id).map((t) => pct(t.unitTest.score, t.unitTest.total))
+    return { bookId: b.id, no: b.no, count: p.length, avg: pct(p.reduce((a, x) => a + x, 0), p.length * 100), min: Math.min(...p), max: Math.max(...p) }
+  }).filter((x) => x.count > 0)
+}
+
+// class level per sound that was attempted: { phoneme, attempts, wrong, rate, students } (students = those with >= 1 wrong); highest error rate first
+export function phonemeErrorTable(students) {
+  const agg = new Map()
+  for (const s of students) {
+    for (const [ph, v] of Object.entries(summarisePhonemes(sortedAttempts(s.records)))) {
+      const a = agg.get(ph) || { phoneme: ph, attempts: 0, wrong: 0, students: 0 }
+      a.attempts += v.attempts; a.wrong += v.wrong
+      if (v.wrong > 0) a.students++
+      agg.set(ph, a)
+    }
+  }
+  return [...agg.values()].map((a) => ({ ...a, rate: pct(a.wrong, a.attempts) })).sort((a, b) => b.rate - a.rate || b.wrong - a.wrong || (a.phoneme < b.phoneme ? -1 : 1))
+}
+
+// { sounds: [phoneme x<=3], units: [unit name x<=2 with the most wrong answers], reason } — rule-based, no AI
+export function studentWeakAreas(student) {
+  const sounds = weakPhonemes(student.records).slice(0, 3)
+  const miss = new Map()
+  for (const r of student.records.filter(isAttempt)) if (!r.correct) miss.set(`${r.bookId}/${r.unitId}`, (miss.get(`${r.bookId}/${r.unitId}`) || 0) + 1)
+  const units = [...miss.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 2).map(([k]) => unitName(...k.split('/')))
+  const reason = !student.records.length ? '기록 없음' : sounds.length ? `${sounds.map((w) => `${slash(w.phoneme)} ${w.wrong}/${w.attempts}번 틀림`).join(', ')}` : '반복해서 틀린 소리가 아직 없어요'
+  return { sounds: sounds.map((w) => w.phoneme), units, reason }
+}
+
+export const EMPTY_KO = '아직 학습 기록이 없어요 — 첫 Unit을 시작해 볼까요?'
+export const emptyState = (records) => { const empty = !records.some((r) => isAttempt(r) || isTest(r)); return { empty, message: empty ? EMPTY_KO : null } }

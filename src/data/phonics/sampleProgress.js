@@ -1,4 +1,4 @@
-// PAUL PHONICS learning-progress SAMPLE (257차). Entirely FICTIONAL: class `샘플반`, students `샘플 학생 A`…`F`, ids `sample-000N` (not UUIDs).
+// PAUL PHONICS learning-progress SAMPLE (257차). Entirely FICTIONAL: class `샘플반`, students `샘플 학생 A`…`G` (G has no records), ids `sample-000N` (not UUIDs).
 // Generated at import from a seeded generator over the real unit ids and phonemes: seeded, with a fixed base date (no random, no clock). Never real student data.
 import { BOOKS } from './curriculum.js'
 import { unitWords } from '../../utils/phonics/curriculum.js'
@@ -23,12 +23,13 @@ const UNITS = BOOKS.flatMap((b) => b.units.map((u) => ({ b, u })))
 
 // profile: units = how many units from Book 1 Unit 1 are covered; per = attempts per unit; base = base error chance; weak = { ipa: error chance }; tests = unit tests for covered non-Book-1 units; review = extra 'review' pass
 const PROFILES = [
-  { name: '샘플 학생 A', seed: 11, units: 14, per: 3, base: 0.12, weak: { ɪ: 0.7, e: 0.6 }, tests: true },
-  { name: '샘플 학생 B', seed: 22, units: 20, per: 3, base: 0.04, weak: {}, tests: true },
+  { name: '샘플 학생 A', seed: 11, units: 14, per: 3, base: 0.12, weak: { ɪ: 0.7, e: 0.6 }, tests: true, retest: 4 },
+  { name: '샘플 학생 B', seed: 22, units: 20, per: 3, base: 0.04, weak: {}, tests: true, retest: 5 },
   { name: '샘플 학생 C', seed: 33, units: 25, per: 2, base: 0.1, weak: { θ: 0.85, ð: 0.85 }, tests: true, focus: 3 },
   { name: '샘플 학생 D', seed: 44, units: 12, per: 4, base: 0.1, weak: { æ: 0.6, e: 0.6, ɪ: 0.6, ɒ: 0.6, ʌ: 0.6 }, tests: true },
   { name: '샘플 학생 E', seed: 55, units: 10, per: 3, base: 0.08, weak: { e: 0.85, ʌ: 0.85, s: 0.8 }, tests: true, review: true },
   { name: '샘플 학생 F', seed: 66, units: 2, per: 15, base: 0.2, weak: {}, tests: false },
+  { name: '샘플 학생 G', seed: 77, units: 0, per: 0, base: 0, weak: {}, tests: false },
 ]
 
 function make(p, index) {
@@ -59,6 +60,11 @@ function make(p, index) {
       records.push({ v: 1, studentId, bookId: b.id, unitId: u.id, unitTest: { score, total: 5 }, at: t + 30 * MIN })
     }
   })
+  if (p.retest) {
+    // a second test a week later on the first covered non-Book-1 unit, for the trend view (fixed score, no random draw)
+    const { b, u } = covered.find((x) => x.b.focus !== 'vowel-recognition')
+    records.push({ v: 1, studentId, bookId: b.id, unitId: u.id, unitTest: { score: p.retest, total: 5 }, at: BASE + 7 * DAY + 30 * MIN })
+  }
   if (p.review) {
     // the review pass happens two weeks later and the child now answers the earlier trouble sounds right
     covered.forEach(({ b, u }, ui) => {
