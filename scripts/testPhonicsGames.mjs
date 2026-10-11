@@ -259,6 +259,8 @@ for (const f of files.filter((x) => x.endsWith('.jsx'))) {
 const comps = files.filter((f) => f.endsWith('.jsx'))
 ok(comps.some((f) => /useReducedMotion/.test(read(f))), 'components have a reduced-motion branch')
 ok(/prefers-reduced-motion/.test(read('src/components/pictureWords/pictureImg.jsx') + comps.map(read).join('')), 'reduced-motion CSS present')
+const admin = read('src/components/AdminScreen.jsx')
+ok(/const PhonicsReviewPanel = React\.lazy\(\(\) => import\('\.\/admin\/PhonicsReviewPanel'\)\)/.test(admin) && !/import PhonicsReviewPanel/.test(admin) && admin.includes("['phonics','🔤 파닉스 검토']") && /tab === 'phonics' && <React\.Suspense/.test(admin), 'AdminScreen lazy-loads the phonics review tab under Suspense')
 const srcFiles = fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).filter((f) => /\.(jsx?|css)$/.test(f))
 ok(srcFiles.length > 100 && !srcFiles.some((f) => /Phonics Adventure/.test(read(path.join('src', f)))), `the name "Phonics Adventure" appears nowhere in src/ (${srcFiles.length} files)`)
 ok(!/playEn|playWordAudio|speak/.test(stripC(read('src/components/phonics/PhonemeListen.jsx'))), 'PhonemeListen never calls TTS')

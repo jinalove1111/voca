@@ -69,6 +69,7 @@ import CurriculumHub from './admin/CurriculumHub'
 import WordAssetPanel from './admin/WordAssetPanel'
 // 248차 - picture-word review (admin only; the 151 images load only inside this lazy chunk)
 const PictureWordReviewPanel = React.lazy(() => import('./admin/PictureWordReviewPanel'))
+const PhonicsReviewPanel = React.lazy(() => import('./admin/PhonicsReviewPanel'))
 
 // v3.12(2026-08-01) — 숙제 배정 저장(setTodaysAssignment/setAssignmentForDate)
 // 실패 메시지를 사람이 바로 행동할 수 있는 한국어로 다듬는다. HTTP 404(
@@ -1945,7 +1946,7 @@ export default function AdminScreen({ onBack }) {
 
         {/* Tabs */}
         <div className="no-print flex gap-2 mb-6 overflow-x-auto">
-          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['entrance','🏁 입실시험'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['curriculum','📚 커리큘럼'],['wordassets','🗂 단어자산'],['picturewords','🖼 그림단어'],['features','🎯 기능']].map(([k,l]) => (
+          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['entrance','🏁 입실시험'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['curriculum','📚 커리큘럼'],['wordassets','🗂 단어자산'],['picturewords','🖼 그림단어'],['phonics','🔤 파닉스 검토'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
@@ -2329,6 +2330,7 @@ export default function AdminScreen({ onBack }) {
         {tab === 'curriculum' && <CurriculumHub adminPin={pin} />}
         {tab === 'wordassets' && <WordAssetPanel adminPin={pin} />}
         {tab === 'picturewords' && <React.Suspense fallback={<p className="text-sm text-gray-400">불러오는 중…</p>}><PictureWordReviewPanel /></React.Suspense>}
+        {tab === 'phonics' && <React.Suspense fallback={<p className="text-sm text-gray-400">불러오는 중…</p>}><PhonicsReviewPanel /></React.Suspense>}
         {/* 2026-09-12 — authed(관리자 PIN 세션)를 Features 패널 권한 판정에 연결(canManageFeatures) */}
         {tab === 'features' && <FeatureManagementPanel adminSession={authed} />}
         {tab === 'debug' && <DebugPage />}
