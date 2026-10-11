@@ -62,6 +62,13 @@ _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
 
+## 2026-10-11 (253차) — Phonics Adventure 시제품: Sound Bubble Pop + Word Train (테스터 전용)
+- 그림 단어 선택 화면에 `Phonics Adventure (시제품)` 블록(`pwg-mode-bubble`, `pwg-mode-train`). 별도 lazy 청크(`PhonicsAdventure`, 약 13.6KB raw)이며 버튼을 눌러야만 받는다. 일반 학생은 진입도 청크 요청도 없음. 저장·네트워크·보상·새 저장 키·SQL·음원/이미지 파일 0, 새 의존성 0.
+- 교재 순서가 없으므로 모든 항목 `unitId null`/`orderConfirmed false`, 라벨은 "시제품 묶음 (교재 순서 아님)". 단독 음소 음원이 없어 글자/자소를 TTS로 보내지 않는다(발음은 단어 전체뿐) — Bubble Pop은 단어의 첫 소리를 묻는다. 상세: `docs/design/PHONICS_ADVENTURE_2026-10-11.md`.
+- 파일: `src/data/phonics/phonicsWords.js`(리드 표 20행 그대로), `src/utils/phonics/games.js`, `src/components/phonics/{SoundBubblePop,WordTrain,PhonicsAdventure}.jsx`, `pictureImg.jsx`(공유 CSS 추가), `sfx.js`(`pop` 보이스 추가), `PictureWordPractice.jsx`(진입 블록 + `studentId` 전달), `App.jsx`(`studentId` prop 1줄).
+- 테스트: `scripts/testPhonicsGames.mjs`(레지스트리 등록, extra:false), `tests/e2e/phonicsGames.spec.mjs`. 커밋 순서는 계약과 달리 2번(Bubble + sfx + CSS) / 3번(Train + 래퍼 + 진입) — 래퍼가 두 컴포넌트를 함께 import해 한 커밋씩 빌드 가능하도록 이렇게 나눴다.
+- 리드 확인 요청: 표 검토 결과 언어학적으로 바꿔야 할 행은 발견하지 못했다(`pics2/candy`의 단어가 "sweet"인 것만 그림(사탕)과 다름 — 의도된 영국식 표기로 보고 그대로 둠).
+
 ## 2026-10-11 (252차) — 그림 단어: 효과음 · 소리 설정 · 공통 카드 디자인
 - **효과음(`src/utils/pictureWords/sfx.js`)**: 오디오 파일·새 패키지 0, Web Audio 합성만. AudioContext는 `playSfx` 안에서 처음 만든다(사용자 탭 안, import/마운트 때는 안 만듦). 호출마다 새 오실레이터라 빠른 탭도 겹쳐 난다. 레시피: tap = 사인 190→95Hz 90ms / right = tap + 삼각파 660→990Hz(+50ms 시작, 150ms) / wrong = tap + 사인 230→165Hz(+50ms, 180ms, 낮고 부드러움) / success = 삼각파 C5 E5 G5 C6 아르페지오(80ms 간격, 410ms). 완성 순서: 마지막 탭에서 tap + success → 520ms 뒤 영국식 발음(겹치지 않음, 다음 단어/나가기 때 취소).
 - **소리 설정**: `SfxControl`(선택 화면 + 게임 화면). 저장 키는 `paulEasyVoca_pictureWordSfx` 하나(기기 설정, 학생 데이터 아님; 바꿀 때만 기록). 연습 카드/녹음 컨트롤은 효과음 0(마이크에 섞이지 않게) — 시험 문제 정오 피드백과 게임만 사용.
