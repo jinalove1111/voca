@@ -2133,3 +2133,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 
 ### 258차 추가 (2026-10-11): 안정성
 - `testPilotTownAllowlist`: onGoTown 핀을 2.5D 우선 3분기 식 전체로 교체(32단언). `testTownKitAssets`: kitSizes.js 동기 핀 1단언 추가(`testGrammarVillage`의 villageArt 핀은 kitSizes로 갱신).
+
+### 259차 추가 (2026-10-11): PAUL PHONICS Book 1
+- `scripts/testPhonicsGames.mjs`(368): Book 1 `skill`/입 모양 문구(`tipNeedsReview`, 따옴표 한글 한 음절·라틴 글자 0), 감지 라운드(옵션 정확히 [a, 다른 소리], 양쪽 정답, 시드 0..19, 기본 `bubbleRound` 불변), `trainRoundVowel`/`vowelTap`(도우미 = 비모음 전부, 빈 칸 1, 모음 타일 5), 소리 확인 세션(5문항·한 번 고름·점수), `missedItems`·`summarisePhonemes`가 `unitTest` 요약 기록을 무시, TTS 원시 호출 0 핀. `testPictureWordGames.mjs`(142): `hiddenRound` prefer(기본 불변), 망치 aria-label 핀을 "타일 자기 글자만"으로 좁힘.
+- `tests/e2e/phonicsGames.spec.mjs`(197): Book 1 허브 3묶음·next 1개·오늘 했어요·조용한 잠금·발음 기호 0, 소개 카드·갤러리·3–5, 감지 과제, 모음 Word Train, 소리 확인과 "다시 만나기", 360×640 `pbp-next` 화면 안(그림·글자 카드), 발음 겹침 0, Books 2~5 회귀. 듣기 버튼은 맥박(애니메이션)이라 마우스 클릭은 `force`(풍선과 같은 이유).
+- `pictureWordGames.spec.mjs`(150)·`pictureWordPractice.spec.mjs`(107): 망치 aria-label·완성 포커스 추가, 나머지 불변. 세 스펙 모두 `scripts/testBrowserE2E.mjs` 미등록(기존과 같음).

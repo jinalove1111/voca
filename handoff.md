@@ -1,4 +1,13 @@
 # Paul Easy Voca — Handoff
+## 259차 (2026-10-11): PAUL PHONICS Book 1 — 소리 알아듣기와 단어 읽기를 나누고 10단계 흐름·게임 다듬기
+- **무엇**: Book 1(단모음)은 자음 전이라 `skill: 'sound'`(자음은 회색 도우미 글자), Book 2~5는 `'reading'`. 허브는 10단계를 3묶음(만나요·말해요·놀아요)으로 보이고 purple "시작하기"는 다음 1개뿐, 한 행은 "✓ 오늘 했어요"(메모리 기록에서만 파생 — 저장·완료 아님), 잠긴 행은 버튼 없는 한 줄, 발음 기호 숨김. 2단계 "선생님 소리 듣기"는 녹음 0개라 조용히 잠김("선생님 목소리는 곧 만나요", 발음·오디오 0).
+- **게임**: Unit 1 Bubble Pop은 감지 과제(두 풍선 [a, 다른 소리], 8문제 = a 있는 단어 5 + 없는 단어 3) — **교육학 판단이라 needsReview**. 모든 풍선은 단어를 한 번 듣기 전에는 잠김, 정답 뒤 작은 카드로 `다음`이 360×640에 보임, 칭찬 3문구 순환, 연습/도전 토글 제거(소리 확인만 힌트 없음·한 번만 고름). Book 1 Word Train = 회색 도우미 칸 + 빈 모음 칸 1개 + 모음 타일 5개. 소리 확인 5문제 → `unitTest { score, total }` 메모리 기록 1건, "다시 만나기". 망치: 글자 이름/소리 음성을 넣지 않음(이유는 설계 문서), `aria-label`·완성 시 포커스. 숨은 글자: Unit 목표 글자 칸 먼저 가림. 그림 시험 오답은 amber.
+- **규칙 15**: 256차 이전 WordTrain/CSS로 임시 빌드해 256차 단언을 돌림 → FAIL이지만 이유는 결과 칸(`pwt-result`) 부재뿐, "기차가 돌아온다"는 재현 안 됨(원인 미확정은 그대로).
+- **검증**: dummy-env build OK, `testPhonicsGames` 368, `testPictureWordGames` 142, `testPhonicsProgress` 59, `testPictureWords` 754, `testBundleBudget` 33, `testLazyChunkGuards` 104, `testRegistryCoverage` 8, `testQaGate` 17 전부 PASS. 브라우저: `phonicsGames.spec` 197, `pictureWordGames.spec` 150, `pictureWordPractice.spec` 107.
+- **번들**: 핵심 JS 합계 2,182 KB → 2,192 KB(예산 2.2 MB, 남은 여유 ≈ 8.0 KB; PaulPhonics 청크 +8 KB). 예산·제외 규칙은 건드리지 않음.
+- **하지 않은 것**: 소리 녹음/이미지 생성 0, 관리자 파일·`progress.js` 등 소유 파일 수정 0, SQL 0, push 0. `SfxControl` 위치 이동(이미 화면당 한 번)·잘못 누른 타일의 클립 재생(녹음 0개)은 보류.
+- **정리 필요**: 저장소 훅이 재귀 강제 삭제 명령을 막아 임시 산출물이 남았다 — 안 쓰는 `dist-r15/`(빌드 산출물)와 `tests/e2e/_r15.spec.mjs`(규칙 15 탐침)는 추적되지 않은 채 있다. 사람이 지워도 된다.
+
 ## 258차 (2026-10-11): 안정성 — 낡은 onGoTown 핀 재고정 + 번들 -16.5 KB
 - **핀 드리프트 원인**: 66047a57이 `onGoTown`을 `paulTown2_5dEnabled ? proto25d : townV1Enabled ? town : null`로 의도적으로 확장해 `testPilotTownAllowlist`의 `onGoTown={townV1Enabled ?` 리터럴 핀이 낡음(verify:quiz FAIL). 제품 코드는 그대로, 핀을 식 전체(2.5D 분기 먼저 → townV1Enabled → town → `: null`)로 더 엄격히 교체. 변이 검증: `townV1Enabled ?`를 `true ?`로 바꾸면 32중 1 FAIL(원복함). verify:quiz 16개 스크립트 전부 PASS.
 - **번들**: 핵심 JS 합계 2.198 → 2.182 MB(-16.5 KB). `manifest-*.js`(19.6 KB)는 town kit manifest.json 전체(출처/품질 필드)를 런타임이 w/h만 쓰려고 번들한 것 → `scripts/town/buildKitSizes.mjs`가 만든 슬림 `kit/kitSizes.js`(2.9 KB)로 교체(worldArt/villageArt). `testTownKitAssets`가 동기 고정, `testGrammarVillage` 핀을 kitSizes로 갱신. 예산/제외 불변.
