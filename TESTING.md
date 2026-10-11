@@ -2155,3 +2155,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 263차 추가 (2026-10-12): Book 1 따라 말하기 5단어
 - `scripts/testPhonicsGames.mjs`(401): Book 1 Unit 1–5 단어 5개·Unit 순서, 그림 카드/글자 카드 수, 그림 시험·게임 목록은 그림 있는 단어만, 허브 say 행은 전체 단어·Books 2–5 pic 행은 ready만.
 - `tests/e2e/phonicsGames.spec.mjs`(217): 시나리오 (p) Unit 1–5 3–5단계 카드 5장, 글자 카드 img 0, 듣기 1단어, 글자 카드 녹음→재생→다시 말하기.
+
+### 264차 추가 (2026-10-12): 글자 카드 뜻 게이트
+- `scripts/testPhonicsGames.mjs`(418): 그림 없는 Book 1 단어 16개 전부 제안 보유, `APPROVED_KO`는 제안의 부분집합, 기본(빈 집합)에서 16개 모두 `ko === null`, 매개변수 집합을 넘기면 그 단어만 뜻이 생김, 그림 단어 `ko` 불변, 학생 코드의 `koProposed`/`PROPOSED_KO` 참조 0, Book 1 단어 목록 불변. SSR 4건: esbuild로 실제 `PracticeCards`를 묶어(브라우저 전용 의존성만 스텁) 미승인/승인 상태 마크업을 검증한다.
+- `tests/e2e/phonicsGames.spec.mjs`(247): (q) Book 1 Unit 4 따라 말하기를 360/768/1280에서 — 그림·글자 카드 크기(±1px)·테두리·그림자·배경 동일, 큰 단어 매트 안, 단어 탭 1회 = 발음 1건, 빠른 2번 탭, 승인 전 뜻 0줄. (r) Sound Bubble Pop 8문제·Word Train 5문제에서 답하기 전 단어·뜻이 글자·aria·alt에 없음.
+- `tests/e2e/phonicsReview.spec.mjs`(50): `phr-b1-ko` ×16 + "뜻 검토 필요", 요약 `뜻 승인 0 / 16`.
