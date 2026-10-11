@@ -124,7 +124,7 @@ ok(CANDS.every((w) => needed.some((i) => i.word === w) && new RegExp(`row\\('${w
 ok((candSrc.match(/row\('/g) || []).length === 7 && needed.length - CANDS.length === 98, '7 candidates, 98 new productions')
 const candPaths = [...candSrc.matchAll(/'(\.\.\/\.\.\/assets\/town\/[^']+)'/g)].map((m) => m[1])
 ok(candPaths.length === 3 && candPaths.every((p) => exists(`src/${p.slice(6)}`)), 'the 3 non-kit candidates import an existing asset')
-const srcPaths = [...candSrc.matchAll(/['`](?:src\/assets\/town\/|\$\{TOWN\})([^'`]+)['`]/g)].map((m) => `src/assets/town/${m[1]}`)
+const srcPaths = [...candSrc.matchAll(/'(src\/assets\/town\/|town kit: )([^']+)'/g)].map((m) => (m[1] === 'town kit: ' ? 'src/assets/town/kit/' : m[1]) + m[2])
 ok(srcPaths.length === 7 && srcPaths.every((p) => exists(p)) && !/import .*town\/kit/.test(candSrc) && (candSrc.match(/row\('\w+', null,/g) || []).length === 4, 'all 7 source files exist; the 4 kit candidates are path-text only (no kit import)')
 ok(/학습용 승인 필요/.test(candSrc) && /UNCERTAIN/.test(candSrc) && /MISMATCH/.test(candSrc), 'candidate note and rejected look-alikes recorded')
 // ---- 260차 image production priority
