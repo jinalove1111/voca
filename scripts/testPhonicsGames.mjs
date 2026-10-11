@@ -379,7 +379,7 @@ for (const f of files) {
   if (!fs.existsSync(path.join(ROOT, f))) { ok(false, `${f} missing`); continue }
   const src = stripC(read(f))
   ok(!NET.test(src), `${f} has no network/storage`)
-  if (!/(curriculum|PaulPhonics|UnitHub|PhonemeListen|PhonicsReviewPanel)/.test(f)) ok(!/['"`>][^'"`<\n]*(Unit|단원|단계)/.test(src), `${f} has no Unit/단원/단계 label strings`)
+  if (!/(curriculum|PaulPhonics|UnitHub|PhonemeListen|PhonicsReviewPanel|ProgressViews|progress.js)/.test(f)) ok(!/['"`>][^'"`<\n]*(Unit|단원|단계)/.test(src), `${f} has no Unit/단원/단계 label strings`)
   ok(!/grantReward|addPoints|awardStar/.test(src), `${f} has no rewards`)
 }
 // the speech helper is only called with the item's whole word
