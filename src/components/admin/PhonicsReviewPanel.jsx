@@ -203,16 +203,17 @@ function Book1() {
   const us = b.units.map((u) => ({ u, w: unitWords(b.id, u.id) }))
   const all = us.flatMap((x) => x.w)
   const n = (s) => all.filter((w) => w.image === s).length
+  const prop = all.filter((x) => x.koProposed)
   const five = RECORDINGS.slice(0, us.length)
   const jump = (ipa) => document.querySelector(`[data-ipa="${ipa}"]`)?.scrollIntoView({ block: 'center' })
   return (
     <section data-testid="phr-book1" className={SEC}>
       <p className={H}>Book 1 수업 준비</p>
-      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 준비 ${n('ready')} · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length}`}</p>
+      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 준비 ${n('ready')} · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length} · 뜻 승인 ${prop.filter((x) => x.ko).length} / ${prop.length}`}</p>
       {us.map(({ u, w }) => (
         <div key={u.id} data-testid="phr-b1-unit" className="mt-2 text-xs text-gray-700">
           <b className="text-gray-900">Unit {u.id.slice(1)} · {unitLabel(u)} /{u.targets[0].ipa}/</b> <span className={AMBER}>{STATUS_LABEL_KO[u.status]}</span>
-          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>))}</div>
+          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <><small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>{x.koProposed && <small data-testid="phr-b1-ko" className={`ml-1 ${ROSE}`}>{x.koProposed}{!x.ko && ' 뜻 검토 필요'}</small>}</>))}</div>
           {u.intro.tipKo} <span className={ROSE}>검토 필요</span>
         </div>
       ))}
