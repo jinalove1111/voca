@@ -240,6 +240,13 @@ export async function run(browser, baseURL) {
     r.check(`${name} 버튼 문구: 🔊 발음 듣기 / 🎤 따라 말하기 / ➡️ 다음 단어`, ((await T(page, 'pwp-listen').textContent()) || '').includes('🔊 발음 듣기') && ((await T(page, 'pwp-rec-record').textContent()) || '').includes('🎤 따라 말하기') && ((await T(page, 'pwp-next').textContent()) || '').includes('➡️ 다음 단어'))
     r.check(`${name} 카드 진입만으로 speak 0(자동재생 없음) + 마이크 요청 0`, (await page.evaluate(() => window.__speak.length)) === 0 && (await page.evaluate(() => window.__micTracks.length)) === 0)
     r.check(`${name} 그림이 실제로 로드됨(naturalWidth>0)`, await T(page, 'pwp-picture').evaluate((i) => i.complete && i.naturalWidth > 0))
+    // 262차 카드 디자인: 그림 상자는 정사각 흰 매트(contain, 잘림·늘림 없음), 분홍 테두리, 세 화면 너비에서 가로 넘침 0
+    for (const w of [1280, 768, 360]) {
+      await page.setViewportSize({ width: w, height: w === 360 ? 640 : 800 })
+      const m = await T(page, 'pwp-picture').evaluate((i) => { const b = i.getBoundingClientRect(), c = getComputedStyle(i), k = getComputedStyle(i.parentElement); return { w: b.width, h: b.height, fit: c.objectFit, bg: c.backgroundColor, pad: c.paddingLeft, border: k.borderTopColor, nat: i.naturalWidth, ok: i.complete } })
+      r.check(`${name} 카드 그림 상자 ${w}px: 정사각(|w-h|<=1) · contain · 흰 매트(padding>0) · 분홍 테두리 · 로드됨 · 가로 넘침 0`, Math.abs(m.w - m.h) <= 1 && m.w > 80 && m.fit === 'contain' && m.bg === 'rgb(255, 255, 255)' && parseFloat(m.pad) > 0 && m.border === 'rgb(244, 114, 182)' && m.ok && m.nat > 0 && (await overflow(page)) <= 0, JSON.stringify(m))
+    }
+    await page.setViewportSize({ width: 1280, height: 800 })
     // 듣기
     await T(page, 'pwp-listen').click()
     await page.waitForFunction(() => window.__speak.length >= 1, null, { timeout: 4000 }).catch(() => {})
