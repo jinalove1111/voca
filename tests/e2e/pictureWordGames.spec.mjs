@@ -203,7 +203,9 @@ export async function run(browser, baseURL) {
       if (i === 0) {
         r.check(`${name} phonics 단어(3~4글자)`, /^[a-z]{3,4}$/.test(w.en), w.en)
         const txt = (await T(page, 'pwh-root').innerText()).toLowerCase()
-        const attrs = await T(page, 'pwh-root').evaluate((root) => [...root.querySelectorAll('*'), root].flatMap((el) => [...el.attributes].map((a) => a.name)).filter((n) => /correct|answer|right|aria-label/i.test(n)))
+        const attrs = await T(page, 'pwh-root').evaluate((root) => [...root.querySelectorAll('*'), root].flatMap((el) => [...el.attributes].filter((a) => !(a.name === 'aria-label' && /^글자 \S$/.test(a.value))).map((a) => a.name)).filter((n) => /correct|answer|right|aria-label/i.test(n)))
+        const labels = await page.locator('[data-testid^="pwh-tile-"]').evaluateAll((l) => l.map((e) => [e.getAttribute('aria-label'), e.textContent]))
+        r.check(`${name} 259차: 망치 타일마다 aria-label "글자 x"(자기 글자만, 정답 순서 정보 없음)`, labels.length > 0 && labels.every(([a, t]) => a === `글자 ${t}`), JSON.stringify(labels))
         r.check(`${name} 완성 전: pwh-word 0개 / 화면 글에 단어 없음 / 정답 속성 0 / alt 그림`, (await T(page, 'pwh-word').count()) === 0 && !txt.includes(w.en) && attrs.length === 0 && (await T(page, 'pwh-picture').getAttribute('alt')) === '그림', JSON.stringify({ attrs, txt: txt.slice(0, 80) }))
         r.check(`${name} 타일·빈 칸 56px 이상(1280) + 한국어 뜻 표시`, await page.locator('[data-testid^="pwh-tile-"]').evaluateAll((l) => l.every((e) => { const b = e.getBoundingClientRect(); return b.height >= 55.9 && b.width >= 55.9 })) && (await page.locator('[data-testid^="pwh-slot-"][data-filled="false"]').evaluateAll((l) => l.every((e) => e.getBoundingClientRect().height >= 55.9 && e.getBoundingClientRect().width >= 55.9))) && ((await T(page, 'pwh-ko').textContent()) === w.ko))
         r.check(`${name} 시작만으로는 소리 재생 없음(자동재생 없음)`, (await page.evaluate(() => window.__speak.length)) === 0)
@@ -215,6 +217,7 @@ export async function run(browser, baseURL) {
       await T(page, 'pwh-word').waitFor({ state: 'visible', timeout: 5000 })
       r.check(`${name} 단어 ${i + 1}: 모든 칸 채움 → 단어/완료 표시`, (await T(page, 'pwh-word').textContent()) === w.en && (await T(page, 'pwh-root').getAttribute('data-done')) === 'true' && (await T(page, 'pwh-feedback').getAttribute('data-result')) === 'right')
       await page.waitForFunction((en) => window.__speak.includes(en), w.en, { timeout: 4000 }).catch(() => {})
+      if (i === 0) r.check(`${name} 259차: 완성하면 "다음 단어" 버튼에 포커스`, await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'pwh-next', null, { timeout: 2000 }).then(() => true).catch(() => false))
       const sp = await page.evaluate(() => window.__speak)
       r.check(`${name} 단어 ${i + 1}: 완성 후 발음 요청(speak 해당 단어)`, sp.includes(w.en), JSON.stringify(sp.slice(-2)))
       await T(page, 'pwh-next').click()
