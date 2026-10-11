@@ -4,9 +4,9 @@
   "task_id": "phonics-adventure-2026-10-11",
   "task": "Sound Bubble Pop + Word Train 시제품(테스터 전용, 저장/네트워크/보상 0)",
   "status": "working",
-  "progress": 70,
+  "progress": 85,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T04:44:27.075Z",
+  "updated_at": "2026-10-11T04:56:01.775Z",
   "files_owned": [
     "src/data/phonics/phonicsWords.js",
     "src/utils/phonics/games.js",
@@ -18,14 +18,15 @@
     "src/components/phonics/WordTrain.jsx",
     "src/components/phonics/PhonicsAdventure.jsx",
     "src/components/pictureWords/PictureWordPractice.jsx",
-    "src/App.jsx"
+    "src/App.jsx",
+    "tests/e2e/phonicsGames.spec.mjs"
   ],
   "files_read": [
     "src/components/pictureWords/*",
     "src/utils/pictureWords/*",
     "tests/e2e/pictureWordGames.spec.mjs"
   ],
-  "summary": "Word Train + 세션 래퍼 + 피커 진입 + studentId 전달",
+  "summary": "브라우저 스펙 106/106, 기존 게임 148/148, 연습 107/107 통과",
   "blocker": null,
   "next_action": ""
 }
