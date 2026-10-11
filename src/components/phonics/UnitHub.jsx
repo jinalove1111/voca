@@ -53,7 +53,7 @@ export default function UnitHub({ bookId, unitId, records, onBack, onSession, on
       <Step n={1} title="소리 듣기" state={hasWords && allClips ? 'ready' : 'locked'} reason={allClips && hasWords ? '' : hasWords ? LOCKED_TEXT_KO : none}>
         <div className="mt-2 space-y-1">{unit.targets.map((x) => <PhonemeListen key={x.pair} target={x} />)}</div>
       </Step>
-      <Step n={2} title="듣고 따라 말하기" state={hasWords && allClips ? 'ready' : 'locked'} reason={allClips && hasWords ? '' : '소리 하나씩 따라 말하려면 선생님 녹음이 있어야 해요. 단어 따라 말하기는 3번에서 해요.'}>
+      <Step n={2} title="듣고 따라 말하기" state={hasWords && allClips ? 'ready' : 'locked'} reason={allClips && hasWords ? '' : `${LOCKED_TEXT_KO} — 소리 하나씩 따라 말하려면 선생님 녹음이 있어야 해요. 단어 따라 말하기는 3번에서 해요.`}>
         {allClips && hasWords && <div className="mt-2 space-y-1">{unit.targets.map((x) => <PhonemeListen key={x.pair} target={x} repeat />)}</div>}
       </Step>
       <Step n={3} title="그림과 단어" state={hasWords ? 'ready' : 'locked'} reason={hasWords ? '그림을 보고 단어를 듣고 따라 말해요' : none} go={() => onPractice(words)} />
