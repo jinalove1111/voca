@@ -87,7 +87,7 @@ function CandidateSection({ list }) {
       <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {IMAGE_CANDIDATES.map((c) => (
           <li key={c.word} data-testid="phr-candidate" data-word={c.word} className="min-w-0 rounded-xl bg-gray-50 p-2 text-center text-xs text-gray-700">
-            <img src={c.url} alt={c.word} draggable={false} className="mx-auto h-24 w-24 bg-white object-contain" />
+            {c.url ? <img src={c.url} alt={c.word} draggable={false} className="mx-auto h-24 w-24 bg-white object-contain" /> : <p className="mx-auto flex h-24 w-24 items-center justify-center bg-white text-[10px] font-bold text-gray-500">마을 kit 그림 — 파일 경로만 표시</p>}
             <p className="mt-1 font-black text-gray-900">{c.word}</p>
             <p className="break-all text-[10px] text-gray-500">{c.source}</p>
             <p className="font-black text-rose-700">승인 필요 — 학생 화면에 사용 안 함</p>
