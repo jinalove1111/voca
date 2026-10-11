@@ -38,6 +38,22 @@ export function bubblePick(state, optionIndex) {
   return { ...state, done: true, last: 'right' }
 }
 
+
+// The spelled word as parts for display; the target grapheme's letters are marked hl (a split digraph marks BOTH its letters, e.g. c a k e -> a and e).
+export function spellParts(graphemes, targetIndex = -1) {
+  const parts = []
+  let tail = null
+  graphemes.forEach((g, i) => {
+    const m = /^(.+)_e$/.exec(g)
+    if (m) { parts.push({ t: m[1], hl: i === targetIndex }); tail = { t: 'e', hl: i === targetIndex } } else {
+      parts.push({ t: g, hl: i === targetIndex })
+      if (tail) { parts.push(tail); tail = null }
+    }
+  })
+  if (tail) parts.push(tail)
+  return parts
+}
+
 // ---- Word Train: tap grapheme tiles in order (digraphs are ONE tile) + exactly one distractor tile
 // opts.learned = 'grapheme|ipa' pairs taught so far: the distractor tile must be one of those graphemes (none if there is none).
 const EXTRA = ['a', 'e', 'i', 'o', 'u', 'b', 'd', 'm', 'n', 't', 'sh', 'ch', 'oo', 'ee']
