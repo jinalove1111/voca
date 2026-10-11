@@ -37,8 +37,8 @@ export async function run(browser, baseURL) {
     const sum = await txt(page, 'phr-summary')
     r.check('헤더 문구: 구조만 승인, 모든 Unit 임시', ((await T(page, 'phr-root').innerText()) || '').includes('PAUL PHONICS 관리자 검토 자료 — 구조만 승인, 모든 Unit 임시'))
     const chip = async (k) => txt(page, `phr-chip-${k}`)
-    r.check('요약: Unit 43 · 승인 0 · 단어 197', (await chip('unit')) === 'Unit 43' && (await chip('approved')) === '승인 0' && (await chip('words')) === '단어 197', sum)
-    r.check('요약: 이미지 제작 대기 94 · 그림 없이 학습 71 · 그림 준비 32 (94 + 71 + 32 = 197)', (await chip('needed')) === '이미지 제작 대기 94' && (await chip('free')) === '그림 없이 학습 71' && (await chip('ready')) === '그림 준비 32', sum)
+    r.check('요약: Unit 43 · 승인 0 · 단어 210', (await chip('unit')) === 'Unit 43' && (await chip('approved')) === '승인 0' && (await chip('words')) === '단어 210', sum)
+    r.check('요약: 이미지 제작 대기 105 · 그림 없이 학습 73 · 그림 준비 32 (105 + 73 + 32 = 210)', (await chip('needed')) === '이미지 제작 대기 105' && (await chip('free')) === '그림 없이 학습 73' && (await chip('ready')) === '그림 준비 32', sum)
     r.check('요약: 녹음 필요 42 · 녹음 승인 0 · 배우지 않은 소리가 필요한 단어 0', (await chip('rec')) === '녹음 필요 42' && (await chip('recok')) === '녹음 승인 0' && (await chip('unlearned')) === '배우지 않은 소리가 필요한 단어 0', sum)
 
     const counts = []
@@ -53,7 +53,7 @@ export async function run(browser, baseURL) {
     const cl = await Promise.all(['b4-u8', 'b4-u9', 'b4-u10', 'b4-u11'].map(row))
     r.check('b4 자음군 4행: "녹음 불필요" + Bubble Pop 없음 + Word Train 있음', cl.every((t) => t.includes('녹음 불필요') && !t.includes('Bubble Pop') && t.includes('Word Train')), JSON.stringify(cl.map((t) => t.slice(0, 40))))
     const r1 = await row('b5-u12')
-    r.check('b5-u12 행: 게임은 철자 게임 둘뿐(Bubble Pop·Word Train 없음), 음성 승인 0 / 필요 1', !r1.includes('Bubble Pop') && !r1.includes('Word Train') && r1.includes('Alphabet Hammer') && r1.includes('승인 0 / 필요 1'), r1)
+    r.check('b5-u12 행: Word Train + 철자 게임 둘(Bubble Pop 없음), 음성 승인 0 / 필요 1', !r1.includes('Bubble Pop') && r1.includes('Word Train') && r1.includes('Alphabet Hammer') && r1.includes('승인 0 / 필요 1'), r1)
     const markers = await T(page, 'phr-unit-b2-u1').locator('[data-image]').evaluateAll((l) => l.map((e) => `${e.getAttribute('data-image')}:${e.textContent.trim()}`))
     r.check('b2-u1 대표 단어 5개: 전부 🔤/⏳ 표시(그림 준비 0), 이미지 준비 0 / 5', markers.length === 5 && markers.every((m) => !m.startsWith('ready')) && (await row('b2-u1')).includes('0 / 5'), JSON.stringify(markers))
     r.check('b5-u7 행: ou /uː/ 예외 철자와 재사용 /uː/ 표시', (await row('b5-u7')).includes('soup, group, you') && (await row('b5-u7')).includes('재사용'), await row('b5-u7'))
@@ -61,11 +61,11 @@ export async function run(browser, baseURL) {
 
     const need = await page.locator('[data-testid="phr-need-image-item"]').allTextContents()
     const free = await page.locator('[data-testid="phr-no-image-item"]').allTextContents()
-    r.check('이미지 제작 대기 94개(cat, zoo 포함, this 없음)', need.length === 94 && need.includes('cat') && need.includes('zoo') && !need.includes('this') && (await txt(page, 'phr-need-image-count')) === '94', String(need.length))
-    r.check('그림 없이 학습 71개(this 포함, cat 없음)', free.length === 71 && free.includes('this') && !free.includes('cat') && (await txt(page, 'phr-no-image-count')) === '71', String(free.length))
+    r.check('이미지 제작 대기 105개(cat, zoo 포함, this 없음)', need.length === 105 && need.includes('cat') && need.includes('zoo') && !need.includes('this') && (await txt(page, 'phr-need-image-count')) === '105', String(need.length))
+    r.check('그림 없이 학습 73개(this 포함, cat 없음)', free.length === 73 && free.includes('this') && !free.includes('cat') && (await txt(page, 'phr-no-image-count')) === '73', String(free.length))
     const recs = await page.locator('[data-testid="phr-recording"]').evaluateAll((l) => l.map((e) => ({ s: e.getAttribute('data-status'), t: e.innerText })))
     r.check('녹음 필요 42행 전부 상태 대기', recs.length === 42 && recs.every((x) => x.s === 'pending' && x.t.includes('대기')) && (await txt(page, 'phr-recordings-count')) === '42', String(recs.length))
-    r.check('방언 메모 9개', (await page.locator('[data-testid="phr-dialect"] li').count()) === 9)
+    r.check('방언 메모 11개', (await page.locator('[data-testid="phr-dialect"] li').count()) === 11)
     r.check('편집 컨트롤 없음(input/textarea/select 0, 승인·저장 버튼 0)', (await T(page, 'phr-root').locator('input, textarea, select').count()) === 0 && (await T(page, 'phr-root').locator('button').count()) === 0)
 
     r.check('1280px 가로 넘침 없음', (await overflow(page)) <= 0, String(await overflow(page)))

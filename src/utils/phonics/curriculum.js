@@ -131,30 +131,36 @@ export const unitTestLock = (book) => (book.focus === 'vowel-recognition' ? BOOK
 // Sound Bubble Pop session of a unit: its own bubble-able words + up to `count` review items from EARLIER units (seeded, each with ITS OWN unit as `origin` and its own target),
 // so a single-target unit is not the same answer all the way through. The first unit of Book 1 has no earlier unit, so it has no review items.
 // Review items prefer target graphemes the unit does not teach itself and each grapheme at most once; contrast units are not drawn from. Order is shuffled.
-export function bubbleSession(bookId, unitId, seed, count = 3) {
+// Every earlier-unit bubble word a unit's session may draw review items from (book order, unit order; deduped by id; carries its own `origin`).
+export function bubbleReviewPool(bookId, unitId) {
   const ctx = unitContext(bookId, unitId)
   if (!ctx || ctx.unit.review) return []
-  const okFor = (w) => hasGame(w, 'B') && w.targetIndex >= 0 && bubbleRound(w, 0, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctx.optionPairs })
-  const own = ctx.words.filter(okFor)
-  if (!own.length) return []
-  const seen = new Set(own.map((w) => w.id))
+  const own = new Set(ctx.words.map((w) => w.id))
   const pool = []
   for (const b of BOOKS) {
     for (const u of b.units) {
-      if (b.id === bookId && u.id === unitId) break
+      if (b.id === bookId && u.id === unitId) return pool
       if (u.kind === 'contrast') continue
       for (const w of slotsOf(u)) {
-        if (seen.has(w.id) || !okFor(w)) continue
-        seen.add(w.id)
+        if (own.has(w.id) || !hasGame(w, 'B') || w.targetIndex < 0 || !bubbleOk(w, ctx)) continue
+        own.add(w.id)
         pool.push({ ...w, origin: { bookId: b.id, unitId: u.id } })
       }
     }
-    if (b.id === bookId) break
   }
+  return pool
+}
+const bubbleOk = (w, ctx) => !!bubbleRound(w, 0, undefined, { targetIndex: w.targetIndex, optionPairs: w.optionPairs || ctx.optionPairs })
+
+export function bubbleSession(bookId, unitId, seed, count = 3) {
+  const ctx = unitContext(bookId, unitId)
+  if (!ctx || ctx.unit.review) return []
+  const own = ctx.words.filter((w) => hasGame(w, 'B') && w.targetIndex >= 0 && bubbleOk(w, ctx))
+  if (!own.length) return []
   const r = rng(seed)
   const taken = new Set(own.map((w) => w.graphemes[w.targetIndex]))
   const review = []
-  for (const w of shuffled(pool, r)) {
+  for (const w of shuffled(bubbleReviewPool(bookId, unitId), r)) {
     const g = w.graphemes[w.targetIndex]
     if (taken.has(g)) continue
     taken.add(g)
