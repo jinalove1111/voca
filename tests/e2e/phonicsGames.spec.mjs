@@ -146,8 +146,16 @@ async function bubbleItem(page, i, { words, allowed = null, vowelOnly = false, t
   await click(page, T(page, good.id), touch)
   await T(page, 'pbp-next').waitFor({ state: 'visible', timeout: 3000 })
   info.popClass = await T(page, good.id).evaluate((e) => e.classList.contains('pbp-pop'))
-  // 그림이 있는 단어는 카드 1개 + 뜻, 그림 없는 단어는 <img>·카드 0개이고 뜻은 있을 때만
-  info.card = (await T(page, 'pbp-reveal').locator('.pw-card').count()) === (item.picture ? 1 : 0) && (await T(page, 'pbp-reveal').locator('img').count()) === (item.picture ? 1 : 0) && (await T(page, 'pbp-word').textContent()) === item.word
+  // 그림이 있는 단어는 그림 카드 1개 + 뜻, 그림 없는 단어는 <img> 0개의 글자 카드(pw-card--text) 1개이고 뜻은 있을 때만
+  const cardBox = await T(page, 'pbp-reveal').evaluate((el, hasPic) => {
+    // 257차: 그림 없는 단어도 같은 pw-card 가족(pw-card--text, 분홍 테두리, "듣기 단어" 태그, <img> 없음); 그림 단어는 정사각 그림 상자(object-fit: contain)
+    const c = el.querySelector('.pw-card')
+    if (!c) return false
+    const text = c.classList.contains('pw-card--text')
+    if (hasPic) { const img = c.querySelector('img'); const b = img.getBoundingClientRect(); return !text && Math.abs(b.width - b.height) <= 1 && getComputedStyle(img).objectFit === 'contain' }
+    return text && getComputedStyle(c).borderTopColor === 'rgb(244, 114, 182)' && c.textContent.includes('듣기 단어') && !c.querySelector('img') && c.getBoundingClientRect().right <= window.innerWidth + 0.5
+  }, !!item.picture)
+  info.card = cardBox && (await T(page, 'pbp-reveal').locator('.pw-card').count()) === 1 && (await T(page, 'pbp-reveal').locator('img').count()) === (item.picture ? 1 : 0) && (await T(page, 'pbp-word').textContent()) === item.word
     && ((await T(page, 'pbp-ko').count()) === (item.ko ? 1 : 0)) && (!item.ko || (await T(page, 'pbp-ko').textContent()) === item.ko) && (item.picture || (await T(page, 'pbp-root').locator('img').count()) === 0)
   info.hl = await T(page, 'pbp-word').evaluate((e) => [...e.querySelectorAll('[data-hl]')].map((x) => x.textContent).join(''))
   info.hlOk = info.hl === tg.replace('_', '')
@@ -199,7 +207,7 @@ async function trainItem(page, i, { allowed = null, touch = false, wrongFirst = 
   if ((await T(page, 'pwt-root').getAttribute('data-item-index')) !== String(i)) throw new Error(`train index ${i}`)
   const L = await leakState(page, 'pwt-root', item)
   info.leak0 = !L.hasWord && L.attrs.length === 0 && (await T(page, 'pwt-word').count()) === 0 && (await T(page, 'pwt-spelled').count()) === 0
-    && (hasPic ? (await T(page, 'pwt-picture').getAttribute('alt')) === '그림' && L.hasKo === !!item.ko : L.imgs === 0 && (await T(page, 'pwt-listen-only').count()) === 1 && ((await T(page, 'pwt-listen-only').textContent()) || '').includes('잘 듣고 소리 블록을 이어 보세요') && (await T(page, 'pwt-ko').count()) === (item.ko ? 1 : 0))
+    && (hasPic ? (await T(page, 'pwt-picture').getAttribute('alt')) === '그림' && L.hasKo === !!item.ko : L.imgs === 0 && (await T(page, 'pwt-text-card').count()) === 1 && (await T(page, 'pwt-text-card').evaluate((c) => c.classList.contains('pw-card--text') && c.textContent.includes('듣기 단어'))) && (await T(page, 'pwt-listen-only').count()) === 1 && ((await T(page, 'pwt-listen-only').textContent()) || '').includes('잘 듣고 소리 블록을 이어 보세요') && (await T(page, 'pwt-ko').count()) === (item.ko ? 1 : 0))
   const ts0 = await trainTiles(page)
   info.tiles = ts0.length === item.graphemes.length + 1 && item.graphemes.every((g) => ts0.some((t) => t.t === g)) && ts0.filter((t) => !item.graphemes.includes(t.t)).length === 1
   info.learnedTiles = !allowed || ts0.every((t) => allowed.has(t.t))
