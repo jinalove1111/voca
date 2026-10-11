@@ -16,9 +16,7 @@ const OVER_BUDGET_OK = new Set(['backgrounds/plaza-topdown'])
 
 // kitSizes.js(런타임이 import하는 슬림 w/h 표)가 manifest.json과 동기인지 고정
 const { kitSizesSource } = await import('./town/buildKitSizes.mjs')
-ok(fs.readFileSync(path.join(KIT, 'kitSizes.js'), 'utf8').replace(/
-/g, '
-') === kitSizesSource(), 'kitSizes.js is in sync with manifest.json (run node scripts/town/buildKitSizes.mjs)')
+ok(fs.readFileSync(path.join(KIT, 'kitSizes.js'), 'utf8').replaceAll('\r\n', '\n') === kitSizesSource(), 'kitSizes.js is in sync with manifest.json (run node scripts/town/buildKitSizes.mjs)')
 
 const expected = new Set(['manifest.json'])
 for (const t of entries) {
