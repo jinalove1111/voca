@@ -145,3 +145,41 @@ Paul Town 그림이며 학습용으로 승인된 것이 아니다. 관리자 검
 2. 그림단어 관리자 탭에서 승인한다 — 승인된 그림만 `src/data/pictureWords`에 들어온다.
 3. 같은 영어 단어의 승인된 그림이 생기면 단어 표가 자동으로 `image: 'ready'`로 바꾼다(코드 변경 없음).
 4. 그 전까지 이 단어들은 "듣기 단어" 카드(글자 카드)로 학습한다.
+
+## 우선순위 (260차, 2026-10-11)
+
+제작 우선순위는 단어가 처음 나오는 Book으로 정한다: P1 = Book 1, P2 = Book 2, P3 = Book 3~5. 관리자 검토 탭 단어 표에서 P1/P2/P3로 거를 수 있다.
+
+**그림 파일은 만들지 않았다.** 이 환경에는 이미지 생성 도구가 없고, 이 문서는 제작 대기 목록과 그리기 지시만 정리한다.
+
+재확인: 제작 대기 105개를 승인된 그림 단어와 다시 대조했다. 이름이 겹쳐 보이는 `dog`(dog bowl, hot dog), `rope`(skipping rope), `boot`(wellington boot)는 서로 다른 그림이라 계속 제작 대기다. 같은 그림인 중복은 없었다.
+
+| 우선순위 | 개수 |
+|---|---|
+| P1 | 13 |
+| P2 | 14 |
+| P3 | 78 |
+
+### P1 (Book 1) — 그리기 지시
+
+- bed — 침대 한 개(옆에서, 베개 포함)
+- box — 뚜껑 열린 골판지 상자
+- bus — 2층 버스
+- cat — 앉아 있는 고양이 한 마리(기존 마을 후보 재사용 가능)
+- dog — 서 있는 강아지 한 마리(그릇·핫도그 아님)
+- hat — 챙 있는 모자 하나
+- lip — 입술(얼굴 아래쪽)
+- map — 접힌 종이 지도 한 장
+- mug — 손잡이 달린 머그컵
+- nut — 껍질째 호두 한 알
+- pig — 분홍색 돼지 한 마리
+- pot — 손잡이 둘 달린 요리용 냄비
+- sun — 단순한 해
+
+### P2 (Book 2)
+
+bell, can, duck, fan, fox, gum, hill, kid, leg, mat, tap, van, vet, zip
+
+### P3 (Book 3~5)
+
+bike, bird, bone, boot, boy, brick, cap, cape, chick, chin, chip, cloth, cloud, coat, coin, cone, corn, cow, crab, cub, cube, dish, drum, farm, fish, flag, flute, food, foot, fork, frog, gate, globe, hair, hand, head, horn, king, lamp, leaf, light, moon, moth, mule, neck, nest, night, oil, park, plum, prune, rain, ring, road, rock, rope, sea, shell, ship, shop, snail, snow, spoon, stair, star, storm, tent, thread, town, toy, tree, truck, tube, whale, whip, wing, wood, zoo

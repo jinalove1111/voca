@@ -214,3 +214,6 @@ export function wordDifficulty(item) {
   if (gs.length === 4 || clusters === 1 || gs.some((g) => g.length > 1)) return 2
   return 1
 }
+
+// image production priority from the first Book a word appears in: P1 = Book 1, P2 = Book 2, P3 = Books 3-5 (260차)
+export const imagePriority = (bookNo) => `P${Math.min(Math.max(bookNo, 1), 3)}`
