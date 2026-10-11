@@ -98,7 +98,8 @@ const code = fs.readFileSync(path.join(ROOT, 'src/utils/grammar/village.js'), 'u
 ok(!/\bimport\b/.test(code) && !/react|\.webp|assets/i.test(code), 'village.js pure (no imports, no React/images)')
 const artSrc = fs.readFileSync(path.join(ROOT, 'src/utils/grammar/villageArt.js'), 'utf8')
 ok(artSrc.includes("import.meta.glob('../../assets/town/kit/**/*.webp', { eager: true, import: 'default', query: '?url' })"), 'villageArt glob as ?url')
-ok(artSrc.includes('manifest.json'), 'villageArt reads manifest')
+// 258차: 런타임은 manifest.json 파생 슬림 표(kitSizes.js, testTownKitAssets가 동기 고정)를 읽는다
+ok(artSrc.includes('kit/kitSizes.js') && !artSrc.includes('manifest.json'), 'villageArt reads kitSizes (manifest-derived)')
 for (const k of shown) {
   const [dir, name] = k.split('/')
   const f = (s) => path.join(ROOT, 'src/assets/town/kit', dir, `${name}${s}.webp`)

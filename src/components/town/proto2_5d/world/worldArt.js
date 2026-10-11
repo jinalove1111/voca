@@ -1,7 +1,7 @@
 // 2026-10-10(244차) 하이브리드 월드 키트 아트 — worldMap.activeArts()(준비된 3개 구역 오브젝트 + 문)의 target만 정적 import한다.
 // 준비 중 구역(SOON_OBJECTS)의 아트는 일부러 import하지 않는다(초기 요청에 끌려오지 않게). 목록은 testTownWorldScreen이 activeArts()와 대조한다.
-// w/h = kit/manifest.json 1x 픽셀 크기(소비자는 h를 월드 단위로 환산해 가로세로비만 쓴다).
-import manifest from '../../../../assets/town/kit/manifest.json'
+// w/h = kit/kitSizes.js(manifest.json 파생) 1x 픽셀 크기(소비자는 h를 월드 단위로 환산해 가로세로비만 쓴다).
+import kitSizes from '../../../../assets/town/kit/kitSizes.js'
 import buildings_bus_stop from '../../../../assets/town/kit/buildings/bus-stop.webp'
 import buildings_bus_stop_2x from '../../../../assets/town/kit/buildings/bus-stop@2x.webp'
 import buildings_castle_gate from '../../../../assets/town/kit/buildings/castle-gate.webp'
@@ -118,8 +118,8 @@ export const WORLD_ART_TARGETS = Object.freeze(Object.keys(SRC))
 
 // target -> { src, src2x, w, h } | null (목록 밖/skipped)
 export const worldArt = (target) => {
-  const m = manifest.targets[target]
+  const m = kitSizes[target]
   const u = SRC[target]
-  if (!m || m.skipped || !u) return null
-  return { src: u[0], src2x: u[1], w: m.w, h: m.h }
+  if (!m || !u) return null
+  return { src: u[0], src2x: u[1], w: m[0], h: m[1] }
 }
