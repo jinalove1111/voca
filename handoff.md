@@ -1,4 +1,13 @@
 # Paul Easy Voca — Handoff
+## 262차 리드 검증 메모 (2026-10-12, Book 1 수업 준비)
+- **리드 직접 확인**: build OK; 정적 `testPhonicsGames` 389, `testPhonicsProgress` 111, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget`·`testLazyChunkGuards`·`testRegistryCoverage`·`testQaGate` 17·`testTownKitAssets` 1421·`testStudentPathContracts` PASS; `verify:quiz` 16개 PASS; `validateRecordings --book1` = 파일 0 / 5 · 승인 0 / 5 · 미등록 5 / 5.
+- **데이터 압축 검증**: `curriculum.js`·`recordings.js`를 d4cb371e 판과 값 단위로 비교 → 차이 0(키 순서만 다름).
+- **브라우저(저메모리 러너, 하나씩)**: phonicsGames 203/0, phonicsReview 49/0, phonicsProgress 62/0, pictureWordGames 150/0, pictureWordPractice 110/0, pictureWordReview 29/0, student 34/0, studentHome 242/0/1 SKIP(기존), admin 21/0. Speaking·Writing·Unit·마을 4종 spec은 262차에서 해당 소스 변경 0이라 261차 결과(전부 PASS) 그대로.
+- **학생 녹음·재생**: 가짜 마이크(실제 getUserMedia + MediaRecorder)로 카드 3장 × 2 화면 — 녹음(webm blob 19~26 KB) → 내 목소리 재생 → 다시 녹음 OK. 요청에 음성 payload 없음.
+- **알려 둘 사실**: 그림 단어·파닉스 카드의 녹음기는 Speaking 연습과 같은 부품(`useLocalRecorder`·`RecorderControls`)이고, Voca 단어 학습(`recordWithAutoStop` + 음성 인식)과는 다른 부품이다. 동작(녹음 → 재생 → 다시)은 같지만 "Voca와 동일 코드"는 아님 — 통일 여부는 운영자 결정.
+- **번들**: 2,199,999 / 2,200,000 B(여유 1 B). 다음 JS 추가는 절감 또는 기준 결정 없이는 불가.
+- **미검증**: Preview 실로그인 화면, 실기기, 실제 소리·실제 마이크.
+
 
 ## 262차 (2026-10-12): Book 1 실제 수업 준비 — 관리자 Book 1 화면, 녹음 등록 준비, 제작 목록, 카드 디자인
 - **관리자 "Book 1 수업 준비"(`phr-book1`)**: 파닉스 검토 탭 맨 위. Unit 5줄(Unit 번호·글자+IPA·임시·단어 5개와 그림 상태·입 모양 문장+"검토 필요"), 요약 한 줄(데이터 계산: 단어 25 · 그림 준비 9 · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5), 단모음 녹음 5줄(예상 파일 이름, 실제 상태 = `recordingStatuses`만, "표에서 보기"로 42행 표로 이동). 업로드·저장·네트워크 없음, 미리보기와 실제 상태는 분리(브라우저 검사로 고정).
