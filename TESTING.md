@@ -2142,3 +2142,7 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ### 260차 추가 (2026-10-11): 녹음 미리보기·이미지 우선순위·학습 발달 v2
 - `scripts/testPhonicsProgress.mjs`(94): `validateUpload` 경계값(2 KB / 500 KB, 0.2 / 3.0초, 이름 경고), 이미지 우선순위 13/14/78, 진도 v2 함수 손계산 고정값, NaN/Infinity 속성 검사(샘플 7명 + 빈 기록), 미리보기 격리 핀(학생 코드 import 0, 네트워크·저장소 0), kit 후보는 import 없이 경로만.
 - `tests/e2e/phonicsReview.spec.mjs`(44): 런타임에 만든 wav로 미리보기 흐름, 같은 컨텍스트 학생 화면 2단계 잠김. `phonicsProgress.spec.mjs`(62): Unit 상태 칸·변화 문구·샘플 G 빈 상태·관리자 기록 없음/오답 표 정렬. 번들 한도 때문에 Book별 시험 표·반복 오답 UI는 아직 없어 그 부분 브라우저 검사는 없다(함수는 정적 테스트).
+
+### 261차 추가 (2026-10-11): 소리 확인 통과 기준
+- `scripts/testPhonicsGames.mjs`(389): `passMark` 1..10(0.8·0.6·1.0), `testPassed` 경계(3/5 거짓·4/5 참), 다른 설정 객체가 결과를 바꿈, 0.8 리터럴은 `settings.js`에만, `reviewForMisses`(결정적·3~6개·틀린 문제 포함·자음 선택지 없음·빈 입력 → 빈 배열), 기록 모양, 시험 오답은 `missedItems`에 들어가고 요약 기록은 안 들어감.
+- `tests/e2e/phonicsGames.spec.mjs`: Book 1 Unit 1 시나리오에 4/5 통과·3/5 아직(`data-passed`/`data-pass-mark`/주 버튼)·허브 9단계 결과·10단계 열림·2단계 잠김·복습 → `pha-retest` → 새 5문제 → 5/5 추가.

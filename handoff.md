@@ -1,4 +1,12 @@
 # Paul Easy Voca — Handoff
+## 261차 (2026-10-11): Book 1 소리 확인 통과 기준 80% + 틀린 소리 복습
+- **통과 기준**: `data/phonics/settings.js`의 `PHONICS_SETTINGS = { testPassRatio: 0.8 }`가 유일한 출처. `passMark(total, settings)` = `ceil(total * ratio)`(5문제 → 4), `testPassed(score, total, settings)` (`utils/phonics/games.js`). 설정 객체는 항상 매개변수(기본값 = 위 상수). 관리자 설정 화면·저장소·DB는 만들지 않았다.
+- **결과 표시**: 소리 확인 요약에 "통과! 5문제 중 4개 이상 맞혔어요" / "조금만 더! 4개를 맞히면 통과예요"(빨강·실패 문구 없음), `pha-summary`에 `data-passed`·`data-pass-mark`. 메모리 기록 `unitTest: { score, total, passMark, passed }`. 허브 9단계에 이번 방문 최근 결과("통과"/"다시 도전").
+- **통과 못 하면**: 보라색 주 버튼 = `pha-review`("틀린 소리 다시 만나기"). `reviewForMisses(bookId, unitId, missed, seed)`(`utils/phonics/curriculum.js`)가 틀린 문제 + 같은 소리를 익히는 이 Unit·이전 Unit 단어를 합쳐 3~6개(시드 결정적, Unit 1은 감지 형태, 자음 선택지 없음). 복습 끝 요약에 `pha-retest`("소리 확인 다시 하기") → 새 5문제. 통과했지만 틀린 게 있으면 복습은 보조 버튼.
+- **10단계**: 시험 문제 기록(`step: 'test'`)은 이미 `missedItems`에 들어간다 — 변경 없음, 정적·브라우저 검사로 고정. 다른 Unit에서 온 복습 문제의 기록은 원래 Unit 쪽에 남는다(기존 규칙).
+- **번들**: 기능 +1,403 B를 같은 phonics 파일의 반복 클래스 문자열·행 정의 공통화로 상쇄(2,199,969 → 2,199,944). 동작 변경 없음.
+- **만들지 않은 것**: 관리자 설정 UI·저장·DB(설계 문서에 연결 지점만 기록), Book 2~5 통과 기준 적용, 저장·네트워크·새 저장 키.
+
 ## 260차 리드 검증 메모 (2026-10-11, 258~260차 통합)
 - **리드가 직접 실행해 본 것**: dummy-env build OK. 정적: `testPhonicsGames` 371, `testPhonicsProgress` 94, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 33, `testLazyChunkGuards` 104, `testRegistryCoverage` 8, `testQaGate` 17, `testPilotTownAllowlist` 32, `testTownKitAssets` 1421/1421, `testTownWorldWiring`, `testStudentPathContracts` 61, `testGrammarVillage` 1608 — 전부 PASS. `verify:quiz` 16개 PASS, `verify:audio-tts` 11개 PASS. `validateRecordings`: 파일 0 / 42 · 승인 0 / 42.
 - **리드가 직접 못 본 것**: 통합 브라우저 검사 16종은 첫 spec 실행 중 메모리 부족(여유 1.3 GB)으로 세션이 프로세스를 종료 → 재시작하지 않음. 259·260차의 브라우저 수치(`phonicsGames` 197, `phonicsReview` 44, `phonicsProgress` 62, `pictureWordGames` 150, `pictureWordPractice` 107, `pictureWordReview` 29)는 구현 담당 보고. Speaking·Writing·Unit·학생 홈·관리자·마을 spec은 258차 이후 재실행 없음(해당 화면 소스는 a8a37b65 이후 변경 0, 마을은 `worldArt.js`·`villageArt.js`의 크기 표 교체만).

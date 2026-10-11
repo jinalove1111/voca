@@ -1,12 +1,12 @@
 {
   "agent_name": "implementer",
-  "role": "녹음 등록 미리보기·이미지 우선순위·학습 발달 v2 (260차)",
-  "task_id": "paul-phonics-audio-progress-v2-2026-10-11",
-  "task": "Book 1 10단계 3묶음 허브, 감지 과제, 모음 Word Train, 소리 확인, 망치/숨은 글자 다듬기 (257차 이미지 감사·학습 발달 항목은 이전 summary 참고)",
+  "role": "소리 확인 통과 기준 80% + 틀린 소리 복습 (261차)",
+  "task_id": "paul-phonics-pass-mark-2026-10-11",
+  "task": "PHONICS_SETTINGS.testPassRatio(0.8), passMark/testPassed, 통과/아직 표시, reviewForMisses, pha-retest, 허브 9단계 결과",
   "status": "completed",
   "progress": 100,
   "started_at": "2026-10-11T04:41:59.230Z",
-  "updated_at": "2026-10-11T12:00:00.000Z",
+  "updated_at": "2026-10-11T18:00:00.000Z",
   "files_owned": [
     "DATABASE.md",
     "TESTING.md",
@@ -45,7 +45,8 @@
     "tests/e2e/phonicsProgress.spec.mjs",
     "tests/e2e/phonicsReview.spec.mjs",
     "tests/e2e/pictureWordGames.spec.mjs",
-    "tests/harness/registry.mjs"
+    "tests/harness/registry.mjs",
+    "src/data/phonics/settings.js"
   ],
   "files_read": [
     "src/components/pictureWords/*",
