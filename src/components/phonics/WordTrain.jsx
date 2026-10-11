@@ -1,7 +1,8 @@
-// Word Train (253차 시제품): 소리 블록(글자 묶음) 타일을 차례로 눌러 기차 칸을 채워 단어를 만든다. 상태는 React state뿐 — 저장·네트워크·보상 0.
+// Word Train (253차 시제품, 254차 Unit 연결): 소리 블록(글자 묶음) 타일을 차례로 눌러 기차 칸을 채워 단어를 만든다. 상태는 React state뿐 — 저장·네트워크·보상 0.
 // 영어 철자는 완성하기 전에는 보여 주지 않는다(조건부 마운트, 그림 alt는 중립). 발음은 단어 전체만(finish → playEn).
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { phonicsAttempt, trainRound, trainStart, trainTap } from '../../utils/phonics/games.js'
+import { spell } from '../../data/phonics/phonicsWords.js'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { GamePicture, PwProgress, playEn, useReducedMotion } from '../pictureWords/pictureImg.jsx'
 import { Sparkles, useSuccessThenSpeak } from '../pictureWords/gameFx.jsx'
@@ -23,8 +24,8 @@ function Fly({ text, dx, dy, from, onEnd }) {
   )
 }
 
-export default function WordTrain({ item, seed, index, total, studentId, onRecord, onNext }) {
-  const round = useMemo(() => trainRound(item, seed), [item, seed])
+export default function WordTrain({ item, seed, index, total, studentId, onRecord, onNext, ctx }) {
+  const round = useMemo(() => trainRound(item, seed, { learned: ctx?.learned }), [item, seed]) // eslint-disable-line react-hooks/exhaustive-deps
   const [st, setSt] = useState(() => trainStart(round))
   const [fx, setFx] = useState(null) // 방금 틀린 타일 id (흔들림 효과용)
   const [flies, setFlies] = useState([])
@@ -62,7 +63,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
   }
   const next = () => {
     cancel()
-    onRecord(phonicsAttempt({ studentId, gameId: 'train', targetPhonemes: item.phonemes, itemId: item.id, correct: st.wrong === 0, retries: st.wrong, completed: true }))
+    onRecord(phonicsAttempt({ studentId, gameId: 'train', bookId: ctx?.bookId, unitId: ctx?.unitId, step: ctx?.step ?? 'train', targetPhonemes: item.targetIndex != null ? [item.phonemes[item.targetIndex]] : item.phonemes, itemId: item.id, correct: st.wrong === 0, retries: st.wrong, completed: true }))
     onNext()
   }
 
@@ -104,6 +105,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
       {st.done && (
         <div className="space-y-2 text-center">
           <p data-testid="pwt-word" className="break-words text-3xl font-black text-gray-900">{graphemes.join(' · ')}</p>
+          <p data-testid="pwt-spelled" className="break-words text-xl font-bold text-gray-600">{spell(graphemes)}</p>
           <p data-testid="pwt-feedback" data-result="right" className="rounded-2xl bg-green-50 p-2 text-base font-black text-green-700">기차가 출발해요!</p>
           <button type="button" data-testid="pwt-next" onClick={next} className={`${BTN} w-full bg-purple-600 text-white`}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
         </div>

@@ -1,4 +1,4 @@
-// Phonics Adventure prototype data (253차). Lead-authored British (RP) table: grapheme and phoneme lists are 1:1.
+// PAUL PHONICS word table (253차 prototype, 254차 renamed). Lead-authored British (RP) table: grapheme and phoneme lists are 1:1 (a split digraph like a_e is ONE grapheme).
 // There is NO confirmed textbook/unit order, so every item has unitId null + orderConfirmed false and the set is labelled as a prototype bundle.
 // Pure: no React, storage or network.
 import { learnableWords } from '../pictureWords/index.js'
@@ -27,7 +27,21 @@ const ROWS = [
   ['pics2/soup', 'soup', ['s', 'ou', 'p'], ['s', 'uː', 'p']],
   ['pics2/chaor', 'chair', ['ch', 'air'], ['tʃ', 'eə']],
   ['pics2/cheese', 'cheese', ['ch', 'ee', 'se'], ['tʃ', 'iː', 'z']],
+  ['pics2/cake', 'cake', ['c', 'a_e', 'k'], ['k', 'eɪ', 'k']],
+  ['pics2/tape', 'tape', ['t', 'a_e', 'p'], ['t', 'eɪ', 'p']],
+  ['pics2/kite', 'kite', ['k', 'i_e', 't'], ['k', 'aɪ', 't']],
+  ['pics2/slide', 'slide', ['s', 'l', 'i_e', 'd'], ['s', 'l', 'aɪ', 'd']],
 ]
+
+// A split digraph X_e writes X, then the NEXT grapheme, then e (c + a_e + k -> cake).
+export function spell(graphemes) {
+  let out = '', tail = ''
+  for (const g of graphemes) {
+    const m = /^(.+)_e$/.exec(g)
+    if (m) { out += m[1]; tail = 'e' } else { out += g + tail; tail = '' }
+  }
+  return out + tail
+}
 
 const LEARN = learnableWords()
 

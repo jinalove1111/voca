@@ -30,3 +30,48 @@
 ## 6. 아직 만들지 않은 것
 
 Treasure Hunt, Sound Bridge. 교재 순서 확정, 실제 음소 음원, 저장/학부모 리포트 연동도 이번 범위 밖이다.
+
+
+## PAUL PHONICS 5권 (254차, 2026-10-11)
+
+이름이 **PAUL PHONICS (폴 파닉스)**로 바뀌었고(코드 폴더 이름은 그대로), 그림 단어 선택 화면의 진입 버튼은 `pwg-open-phonics` 하나다. 책장(5권) → Book(Unit 목록) → Unit 허브(7단계) → 기존 연습 카드·그림 시험·알파벳 망치·숨은 글자 + 시제품 게임 2종으로 이어진다. 테스터 전용, 저장·네트워크·보상·DB 없음은 그대로.
+
+### 5권 개요 (운영자) 와 임시 Unit (리드 초안, 승인 전)
+
+- Book 1 단모음 / Book 2 단자음 / Book 3 장모음 / Book 4 이중자음 / Book 5 이중모음 — 이 다섯 권의 구성은 운영자 개요다.
+- 그 안의 **Unit 구성은 전부 리드가 쓴 초안(`status: 'draft'`, 화면에 `임시` 배지)** 이고 승인된 Unit은 0개다. `unitsOf(book, { includeDraft: false })`는 모든 권에서 빈 목록이며 테스터 화면만 `includeDraft: true`로 부른다. 책장에는 "Unit과 단어 목록은 관리자 승인 전 임시 구성입니다"를 항상 보여 준다.
+- 목표는 `자소|음소` 쌍(영국식 RP)이다. Book 2의 묶음 순서는 알파벳 순이며 임시. Book 4는 글자 두 개가 소리 하나를 내는 digraph(`kind: 'digraph'`)만 Unit으로 두고, dr·tr·sl 같은 consonant cluster는 글자마다 제 소리를 내므로 따로 Unit 없이 Book 2의 글자로 만든다는 안내를 Book 화면에 둔다. 소리가 둘인 경우(th, ou 등)와 다르게 읽히는 경우(u_e, ea, ow)는 Unit 메모로 보여 준다.
+- 각 권에는 "Book 전체 연습"(`review`) 노드가 있고 목표는 그 권 전체다.
+
+### 단어가 나오는 규칙 (`src/utils/phonics/curriculum.js`)
+
+- `learnedPairs(book, unit)` = 앞선 모든 Unit(권 순서, Unit 순서)의 쌍 + 이 Unit의 쌍. Book 전체 연습은 그 권 끝까지.
+- Book 1(`vowel-recognition`): 이 Unit의 모음 쌍을 가진 단어. 다른 글자는 익혔는지 따지지 않는다(아이는 모음만 듣고 고른다). 풍선 보기는 단모음 5개.
+- Book 2~5: 이 Unit의 쌍을 하나 이상 가지면서 단어의 **모든** 자소|음소 쌍이 `learnedPairs` 안에 있는 단어만. 그래서 rice(c|s), ink(n|ŋ), dress(ss), egg(gg), cheese(se), r-controlled 단어는 Book 2~5에 나오지 않는다 — 의도된 동작이며 완화하지 않는다.
+- 풍선 보기와 기차 방해 타일도 `learnedPairs`의 글자에서만 나온다("배우지 않은 소리 없음" 정적 보장, 모든 Unit·복습 노드 x 시드 0..19).
+
+### 콘텐츠가 적은 이유와 Unit별 단어 (계산 결과)
+
+단어는 승인된 `learn: true` 그림 단어 중 `phonicsWords.js` 24행(기존 20 + 분리 이중자 4: cake·tape·kite·slide)만 쓴다. 그래서 대부분의 Unit이 비어 있고, 비어 있으면 "단어 준비 중"으로 보이며 단계가 잠긴다(숨기지 않음).
+
+- Book 1: u1 bag·jam / u2 pen·desk·egg·dress / u3 milk·ink / u4 sock / u5 cup (전체 연습 10)
+- Book 2: u1 bag / u2 jam·milk / u3 pen·cup·desk / u4 없음 (전체 연습 6)
+- Book 3: u1 cake·tape / u2 kite·slide / u3·u4 없음 (전체 연습 4)
+- Book 4: u5 sock만, 나머지 없음 (전체 연습 1)
+- Book 5: u1 train / u2 sweet·peach / u3 boat / u4 없음 / u5 soup (전체 연습 5)
+
+### 7단계 허브
+
+1 소리 듣기 · 2 듣고 따라 말하기 — 소리 하나는 **선생님이 승인한 녹음**(`phonemeClips.js`)으로만 들려주고, 지금은 하나도 없어 모두 "선생님 녹음 준비 중"으로 잠긴다. 글자·자소·IPA는 TTS로 절대 보내지 않는다(정적 핀). 3 그림과 단어 = 기존 연습 카드(단어 전체 듣기 + 녹음 + 내 목소리), 4 Sound Bubble Pop(가운데/끝 소리도 묻는다), 5 Word Train(Book 2부터), 6 Unit Test = 기존 그림 시험(단어 4개 이상), 7 틀린 소리 복습 = 이번 방문에서 놓친 항목만 Bubble Pop을 `step: 'review'`로 다시. 철자 게임 2개(`pph-extra-*`)는 같은 단어 목록을 넘긴다. 어느 단계에서 돌아와도 같은 Unit 허브로 오며, 허브는 연습/시험/게임 중에도 숨겨진 채 마운트되어 기록과 위치를 유지한다.
+
+### 소리 음원 등록 방법
+
+`src/data/phonics/phonemeClips.js`의 `PHONEME_CLIPS`(지금은 `{}`)에 키 `자소|IPA`로 `{ src, status: 'teacher-approved', approvedBy, approvedOn }`를 추가한다(`src`는 `src/assets/phonics/clips/`에서 import한 파일). `phonemeClip(pair)`는 `teacher-approved`일 때만 항목을 돌려주고 아니면 null이다. 항목이 생기면 1단계는 `<audio>`로 들려주고 2단계는 기존 로컬 녹음기(같은 훅·라벨)를 붙여 아이가 듣고, 말하고, 자기 목소리를 듣는다(`PhonemeListen.jsx`, 지금은 모든 소리가 "준비 중" 상태만 그려진다).
+
+### 추적 설계 (설계만 — SQL 파일 없음, DB 변경 없음)
+
+`phonicsAttempt`에 `bookId`·`unitId`·`step`('bubble'|'train'|'test'|'review')이 추가됐다(여전히 동결된 메모리 객체). `summarisePhonemes(records)`는 목표 음소별 `{ attempts, wrong, retries, improvedAfterReview }`를 돌려주는 순수 함수로, `improvedAfterReview`는 복습 아닌 단계에서 틀렸던 음소를 이후 `review` 단계에서 처음에 맞혔을 때 true다. 허브의 "다시 볼 소리"는 틀렸고 아직 복습으로 개선되지 않은 음소의 목록이다(반복해서 틀리는 음소 = wrong 합이 큰 음소). 장래 저장이 필요하면 항목당 한 행(학생 UUID, 게임 id, 권, Unit, 단계, 목표 음소, 항목 id, 정답 여부, 재시도, created_at)을 생각할 수 있고, 실제 도입 시에는 UUID FK·RLS·멱등 마이그레이션·클라이언트 폴백(규칙 9, 10)이 필요하다. 이번 작업에서는 파일도 실행도 하지 않았다.
+
+### 아직 만들지 않은 것
+
+Treasure Hunt, Sound Bridge, 마을 건물 연결, 저장/학부모 리포트, 실제 소리 음원, 승인된 Unit 구성.

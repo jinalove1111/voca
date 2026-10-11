@@ -1,27 +1,33 @@
-// Phonics Adventure prototype logic (253차): Sound Bubble Pop + Word Train. Pure: no React, DOM, storage or network.
+// PAUL PHONICS game logic (253차 prototype, 254차 unit-aware): Sound Bubble Pop + Word Train. Pure: no React, DOM, storage or network.
 // Randomness only from the seed the caller passes (reuses the picture-word seeded rng/shuffled).
 import { rng, shuffled } from '../pictureWords/practice.js'
 import { PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
 
+export const POSITION_KO = { initial: '첫', medial: '가운데', final: '끝' }
 export const BUBBLE_OBJECTIVE_KO = '단어의 첫 소리를 듣고 글자 고르기'
 export const TRAIN_OBJECTIVE_KO = '소리 블록을 차례로 이어 단어 만들기'
 
-// ---- Sound Bubble Pop: hear the word, pick the grapheme of its FIRST sound
-export function bubbleRound(item, seed, pool = PHONICS_ITEMS) {
-  const grapheme = item.graphemes[0]
-  const ipa = item.phonemes[0]
+// ---- Sound Bubble Pop: hear the word, pick the grapheme of the target sound (default: the FIRST sound)
+// opts.targetIndex = which grapheme of the word is the target; opts.optionPairs = 'grapheme|ipa' pairs the distractors may come from
+// (the caller passes the learned pairs, Book 1 passes the five short vowels). Without opts the distractors come from the pool's first sounds.
+const position = (i, n) => (i === 0 ? 'initial' : i === n - 1 ? 'final' : 'medial')
+export function bubbleRound(item, seed, pool = PHONICS_ITEMS, { targetIndex = 0, optionPairs } = {}) {
+  const grapheme = item.graphemes[targetIndex]
+  const ipa = item.phonemes[targetIndex]
   const seen = new Set([grapheme])
   const distractors = []
-  // a different first PHONEME and a different grapheme (so c/k never competes with another /k/ spelling); each grapheme once
-  for (const o of shuffled(pool, rng(seed))) {
-    const g = o.graphemes[0]
-    if (o.phonemes[0] === ipa || seen.has(g)) continue
+  const source = optionPairs ? optionPairs.map((p) => p.split('|')) : pool.map((o) => [o.graphemes[0], o.phonemes[0]])
+  // a different PHONEME and a different grapheme (so c/k never competes with another /k/ spelling); each grapheme once
+  for (const [g, ph] of shuffled(source, rng(seed))) {
+    if (ph === ipa || seen.has(g)) continue
     seen.add(g)
     distractors.push(g)
     if (distractors.length === 3) break
   }
+  if (!distractors.length) return null // not bubble-eligible
   const options = shuffled([grapheme, ...distractors], rng(seed + 7))
-  return { itemId: item.id, target: { grapheme, ipa, position: 'initial' }, objectiveKo: BUBBLE_OBJECTIVE_KO, options }
+  const pos = position(targetIndex, item.graphemes.length)
+  return { itemId: item.id, target: { grapheme, ipa, position: pos }, objectiveKo: `단어의 ${POSITION_KO[pos]} 소리를 듣고 글자 고르기`, options }
 }
 export const bubbleStart = (round) => ({ round, wrong: 0, tried: [], done: false, last: null })
 
@@ -32,18 +38,36 @@ export function bubblePick(state, optionIndex) {
   return { ...state, done: true, last: 'right' }
 }
 
+
+// The spelled word as parts for display; the target grapheme's letters are marked hl (a split digraph marks BOTH its letters, e.g. c a k e -> a and e).
+export function spellParts(graphemes, targetIndex = -1) {
+  const parts = []
+  let tail = null
+  graphemes.forEach((g, i) => {
+    const m = /^(.+)_e$/.exec(g)
+    if (m) { parts.push({ t: m[1], hl: i === targetIndex }); tail = { t: 'e', hl: i === targetIndex } } else {
+      parts.push({ t: g, hl: i === targetIndex })
+      if (tail) { parts.push(tail); tail = null }
+    }
+  })
+  if (tail) parts.push(tail)
+  return parts
+}
+
 // ---- Word Train: tap grapheme tiles in order (digraphs are ONE tile) + exactly one distractor tile
+// opts.learned = 'grapheme|ipa' pairs taught so far: the distractor tile must be one of those graphemes (none if there is none).
 const EXTRA = ['a', 'e', 'i', 'o', 'u', 'b', 'd', 'm', 'n', 't', 'sh', 'ch', 'oo', 'ee']
 
-export function trainRound(item, seed) {
+export function trainRound(item, seed, { learned } = {}) {
   const answer = item.graphemes
   const r = rng(seed)
   let real = shuffled(answer.map((grapheme, i) => ({ id: `t${i}`, grapheme })), r)
   // never pre-solved: rotate once (a rotation by one only equals the original when every tile is identical)
   if (real.every((t, i) => t.grapheme === answer[i])) real = [...real.slice(1), real[0]]
-  const extra = shuffled(EXTRA.filter((g) => !answer.includes(g)), r)[0]
+  const base = learned ? [...new Set(learned.map((p) => p.split('|')[0]))] : EXTRA
+  const extra = shuffled(base.filter((g) => !answer.includes(g)), r)[0]
   const tiles = real.slice()
-  tiles.splice(r.int(tiles.length + 1), 0, { id: `x${answer.length}`, grapheme: extra })
+  if (extra) tiles.splice(r.int(tiles.length + 1), 0, { id: `x${answer.length}`, grapheme: extra })
   return { itemId: item.id, target: { graphemes: answer, phonemes: item.phonemes }, objectiveKo: TRAIN_OBJECTIVE_KO, tiles }
 }
 export const trainStart = (round) => ({ round, placed: 0, usedTileIds: [], wrong: 0, last: null, done: false })
@@ -58,7 +82,26 @@ export function trainTap(state, tileId) {
 }
 
 // ---- attempt record: a plain frozen object. Nothing is stored or sent; studentId is the session's student UUID (never a name).
-export const phonicsAttempt = ({ studentId, gameId, unitId = null, targetPhonemes, itemId, correct, retries, completed }) =>
-  Object.freeze({ v: 1, studentId, gameId, unitId, targetPhonemes, itemId, correct, retries, completed })
+// step: 'bubble' | 'train' | 'test' | 'review'
+export const phonicsAttempt = ({ studentId, gameId, bookId = null, unitId = null, step = null, targetPhonemes, itemId, correct, retries, completed }) =>
+  Object.freeze({ v: 1, studentId, gameId, bookId, unitId, step, targetPhonemes, itemId, correct, retries, completed })
 
-export const sessionItems = (seed, count = 6) => shuffled(PHONICS_ITEMS, rng(seed)).slice(0, count)
+export const sessionItems = (seed, count = 6, items = PHONICS_ITEMS) => shuffled(items, rng(seed)).slice(0, count)
+
+// Per target phoneme: { attempts, wrong, retries, improvedAfterReview }. improvedAfterReview = a phoneme missed in a non-review step
+// was later answered right first time in a 'review' step. Records are in the order they happened.
+export function summarisePhonemes(records) {
+  const out = {}
+  const missed = new Set()
+  for (const r of records) {
+    for (const ph of r.targetPhonemes) {
+      const s = out[ph] || (out[ph] = { attempts: 0, wrong: 0, retries: 0, improvedAfterReview: false })
+      s.attempts++
+      s.retries += r.retries
+      if (!r.correct) s.wrong++
+      if (r.step !== 'review' && !r.correct) missed.add(ph)
+      if (r.step === 'review' && r.correct && missed.has(ph)) s.improvedAfterReview = true
+    }
+  }
+  return out
+}
