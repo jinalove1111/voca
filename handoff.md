@@ -1,4 +1,5 @@
 # Paul Easy Voca — Handoff
+_257차 갱신: 2026-10-11 (257차 — **PAUL PHONICS 이미지 감사 + 관리자 검토 패널 확장 + 글자 카드 + 학습 발달 설계(샘플 화면)**: 이미지 필요 105개 중 7개는 Paul Town 기존 그림 후보(승인 전), 새 제작 98개는 사양 문서로. 그림 없는 단어는 `pw-card--text` 카드. 학습 발달은 순수 함수 + 가상 `샘플반` + 샘플 화면 2개 + 실행 안 한 SQL 초안. 학생 기록 저장·DB 실행·네트워크 0)_
 _256차 갱신: 2026-10-11 (256차 — **PAUL PHONICS 품질 개선**: 검수 반영 단어 210개·Unit 정리, Bubble Pop 복습 섞기(정답이 계속 같은 글자이던 문제), Word Train 출발 기차 고정 + 완성 단어 칸, 선생님 녹음 42개 등록·승인·검증 구조(녹음 파일 0개, 모든 Unit 임시). 아래 256차 섹션 참고.)
 _255차 갱신: 2026-10-11 (255차 — **PAUL PHONICS 43 Unit(구조 승인, 전부 임시) 적용 + 관리자 읽기 전용 검토 탭**: 24 Unit 초안을 운영자가 구조만 승인한 43 Unit(5/7/6/11/14)으로 교체. Sound Bubble Pop·Word Train은 그림 없는 단어도 처리, 그림이 필요한 단계는 그림 준비된 단어만. 녹음 42개는 모두 대기. 정적 테스트·브라우저 스펙 갱신. 단어·소리·이미지·음성은 승인 전.)
 _254차 갱신: 2026-10-11 (254차 — **PAUL PHONICS (폴 파닉스) 5권 → Unit → 7단계 허브**: 시제품 게임 2종 앞에 책장·Book·Unit 허브를 두고 기존 연습 카드·그림 시험·알파벳 망치·숨은 글자에 Unit 단어를 넘겨 연결. Unit은 전부 리드 초안(임시), 소리 하나는 선생님 녹음 없이는 잠김(TTS 없음). 테스터 전용·저장·네트워크·보상·DB 없음. 아래 254차 섹션 참고.)_
@@ -64,6 +65,33 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-11 (257차) — PAUL PHONICS 이미지 감사·검토 패널·글자 카드·학습 발달 설계
+
+작업 위치 `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `feat/paul-town-hybrid-world-2026-10-10`. 전부 draft 유지, push 없음, DB·SQL 실행·네트워크·.env 0. 운영자 부재 중 자율 블록.
+
+### 1. 이미지 감사
+- 이미지가 필요한 단어 105개. 그중 7개(cat, tree, lamp, duck, fox, tent, gate)는 이미 Paul Town 그림이 있다 → **기존 에셋 후보(학습용 승인 필요)**. 새 제작 98개. `rubber duck`/`rocks`(UNCERTAIN)·`globe`(MISMATCH)는 비슷해 보여도 일치하지 않아 보류 유지.
+- `src/data/phonics/imageCandidates.js`(신규): 후보 7개의 url·원본 경로·메모. **관리자 검토 패널만 import** — 정적 테스트가 격리를 고정(학생 코드 import 0, 학생 데이터의 7개 단어는 그대로 `image: 'needed'`).
+- 이미지 생성 도구가 없어 파일은 만들지 않았다. 제작 사양 `docs/design/PHONICS_IMAGE_SPEC_2026-10-11.md`(스타일·256px WebP·파일명·98개 Book/Unit별 목록·모호 단어 그림 지시·승인 경로)는 데이터에서 스크립트로 생성.
+
+### 2. 관리자 검토 패널 (`PhonicsReviewPanel.jsx`, 읽기 전용 유지)
+요약 칩 3개 추가(새 이미지 제작 98 · 기존 에셋 후보 7 · 검토 필요 단어 17, 전부 데이터에서 계산), 단어 필터 6종(`phr-filter`) + 단어 표(`phr-words`: Book·Unit, 철자 분해, 음가, 난이도, 그림 상태, 검토 이유), 후보 썸네일 7개(`phr-candidates`, 정사각 상자 object-fit contain, "승인 필요 — 학생 화면에 사용 안 함"), 녹음 표(`phr-recordings`, 256차 `recordings.js` 기반 42행 전부 파일 없음, 파일 이름 규칙 `ph-01-a.mp3`), Unit 표 단어에 ⚠ 검토 배지. 표는 컨테이너 안에서만 가로 스크롤.
+
+### 3. 글자 카드 (학생, CSS만)
+그림이 없는 단어는 Bubble Pop 정답 뒤·Word Train 시작 화면에서 `pw-card pw-card--text`(분홍 테두리, 파스텔 배경, "듣기 단어" 태그)로 보인다. 빈/깨진 이미지 상자 없음. Word Train은 정답을 만드는 게임이라 글자 카드에 단어를 미리 쓰지 않는다(안내 문장만) — 계약의 "단어를 크게"에서 의도적으로 벗어난 부분.
+
+### 4. 학습 발달 설계 (저장 없음)
+- `src/utils/phonics/progress.js`(신규, 순수): `bookProgress`·`unitTestResults`·`weakPhonemes`(시도≥3, 틀림≥2, 오답률≥40%)·`reviewWords`·`recentActivity`·`improvement`·`recommendations`·`parentSummary`·`classOverview`·`classWeakPhonemes`. 입력 순서 무관, 입력 불변, AI 호출 없음.
+- `src/data/phonics/sampleProgress.js`(신규): 가상 `샘플반`, `샘플 학생 A`~`F`, id `sample-0001`~`0006`(UUID 아님), 시드 생성기(랜덤·시계 없음), 30~80건씩, 프로필 6종. `SAMPLE_NOTICE_KO = '샘플 데이터 — 실제 학생 기록이 아닙니다'`.
+- 샘플 화면: 학생 `PhonicsProgress.jsx`(책장의 `pph-open-progress` 버튼, `샘플 학생 A`만 표시, 로그인한 학생 정보 읽지 않음), 관리자 `PhonicsProgressPanel.jsx`(새 lazy 탭 `phonicsprogress` "📈 파닉스 발달 (샘플)"). 공용 `ProgressViews.jsx`. 순수 CSS 막대.
+- 설계 문서 `docs/design/PHONICS_PROGRESS_2026-10-11.md`(쓰기 경로 선택지: 기존 엔드포인트의 새 action 권고, 함수 12개 한도 때문에 새 파일 불가). SQL 초안 `supabase_v3_51_phonics_progress_DRAFT.sql` — **실행 금지·참조 0**, 멱등, RLS 켜고 정책 없음.
+
+### 5. 검증
+`scripts/testPhonicsProgress.mjs`(60, 신규, registry 등록 extra:false), `testPhonicsGames` 352(라벨 핀에서 progress 화면 제외), 브라우저: `phonicsReview.spec` 33, `phonicsProgress.spec`(신규) 53, `phonicsGames.spec` 158, `pictureWordGames` 148, `pictureWordPractice` 107, `pictureWordReview` 29. 더미 env 빌드 통과.
+
+### 남은 일 / 운영자 결정
+새 그림 98장 제작 또는 후보 7개 승인 여부, 녹음 42개, 학습 기록 SQL·쓰기 경로 승인, 단어·Unit 승인(전부 임시).
 
 ## 2026-10-11 (256차) — PAUL PHONICS 품질 개선: 단어·Unit 수정, 풍선 복습 섞기, 기차 출발 고정, 녹음 42개 등록·검증 구조
 
