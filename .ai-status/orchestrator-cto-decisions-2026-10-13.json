@@ -1,0 +1,39 @@
+{
+  "agent_name": "orchestrator",
+  "role": "CTO 결정 4건 반영 (268차)",
+  "task_id": "paul-phonics-cto-decisions-2026-10-13",
+  "task": "testTownUiStatic 정규식 핀, SQL 초안 별도 분류 가드, 관리자 그림 승인 3분리 표기, 통과/미완료 검증 분리 기록",
+  "status": "completed_with_open_verification",
+  "progress": 95,
+  "updated_at": "2026-10-13",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "commits": ["fa22991e", "ed4fb4c7", "04be890a"],
+  "files_owned": [
+    "scripts/testTownUiStatic.mjs",
+    "scripts/testTownV2Static.mjs",
+    "scripts/testPhonicsGames.mjs",
+    "src/data/phonics/phonicsWords.js",
+    "src/components/admin/PhonicsReviewPanel.jsx",
+    "tests/e2e/phonicsReview.spec.mjs",
+    "handoff.md"
+  ],
+  "verification": {
+    "passed": {
+      "build": "OK (dummy env, 0 warnings)",
+      "static": "testTownV2Static 157/157, testTownUiStatic 126/126, testPhonicsGames 426/426, testPhonicsProgress 111/111, testPictureWords 754/754, testPictureWordGames 142/142, testBundleBudget 32/32 (2.178 MB), testLazyChunkGuards 116/116, testRegistryCoverage 8/8, testQaGate 17/17",
+      "browser": "phonicsReview 50/0, unmocked 0 — one run at 3.1 GB free, no rerun"
+    },
+    "failed_preexisting": "testTownShop 85/1 — SSR block: esbuild has no loader for src/assets/hats/*.png (test drift, unrelated, not fixed)",
+    "not_run": "townProto25d S37 (needs >= 4.5 GB free; session had 3.1-3.4 GB), the other 27 browser specs, verify:all"
+  },
+  "picture_approval_facts": "119 learnable picture words: all status MATCH, decision null, counts.approved 0 — no teacher approval record exists; nothing was auto-approved",
+  "blocked_on_operator": [
+    "townProto25d S37 재실행은 여유 메모리 4.5 GB 이상에서 (실패하면 assetsInlineLimit 줄만 빼고 비교)",
+    "자동 일치 119개 그림이 테스터 화면에 이미 쓰이고 있음 — 승인 전에는 테스터에게도 숨길지 결정",
+    "supabase_v3_51_phonics_progress_DRAFT.sql은 미실행 초안 — 실행 여부는 운영자",
+    "testTownShop SSR png 로더 수정 여부",
+    "교사 음소 녹음 5개, Book 1 그림 13개",
+    "C:\\voca VS Code 미저장 탭 15개 처리"
+  ],
+  "not_done": "DB/SQL 실행/Production/main/pw-preview 갱신 0, 학생 화면 변경 0, 다른 워크트리 0"
+}

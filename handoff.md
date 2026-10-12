@@ -1,4 +1,20 @@
 # Paul Easy Voca — Handoff
+## 268차 (2026-10-13): CTO 결정 4건 반영 — 정규식 핀, SQL 초안 별도 분류, 그림 승인 3분리 표기 / S37 미실행
+- **상태 한 줄**: 코드·테스트 커밋 3개 push 완료. 정적 검증 전부 통과, 브라우저는 영향받은 1종만 1회 실행해 통과. **`townProto25d` S37은 메모리 기준 미달로 실행하지 않았다(미완료 그대로).**
+- **(1) `testTownUiStatic` 정규식 (`fa22991e`)**: `onGoTown || (showBuildings` 핀이 `PaulTown.jsx`에 들어온 `onGoWorld ||` 항을 받아들이도록 한 줄 수정. 앱 코드 변경 0, `showBuildings` 분기는 그대로 있음. 125/1 → **126/126**.
+- **(2) SQL 변경 0 가드 (`ed4fb4c7`)**: `testTownV2Static` 5번 절이 `git diff --name-status`를 읽고 `classifySqlApiDiff()`로 나눈다. **초안으로 분류되는 조건은 셋 다 만족할 때뿐** — 상태가 정확히 `A`(신규 추가), 저장소 루트, 이름이 `supabase_v<n>…_DRAFT.sql`. 수정(M)·이름 변경(R)·삭제(D)·`api/` 아래·하위 폴더·`_DRAFT` 없는 새 SQL은 전부 운영 변경으로 남아 계속 FAIL한다(고정 입력 자가 검사 9건으로 고정). 지금 분류된 초안 1개: `supabase_v3_51_phonics_progress_DRAFT.sql` — **실행하지 않았고 운영 DB에 반영하지 않았다.** 146/1 → **157/157**.
+- **(3) 그림 승인 3분리 (`04be890a`)**: 사실 확인 — `pictureWords.json`의 학습 가능 119개는 전부 `status: MATCH` + `decision: null`, `counts.approved` 0, `decisions.json` 비어 있음. 즉 **교사 승인 기록이 있는 그림은 0개**다. 자동 승인하지 않았다.
+  - `phonicsWords.js`: `pictureApprovalOf(pic)` 추가(`null` = 그림 없음 / `'auto'` = 자동 일치·승인 기록 없음 / `'approved'` = `decision === 'approve'`), 항목에 `pictureApproval` 필드. 기존 `image: 'ready'` 값과 학생 코드는 그대로.
+  - `PhonicsReviewPanel.jsx`(관리자 전용): "그림 준비" 표기를 전부 "그림 있음"으로, 요약 칩 `그림 있음 32` · `자동 일치 · 승인 기록 없음 32` · `그림 교사 승인 0`, Book 1 요약 `그림 있음 9 (자동 일치 9 · 교사 승인 0)`, 단어 표 그림 상태에 `· 자동 일치` / `· 교사 승인`, Unit 표 열 이름 `이미지 준비` → `그림 있음`. 버튼·저장·네트워크 추가 0.
+  - 정적 단언 3건 추가(`testPhonicsGames` 423 → 426: 헬퍼 3경우, 32개 전부 `auto`·승인 0, 패널에 "그림 준비" 문자열 0).
+- **운영자 확인 필요(고치지 않음)**: 이 119개 자동 일치 그림은 250차부터 테스터 전용 그림 단어 연습·파닉스 게임에 쓰이고 있다(`learnableWords()` = `learn: true`). "승인 안 된 그림은 학생에게 나가지 않는다"는 원칙을 테스터 화면에도 적용할지는 결정이 필요하다 — 적용하면 테스터 연습 단어가 0개가 되고 관련 검사 다수가 바뀐다. 이번에는 표기만 고쳤다.
+- **검증 — 통과(정적, dummy-env build)**: build OK(38초, 경고 0). `testTownV2Static` 157, `testTownUiStatic` 126, `testPhonicsGames` 426, `testPhonicsProgress` 111, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 32(합계 실측 2.178 MB, 한도 숫자 변경 0), `testLazyChunkGuards` 116, `testRegistryCoverage` 8, `testQaGate` 17.
+- **검증 — 통과(브라우저 1종, 1회)**: `phonicsReview` 50/0, 미mock 요청 0. 표기를 바꾼 화면이라 이 spec만 여유 3.1 GB에서 전용 preview 서버로 한 번 실행했고, 끝난 뒤 서버·헤드리스 브라우저 0개 확인. 재실행 0.
+- **검증 — 실패(기존, 이번 변경과 무관, 미수정)**: `testTownShop` 85/**1** — 7번 절 SSR 묶음이 `src/assets/hats/*.png`에 esbuild 로더가 없어 실패한다(모자 PNG가 들어온 뒤 테스트가 따라가지 못한 것, 앱 문제 아님). 테스트의 esbuild 호출에 png 로더 한 줄을 넣으면 될 것으로 보이나 확인하지 않았다.
+- **검증 — 미완료**: `townProto25d` S37(기준 여유 4.5 GB 이상, 이번 세션 여유 3.1~3.4 GB). 나머지 브라우저 27종과 `verify:all`은 이번에 다시 돌리지 않았다(267차 결과 그대로, `.env` 없음). `phonicsGames.spec` 683·722행 검사 이름에 "그림 준비된"이라는 말이 남아 있다(검사 설명 문구일 뿐, 화면 문구 단언 아님).
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·`pw-preview` 갱신·다른 워크트리·`C:\voca` 0. 학생 화면 변경 0. 예산 숫자 변경 0.
+- **미검증**: 실기기, Preview(`pw-preview`는 `95b7faa2` 그대로라 이번 변경이 올라가 있지 않음), `townProto25d` S37.
+
 ## 267차 (2026-10-12): 번들 여유 확보(인라인 이미지 분리) + 관리자 집계 기준 교정 + 브라우저 29종 — 검증 1건 미완료
 - **상태 한 줄**: 커밋·push 완료, **검증은 미완료 1건**(`townProto25d` S37 가게 여닫기 실패, 원인 미확정). 그 밖의 28종은 통과.
 - **번들 원인**: 합계 예산(2.2 MB)은 pdf·xlsx·`PictureWordReviewPanel`만 뺀 모든 JS 청크의 raw 합이라 lazy 분할로는 줄지 않는다(분할하면 청크 머리말만큼 늘어난다). 실제로 줄일 수 있는 것을 in-memory 빌드로 측정: 모듈 프리로드 폴리필 끄기 −568 B, 라이선스 주석 제거 −964 B, `console.log` 제거 −185 B, **4KB 미만 이미지 인라인 끄기 −22,067 B**. 인라인은 마을 그림 5개(cat·owl·puppy·shop-lamp·stone-fountain)가 base64로 JS 청크(20,158 B)에 실려 있던 것이다.
