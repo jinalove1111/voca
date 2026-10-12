@@ -1,12 +1,12 @@
 // PAUL PHONICS word table (255차, 256차: display + needsReview). The words are the union of the 43 draft units' own word lists (data/phonics/curriculum.js, segmented notation).
 // graphemes and phonemes are 1:1 (a split digraph like a_e is ONE grapheme). Pure: no React, storage or network.
-// image: 'ready' = a learnable picture word with the same en exists; 'not-needed' = can be learned without a picture; 'needed' = a picture still has to be made.
+// image: 'ready' = a picture file exists (auto-matched by en; teacher approval is pictureApproval); 'not-needed' = can be learned without a picture; 'needed' = a picture still has to be made.
 import { learnableWords } from '../pictureWords/index.js'
 import { BOOKS, parseWord, spell } from './curriculum.js'
 
 export { spell }
 export const PHONICS_SET_LABEL_KO = '시제품 묶음 (교재 순서 아님)'
-export const IMAGE_LABEL_KO = { ready: '그림 준비', needed: '이미지 제작 대기', 'not-needed': '그림 없이 학습' }
+export const IMAGE_LABEL_KO = { ready: '그림 있음', needed: '이미지 제작 대기', 'not-needed': '그림 없이 학습' }
 
 export const NOIMG = new Set('boil brown clap cute day dig fight five game group grow her high home hop hope hot june kick kit miss name lunch note pair pink play quiz red right rude rule sat short sip six snap song spot stop swim tenth that them then thick thin this time tune turn wet when which with yes you green loud winter cook good yum quick off buzz white smell skip black breath chop spread'.split(' '))
 // Words the teacher must confirm before the unit can be approved (British usage / rare words). jumper = sweater, rubber = eraser in British English.
@@ -18,6 +18,8 @@ export const PROPOSED_KO = { cat: '고양이', hat: '모자', map: '지도', bed
 export const APPROVED_KO = new Set('cat hat map bed red pig six lip dog box hot pot sun bus mug nut'.split(' '))
 // picture meaning first; else the proposal only if approved (approved is a parameter so tests can pass their own set)
 export const koOf = (word, pic, approved = APPROVED_KO) => (pic ? pic.ko : approved.has(word) ? PROPOSED_KO[word] ?? null : null)
+// picture approval: null = no picture, 'auto' = auto-matched without a teacher approval record, 'approved' = decision 'approve'
+export const pictureApprovalOf = (pic) => (pic ? (pic.decision === 'approve' ? 'approved' : 'auto') : null)
 
 const LEARN = learnableWords()
 const PICTURE_BY_EN = new Map()
@@ -27,7 +29,7 @@ function build(notation) {
   const { graphemes, phonemes, raw } = parseWord(notation)
   const word = spell(graphemes)
   const pic = PICTURE_BY_EN.get(word) || null
-  const item = { id: pic ? pic.id : `word:${word}`, word, en: word, ko: koOf(word, pic), koProposed: PROPOSED_KO[word] ?? null, asset: pic ? pic.asset : null, display: spell(raw), needsReview: REVIEW_WORDS.has(word), graphemes, phonemes, picture: pic, image: pic ? 'ready' : NOIMG.has(word) ? 'not-needed' : 'needed' }
+  const item = { id: pic ? pic.id : `word:${word}`, word, en: word, ko: koOf(word, pic), koProposed: PROPOSED_KO[word] ?? null, asset: pic ? pic.asset : null, display: spell(raw), needsReview: REVIEW_WORDS.has(word), graphemes, phonemes, picture: pic, pictureApproval: pictureApprovalOf(pic), image: pic ? 'ready' : NOIMG.has(word) ? 'not-needed' : 'needed' }
   return item
 }
 

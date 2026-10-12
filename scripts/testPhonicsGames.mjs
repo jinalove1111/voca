@@ -557,6 +557,11 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
   const stu = ['src/components/phonics', 'src/components/pictureWords'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).map((f) => `${d}/${f}`)).filter((f) => /\.jsx?$/.test(f))
   ok(stu.length > 10 && stu.every((f) => !/koProposed|PROPOSED_KO/.test(read(f))), 'ko: student code never reads koProposed / PROPOSED_KO')
   ok(/koProposed/.test(read('src/components/admin/PhonicsReviewPanel.jsx')) && /phr-b1-ko/.test(read('src/components/admin/PhonicsReviewPanel.jsx')), 'ko: only the admin review panel shows the proposals')
+  // 그림 승인 3분리: 그림 있음(image) / 자동 일치 / 교사 승인 기록(decision) - 승인 기록 없는 그림은 승인으로 표시 금지
+  const rdy = ITEMS.filter((i) => i.image === 'ready')
+  ok(D.pictureApprovalOf({ decision: 'approve' }) === 'approved' && D.pictureApprovalOf({ decision: null }) === 'auto' && D.pictureApprovalOf(null) === null, 'picture approval: approve -> approved, no decision -> auto, no picture -> null')
+  ok(rdy.length === 32 && rdy.every((i) => i.pictureApproval === 'auto') && !ITEMS.some((i) => i.pictureApproval === 'approved') && ITEMS.filter((i) => i.image !== 'ready').every((i) => i.pictureApproval === null), 'picture approval: 32 ready items are all auto-matched, none approved, non-ready items have null')
+  ok(!read('src/components/admin/PhonicsReviewPanel.jsx').includes('그림 준비') && read('src/components/admin/PhonicsReviewPanel.jsx').includes('교사 승인') && D.IMAGE_LABEL_KO.ready === '그림 있음', 'picture approval: the admin panel never says 그림 준비 and shows 교사 승인 separately')
   // 267차 관리자 집계 기준: 승인 수는 승인 목록·실제 파일에서만 계산한다(제안·미리보기·고정 숫자 금지).
   const phr = read('src/components/admin/PhonicsReviewPanel.jsx'), ppp = read('src/components/admin/PhonicsProgressPanel.jsx')
   ok(/prop\.filter\(\(x\) => APPROVED_KO\.has\(x\.word\)\)\.length/.test(phr) && /APPROVED_KO\.has\(x\.word\) \? ' 승인' : ' 뜻 검토 필요'/.test(phr) && !/x\.ko \? ' 승인'/.test(phr), 'admin counts: "뜻 승인" counts APPROVED_KO membership, not any truthy ko (a picture ko must not read as an approved proposal)')
