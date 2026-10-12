@@ -5,6 +5,9 @@ import { playWordAudio } from '../../utils/speech'
 const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, query: '?url', import: 'default' })
 export const imgUrl = (asset) => IMG[`../../assets/pictureWords/${asset}.webp`]
 
+// Decorative picture for menu tiles/set cards (alt empty; the word is not a quiz secret here).
+export const MenuPic = ({ asset, className }) => <img src={imgUrl(asset)} alt="" draggable={false} className={className} />
+
 // Picture card (252차): rounded pink-border card around the picture. alt is always the neutral "그림" (the word never appears in the DOM before the child finds it).
 export const GamePicture = ({ word, testid, glow = false, small = false }) => (
   <div data-testid={testid ? `${testid}-card` : undefined} className={`pw-card${small ? ' pw-card-sm' : ''}${glow ? ' pw-glow' : ''}`}>
@@ -40,9 +43,21 @@ export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-pr
 export const T2 = 'text-2xl font-black text-gray-900'
 export const T3 = 'text-3xl font-black text-gray-900 break-words'
 export const MUTED = 'text-xs font-bold text-gray-500'
-export const W = { gray: 'w-full bg-gray-200 text-gray-700', purple: 'w-full bg-purple-600 text-white', sky: 'w-full bg-sky-100 text-sky-700' }
+export const W = { gray: 'w-full bg-gray-200 text-gray-700' }
+// colour roles: strong = the one main action on a screen, soft = same hue, pale. Gray stays W.gray (leave/back).
+export const ROLE = {
+  go: { strong: 'bg-emerald-500 text-white', soft: 'bg-emerald-100 text-emerald-800' },
+  say: { strong: 'bg-rose-400 text-white', soft: 'bg-rose-100 text-rose-800' },
+  play: { strong: 'bg-amber-400 text-amber-950', soft: 'bg-amber-100 text-amber-900' },
+  review: { strong: 'bg-violet-400 text-white', soft: 'bg-violet-100 text-violet-800' },
+  listen: { strong: 'bg-sky-500 text-white', soft: 'bg-sky-100 text-sky-800' },
+}
 
 const CSS = `
+.pw-tile-menu{display:flex;align-items:center;gap:12px;width:100%;min-height:176px;padding:12px;text-align:left;border:3px solid var(--tm-edge);border-radius:24px;background:var(--tm-bg);box-shadow:0 5px 0 var(--tm-edge);transition:transform .1s ease,box-shadow .1s ease}
+.pw-tile-menu:active{transform:translateY(3px);box-shadow:0 2px 0 var(--tm-edge)}
+.pw-tile-menu img{flex:none;box-sizing:border-box;width:112px;height:112px;object-fit:contain;padding:6px;border-radius:18px;background:#fff}
+.pw-tm-go{--tm-bg:#D1FAE5;--tm-edge:#10B981}.pw-tm-say{--tm-bg:#FFE4E6;--tm-edge:#FB7185}.pw-tm-play{--tm-bg:#FEF3C7;--tm-edge:#FBBF24}
 @keyframes pw-swing{0%{transform:rotate(-70deg) translateY(-6px)}60%{transform:rotate(25deg) translateY(4px)}100%{transform:rotate(0) translateY(0)}}
 @keyframes pw-shake{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 @keyframes pw-bounce{0%,100%{transform:none}40%{transform:scale(1.15)}}
@@ -69,8 +84,8 @@ const CSS = `
 .pw-slot{border:2px dashed #C4B5FD;background:#F5F3FF;box-shadow:inset 0 2px 4px rgba(76,29,149,.18);color:#1F2937}
 .pw-slot-on{border:2px solid #22C55E;background:#ECFDF5;box-shadow:0 2px 0 #22C55E;color:#1F2937}
 .pw-slot-now{border-color:#A855F7;background:#FAF5FF}
-.pw-progress{display:flex;align-items:center;gap:8px;justify-content:center;font-weight:900;font-size:.875rem;color:#7E22CE}
-.pw-bar{display:block;flex:1;max-width:9rem;height:8px;border-radius:999px;background:#F3E8FF;overflow:hidden}
+.pw-progress{display:flex;align-items:center;gap:8px;justify-content:center;font-weight:900;font-size:.875rem;color:#047857}
+.pw-bar{display:block;flex:1;max-width:9rem;height:8px;border-radius:999px;background:#D1FAE5;overflow:hidden}
 .pw-bar-fill{display:block;height:100%;border-radius:999px;background:#F472B6;transition:width .25s ease}
 .pw-spark-star{position:absolute;pointer-events:none;font-size:1.25rem;line-height:1;color:#F59E0B}
 @keyframes pbp-float{0%,100%{transform:none}50%{transform:translateY(-8px)}}

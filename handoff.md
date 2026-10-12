@@ -1,4 +1,37 @@
 # Paul Easy Voca — Handoff
+## 273차 (2026-10-13): PAUL PHONICS 학생용 모바일 화면 재설계 — 첫 화면 3타일, 하위 화면 2개, 역할별 색, Unit 허브 4묶음
+- **상태 한 줄**: 테스터 전용 학생 화면만 바꿨다. 기존 기능·데이터·`data-testid`는 지우지 않고 위치와 모양만 옮겼다. 정적 검증과 관련 브라우저 검사 5종 통과, 390px 캡처로 직접 확인. 운영자의 실화면 확인이 남아 있다.
+- **설계 문서**: `docs/design/PHONICS_STUDENT_UX_REDESIGN_2026-10-13.md`(화면 구조, 색 역할, 변경 범위, 제약).
+- **첫 화면 (`ee941a1b`)**: 버튼 30개 → 5개. 그림 타일 3개 — `파닉스 모험`(민트, 책 그림, 기존 `pwg-open-phonics`), `말하기`(코랄, 사과 + 마이크 표시, 새 `pwh-open-speak`), `게임 놀이터`(노랑, 로봇, 새 `pwh-open-play`) — 와 소리 조절, 나가기. 390×844에서 스크롤 없음. 제목은 `그림 단어 연습` → `PAUL PHONICS`(테스트 표시 유지). `pwp-root`에 `data-home="main|speak|play"` 추가.
+- **말하기 하위 화면**: 묶음 10개(음식·학용품 등)가 여기로 이동. 그림이 있는 2열 카드, 버튼 문구 `연습`(민트 옅게) / `시험`(라벤더 옅게). 단계 묶음 2개는 짧은 이름(`짧고 쉬운 단어`, `생활 단어와 가게 물건`)으로 맨 앞, `준비 중` 묶음은 맨 뒤. `뒤로`(`pwh-back`).
+- **게임 놀이터 하위 화면**: 알파벳 망치·숨은 글자·가게 구경 그림 타일 3개 + 단계 칩(게임에만 영향을 주므로 여기로 옮기고 짧은 이름으로). 게임·연습을 끝내면 들어온 하위 화면으로 돌아온다(허브에서 시작한 것은 지금처럼 허브로).
+- **색 역할**(`pictureImg.jsx`의 `ROLE`): 민트 = 시작·다음, 코랄 = 말하기, 노랑 = 게임, 라벤더 = 복습·시험, 하늘 = 듣기, 회색 = 뒤로·나가기. 한 화면에 진한 색 버튼은 하나. 손댄 파일에서 보라색 버튼을 걷어냈다(`PictureWordPractice.jsx`의 요약 글자색 2곳만 남음).
+- **파닉스 (`df28686b`)**: 책장 — `파닉스 모험` / `책을 골라요`, 표지는 `Book N` + 한글 제목을 크게, 임시 안내문은 문구 그대로 책 아래 작은 글씨로. Book — Unit 줄을 크게(64px 이상), 표지 색 테두리. **Unit 허브 — 4묶음 `듣기`(하늘) → `따라 말하기`(코랄) → `게임`(노랑) → `복습`(라벤더)**, 두 레이아웃 모두 `pph-chunk-1..4`. "지금 할 것"(`data-state="next"`) 한 줄만 큰 카드 + 그 묶음 색의 `시작하기`, 나머지는 한 줄(아이콘·제목·작은 `하기`/`보기`), 잠긴 줄은 흐린 한 줄. 철자 게임(망치·숨은 글자)은 `게임` 묶음 안으로. Book 1 Unit 허브 높이 약 2,400px → **1,074px**(390px 실측).
+- **바뀐 동작(의도된 것)**: Book 1에서 `그림과 단어`(6번)가 `듣기` 묶음으로 가면서 "다음 할 것" 순서가 소개 → **그림과 단어 → 따라 말하기** → 풍선 → 기차 → 소리 확인이 됐다(전에는 소개 → 따라 말하기). 풍선 → 기차 → 소리 확인 연결은 그대로. 단계 번호는 화면에 보이지 않는다(testid의 번호는 유지). 한 줄짜리 줄의 설명문은 "다음 할 것"이거나 펼쳤을 때만 보인다. Book 2~5의 잠금 안내 "3번에서 해요" → "'그림과 단어'에서 해요". Book 화면 머리의 임시 안내문은 뺐다(책장 안내문과 Unit마다 `임시` 배지는 유지).
+- **그림**: 새 그림을 만들지 않았다. 메뉴·묶음 그림은 이미 학생 화면에 쓰이는 그림 단어 그림(교사 승인 기록 없는 자동 연결 119장 안)에서 골랐다. "말하기" 전용 그림은 없어 사과 + 🎤, 단계 묶음 2개는 그림 대신 🔤 / 💬. 책장·Book·허브에는 여전히 그림이 거의 없다(Book 1은 25단어 중 9개만 그림 있음).
+- **건드리지 않은 것**: `SpeakingPracticeItem.jsx`(녹음 버튼 — Speaking과 같은 부품이라 색 그대로), `App.jsx`·Dashboard·StudentHome, Voca·Speaking·Writing·Town·관리자, `src/data`·`src/utils`, 게임 규칙·단어·채점·녹음 로직, DB.
+- **번들**: 예산 대상 JS 합계 2.179 → **2.183 MB**(한도 2.2 MB 숫자 변경 0, 여유 약 17 KB).
+- **검증 — 통과(정적, dummy-env build)**: build OK. `testPhonicsGames` 428, `testPhonicsProgress` 111, `testPictureWords` 782, `testPictureWordGames` 142, `testBundleBudget` 32, `testLazyChunkGuards` 116, `testStudentPathContracts`·`testKeySentenceFlow`·`testWritingPractice`·`testRegistryCoverage` PASS, `testQaGate` 17, `testTownV2Static` 157, `testTownUiStatic` 126.
+- **검증 — 통과(브라우저 5종, 1종씩, 여유 3.4 GB)**: `pictureWordPractice` 123/0(110 → 123), `pictureWordGames` 151/0, `phonicsGames` 304/0(298 → 304), `phonicsProgress` 62/0, `phonicsReview` 50/0, 미mock 요청 0. `pictureWordPractice`는 첫 실행에서 새 단언 1건이 잘못된 위치(게임 놀이터로 넘어간 뒤 첫 화면의 나가기 버튼을 찾음)에 있어 116/1이었고, 단언을 제자리로 옮긴 뒤 123/0 — 앱 문제가 아니라 검사 코드 문제였다. 새 단언: 첫 화면 타일 3개·스크롤 없음·그림 로드, 하위 화면 왕복, 허브 4묶음 제목 순서, 진한 `시작하기` 1개, 허브 높이 1,200px 이하, 가로 넘침 0, 버튼 44px 이상.
+- **390px 눈으로 확인(스크래치 캡처)**: 첫 화면, 말하기, 연습 카드, 게임 놀이터, 알파벳 망치, 책장, Book 1, Book 1 Unit 1 허브, Book 2 Unit 1 허브. 가로 넘침 0, 깨진 그림 0, 44px 미만 버튼 0, 페이지 오류 0.
+- **남은 아쉬움(고치지 않음)**: 게임 이름이 영어 그대로다(`Sound Bubble Pop`, `Word Train` — 검사가 이름을 고정). 말하기 화면은 1,080px로 스크롤이 조금 있다. Book 2~5 허브는 선생님 녹음이 없어 잠긴 줄이 많고 1,296px. 책장 표지에 그림이 없다. 연습 카드의 `따라 말하기`는 파란 그라데이션 그대로.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1.
+- **검증 — 미완료**: 실기기·iOS·실제 스피커와 마이크, 배포된 Preview의 로그인 뒤 화면, `townProto25d` S37(여유 4.5 GB 이상 필요), Speaking·Writing·Voca·Town 브라우저 검사와 `verify:all`(해당 파일 변경 0이 근거), 360px·태블릿 폭의 새 화면은 기존 검사가 지나가는 범위만.
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·다른 워크트리·`C:\voca` 0. 학생 데이터 변경 0. 새 그림 파일 0.
+
+## 272차 (2026-10-13): 학생용 PAUL PHONICS 화면 검증 + `pw-preview` 갱신 (코드 변경 0)
+- **상태 한 줄**: 그림 관리 기능 개발은 운영자 지시로 일시 중단. 이번에는 **코드를 바꾸지 않았다** — 검증과 Preview 갱신만 했다. `pw-preview` = `4ead1686`(트리는 `7b73c7b5`와 동일), Vercel 배포 success. 운영자가 직접 여는 실화면 확인은 아직 남아 있다.
+- **Preview**: `https://voca-git-pw-preview-jina4926952s-projects.vercel.app` (Vercel 로그인 필요, 주소 요청 시 로그인 화면으로 넘어감). 이전 Preview 커밋 `95b7faa2` → 새 커밋 `4ead1686`(fast-forward, 강제 push 아님). 되돌리려면 `95b7faa2`의 트리로 같은 방식의 새 커밋을 올린다.
+- **덮어쓰기 전 변경 범위 확인**: 이전 Preview 대비 실행 코드 변경은 `AdminScreen.jsx`, `admin/PhonicsReviewPanel.jsx`, `admin/PictureWordReviewPanel.jsx`, `data/phonics/phonicsWords.js`(필드·헬퍼 추가), `data/pictureWords/index.js`(헬퍼 추가), `data/pictureWords/legacyReviews.json`(신규, 관리자 청크 전용) 6개뿐. 나머지는 문서·테스트·스크립트·미실행 SQL 초안. `api/`, `supabase/functions`, `package.json`, `vite.config.js`, `vercel.json` 변경 0. Speaking·Writing·Voca·Town 파일 변경 0. 생성 데이터 `pictureWords.json` 내용 동일.
+- **Vercel 대기열 메모**: 오늘 올린 커밋이 한 번에 하나씩 약 12분 간격으로 빌드돼, `pw-preview` push(16:09Z 무렵)에서 배포 완료(17:00Z)까지 약 50분 걸렸다. 그동안 GitHub 상태는 `pending`에 빈 목록으로 보인다 — 실패가 아니다. 작업 브랜치에 소커밋을 여러 번 push하면 Preview가 그만큼 늦어진다.
+- **검증 — 통과(정적, dummy-env build)**: build OK. `testPhonicsGames` 428, `testPhonicsProgress` 111, `testPictureWords` 782, `testPictureWordGames` 142, `testBundleBudget` 32, `testLazyChunkGuards` 116, `testStudentPathContracts` 61, `testWritingPractice`·`testPilotUnit` PASS, `testQaGate` 17, `testRegistryCoverage` 8, `testTownV2Static` 157, `testTownUiStatic` 126.
+- **검증 — 통과(학생 쪽 브라우저 3종, 각 1회, 1종씩, 여유 3.6~4.0 GB)**: `phonicsGames` 298/0, `pictureWordGames` 150/0, `pictureWordPractice` 110/0, 미mock 요청 0. `phonicsGames`의 시나리오 (s)가 **390×844 터치 화면에서 Book 1의 Unit 1~5 · 25단어를 완주**한다 — 듣기(보이는 단어만 읽음), 한국어 뜻, 녹음 → 멈춤 → 내 목소리 재생, 게임 2종(Sound Bubble Pop·Word Train), 소리 확인. 알파벳 망치·숨은 글자는 `pictureWordGames`가 다룬다.
+- **390px 눈으로 확인(스크래치 캡처, 저장소에 넣지 않음)**: 대시보드, 그림 단어 연습 첫 화면, 파닉스 책장, Book 1 Unit 목록, Unit 1 허브, 단어 카드(듣기 전·후), 알파벳 망치, 숨은 글자 11장. 가로 넘침 0, 깨진 그림 0, 화면 밖 버튼 0, 최소 글자 11~12px, 페이지 오류 0. 44px 미만 버튼은 단어 카드의 단어 글자 버튼 1개(40px, 눌러서 소리 듣기 — 264차 기능). Unit 2~5 허브와 풍선·기차 화면은 캡처 스크립트의 나가기 버튼 지정이 틀려 찍지 못했다(앱 문제 아님, 같은 화면을 `phonicsGames`가 통과). 다시 돌리지 않았다.
+- **학생 화면에서 알아 둘 것(기존 상태, 이번에 바뀐 것 아님)**: Book 1 25단어 중 **그림이 있는 단어는 9개**이고 16개는 글자 카드다(cat 등 — 그림 13개 미제작, 3개는 그림 없이 학습). 영국식 발음은 브라우저 음성 합성(en-GB)이며 기기에 따라 목소리가 다르다. 허브 2단계(선생님 소리)는 녹음 0 / 5라 잠겨 있다. 진도는 저장되지 않는다.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1.
+- **검증 — 미완료**: 배포된 Preview의 실제 화면(로그인 뒤)은 에이전트가 열어 보지 못했다 — Vercel 로그인 화면에서 막힌다. 실기기, 실제 스피커·마이크, iOS Safari. `townProto25d` S37(여유 4.5 GB 이상 필요). Speaking·Writing·Voca·Town 브라우저 검사와 `verify:all`은 이번에 다시 돌리지 않았다(해당 파일 변경 0이 근거).
+- **하지 않은 것**: 코드 변경 0. DB·SQL 실행·`.env`·Production·main·다른 워크트리·`C:\voca` 0. 교사 승인 기록·그림 제작·관리자 DB 저장은 범위 밖.
+
 ## 271차 (2026-10-13): 그림 검토 기록을 Git 정적 파일로 — 기록 파일·검증기·절차 문서, 꺼진 승인·반려 버튼, 이미지 없는 105개 목록
 - **상태 한 줄**: 커밋 3개 push 완료. 학생 화면·학생 데이터 변경 0, DB·SQL 실행 0. 정적 검증 통과, 관리자 브라우저 1종 1회 통과. **`townProto25d` S37과 학생 쪽 브라우저 검사는 돌리지 않았다.**
 - **CTO 결정**: 119개 검토 기록은 우선 Git 정적 파일 / 구조·검증 규칙·절차 문서화, 관리자 화면이 파일을 저장하는 것처럼 보이면 안 됨 / 승인·반려 버튼은 영구 저장 준비 전까지 비활성 + 이유 안내 / 반려 그림은 나중에 학생 화면에서 숨기고 대체 없으면 그림 없는 학습(지금은 설계만) / 이미지 없는 105개 정리와 제작 우선순위 제안 / Supabase는 추후 별도.

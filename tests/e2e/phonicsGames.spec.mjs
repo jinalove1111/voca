@@ -499,11 +499,11 @@ export async function run(browser, baseURL) {
   // ---- (a) 책장 → Book 1 → Unit 2 허브(10단계·3묶음) → 소개·갤러리·연습 → Sound Bubble Pop → 틀린 소리 복습
   await scenario('(a) Book 1 Unit 2', { width: 1280, height: 800 }, async ({ page, name, reqs }) => {
     await openScreen(page)
-    r.check(`${name} 진입 전에는 파닉스 청크 요청 0건, 진입 버튼 1개(옛 버튼 없음)`, !reqs.some((q) => /PaulPhonics/.test(q.url)) && (await T(page, 'pwg-open-phonics').isVisible()) && (await T(page, 'pwg-open-phonics').textContent()) === 'PAUL PHONICS (폴 파닉스)' && (await T(page, 'pwg-mode-bubble').count()) === 0 && (await T(page, 'pwg-mode-train').count()) === 0 && (await T(page, 'pha-entry').count()) === 0)
+    r.check(`${name} 진입 전에는 파닉스 청크 요청 0건, 진입 버튼 1개(옛 버튼 없음)`, !reqs.some((q) => /PaulPhonics/.test(q.url)) && (await T(page, 'pwg-open-phonics').isVisible()) && ((await T(page, 'pwg-open-phonics').textContent()) || '').includes('파닉스 모험') && (await T(page, 'pwg-mode-bubble').count()) === 0 && (await T(page, 'pwg-mode-train').count()) === 0 && (await T(page, 'pha-entry').count()) === 0)
     await openPhonics(page)
     r.check(`${name} 진입하면 파닉스 청크 요청`, reqs.some((q) => /PaulPhonics/.test(q.url)))
     const main = (await T(page, 'pph-main').innerText()) || ''
-    r.check(`${name} 책장: 제목 + 임시 구성 안내 + 5권 표지(제목 영/한)`, main.includes('PAUL PHONICS · 폴 파닉스') && ((await T(page, 'pph-draft-notice').textContent()) || '').includes('기본 구조만 승인된 임시 교육과정입니다 — 단어·소리·그림·녹음은 승인 전입니다')
+    r.check(`${name} 책장: 제목(파닉스 모험·책을 골라요) + 임시 구성 안내 + 5권 표지(제목 영/한)`, main.includes('파닉스 모험') && main.includes('책을 골라요') && ((await T(page, 'pph-draft-notice').textContent()) || '').includes('기본 구조만 승인된 임시 교육과정입니다 — 단어·소리·그림·녹음은 승인 전입니다')
       && (await page.locator('[data-testid^="pph-book-b"]').count()) === 5, main)
     const covers = []
     for (const [b, en, ko, nu] of [['b1', 'Short Vowels', '단모음', 5], ['b2', 'Single Consonants', '단자음', 7], ['b3', 'Long Vowels', '장모음', 6], ['b4', 'Consonant Teams', '이중자음', 11], ['b5', 'Vowel Teams', '모음 조합 및 확장 음가', 14]]) {
@@ -523,9 +523,9 @@ export async function run(browser, baseURL) {
     r.check(`${name} Unit 2 허브: data-book/unit, book1 배치, 임시 배지(작게), 큰 글자 e, 단어 5개, 먼저 배운 것 줄 없음, 발음 기호 0`, (await T(page, 'pph-unit').getAttribute('data-book')) === 'b1' && (await T(page, 'pph-unit').getAttribute('data-unit')) === 'u2' && (await T(page, 'pph-unit').getAttribute('data-layout')) === 'book1' && (await T(page, 'pph-unit-status').textContent()) === '임시' && (await T(page, 'pph-unit-words').textContent()) === '단어 5개' && words.length === 5 && ((await T(page, 'pph-unit-objective').textContent()) || '').includes('모음') && (await T(page, 'pph-unit-prereq').count()) === 0 && (await T(page, 'pph-unit-target').textContent()) === 'e' && !IPA_RE.test(hubTxt), hubTxt.slice(0, 200))
     const h = await hub1(page)
     const byN = Object.fromEntries(h.rows.map((x) => [x.n, x]))
-    r.check(`${name} 10단계가 3묶음(만나요 1·2 / 말해요 3–5·6 / 놀아요 7·8·9·10)으로 보이고 3–5는 한 줄(data-covers=3,4,5)`, h.rows.map((x) => x.n).join() === '1,2,3,6,7,8,9,10' && byN[1].chunk === 'pph-chunk-1' && byN[2].chunk === 'pph-chunk-1' && byN[3].chunk === 'pph-chunk-2' && byN[6].chunk === 'pph-chunk-2' && [7, 8, 9, 10].every((n) => byN[n].chunk === 'pph-chunk-3') && byN[3].covers === '3,4,5' && ['만나요', '말해요', '놀아요'].every((t, k) => h.chunkTitles[k] === t), JSON.stringify(h.rows.map((x) => [x.n, x.chunk])))
+    r.check(`${name} 10단계가 4묶음(듣기 1·2·6 / 따라 말하기 3–5 / 게임 7·8 / 복습 9·10)으로 화면 순서대로 보이고 3–5는 한 줄(data-covers=3,4,5)`, h.rows.map((x) => x.n).join() === '1,2,6,3,7,8,9,10' && [1, 2, 6].every((n) => byN[n].chunk === 'pph-chunk-1') && byN[3].chunk === 'pph-chunk-2' && [7, 8].every((n) => byN[n].chunk === 'pph-chunk-3') && [9, 10].every((n) => byN[n].chunk === 'pph-chunk-4') && byN[3].covers === '3,4,5' && h.chunkTitles.join() === '듣기,따라 말하기,게임,복습', JSON.stringify(h.rows.map((x) => [x.n, x.chunk])))
     r.check(`${name} 처음에는 next가 정확히 1개(1단계 "시작하기"), 2 잠김, 3·6·7·8·9 준비됨, 10 잠김("게임을 하면 열려요")`, h.rows.filter((x) => x.st === 'next').map((x) => x.n).join() === '1' && byN[2].st === 'locked' && [3, 6, 7, 8, 9].every((n) => byN[n].st === 'ready') && byN[10].st === 'locked' && byN[10].txt.includes('게임을 하면 열려요') && ((await T(page, 'pph-step-1-go').textContent()) || '').trim() === '시작하기' && ((await T(page, 'pph-step-7-go').textContent()) || '').trim() === '하기', JSON.stringify(h.rows.map((x) => [x.n, x.st])))
-    r.check(`${name} 2단계: 조용한 한 줄 "선생님 목소리는 곧 만나요", 버튼·오디오 0, 발음 요청 0건 / 3–5 "단어로 따라 말해요" / 6 "읽기는 Book 2에서" / 잠긴 행에 비활성 버튼 0`, byN[2].txt.includes('선생님 목소리는 곧 만나요') && byN[2].btn === 0 && (await T(page, 'pph-clip-audio').count()) === 0 && (await T(page, 'pph-phoneme').count()) === 0 && (await speakLen(page)) === 0 && byN[3].txt.includes('단어로 따라 말해요') && byN[6].txt.includes('읽기는 Book 2에서') && (await page.locator('[data-testid="pph-unit"] button:disabled').count()) === 0)
+    r.check(`${name} 2단계: 조용한 한 줄 "선생님 목소리는 곧 만나요", 버튼·오디오 0, 발음 요청 0건 / 지금 할 줄이 아닌 줄에는 설명 줄이 없음(3–5·6) / 잠긴 행에 비활성 버튼 0`, byN[2].txt.includes('선생님 목소리는 곧 만나요') && byN[2].btn === 0 && (await T(page, 'pph-clip-audio').count()) === 0 && (await T(page, 'pph-phoneme').count()) === 0 && (await speakLen(page)) === 0 && !byN[3].txt.includes('단어로 따라 말해요') && !byN[6].txt.includes('읽기는 Book 2에서') && byN[1].txt.includes('오늘의 소리 만나기') && (await page.locator('[data-testid="pph-unit"] button:disabled').count()) === 0)
     r.check(`${name} 소리 찾기 표시: 7·8·9단계에만 "소리 찾기" 3개, Book 1은 철자 게임 버튼 없음, 진행 요약은 비어 있음(data-records=0)`, (await T(page, 'pph-skill').count()) === 3 && (await T(page, 'pph-skill').first().textContent()) === '소리 찾기' && (await T(page, 'pph-step-7').locator('[data-testid="pph-skill"]').count()) === 1 && (await T(page, 'pph-extra-hammer').count()) === 0 && (await T(page, 'pph-extra-hidden').count()) === 0 && (await T(page, 'pph-progress').getAttribute('data-records')) === '0')
 
     // 1단계: 소개 카드
@@ -539,7 +539,7 @@ export async function run(browser, baseURL) {
     const spokenIntro = await page.evaluate(() => window.__speak.slice(-1)[0])
     r.check(`${name} 소개 카드: 큰 글자 e + 핵심 단어 2개(그림 있으면 그림 카드) + 입 모양 한 줄(pph-tip), 🔊는 단어 전체만 읽음 (${spokenIntro})`, (await T(page, 'pph-intro-letter').textContent()) === 'e' && introWords.length === 2 && introWords.every((x, k) => x.pic === (keyWordsExpected[k].image === 'ready' ? 'true' : 'false') && x.imgs === (keyWordsExpected[k].image === 'ready' ? 1 : 0)) && ((await T(page, 'pph-tip').textContent()) || '') === BOOKS[0].units[1].intro.tipKo && keyWordsExpected.some((w) => w.word === spokenIntro) && !IPA_RE.test((await T(page, 'pph-intro').innerText()) || ''), JSON.stringify(introWords))
     const h1 = await hub1(page)
-    r.check(`${name} 소개를 열면 1단계에 "오늘 했어요" 표시(저장·완료라는 말 없음)가 붙고 next가 3단계로 옮겨감`, h1.rows.find((x) => x.n === 1).st === 'done' && ((await T(page, 'pph-step-1-done').textContent()) || '').includes('오늘 했어요') && h1.rows.filter((x) => x.st === 'next').map((x) => x.n).join() === '3' && !/완료|저장/.test((await T(page, 'pph-unit').innerText()) || ''), JSON.stringify(h1.rows.map((x) => [x.n, x.st])))
+    r.check(`${name} 소개를 열면 1단계에 "오늘 했어요" 표시(저장·완료라는 말 없음)가 붙고 next가 6단계(그림과 단어)로 옮겨감`, h1.rows.find((x) => x.n === 1).st === 'done' && ((await T(page, 'pph-step-1-done').textContent()) || '').includes('오늘 했어요') && h1.rows.filter((x) => x.st === 'next').map((x) => x.n).join() === '6' && !/완료|저장/.test((await T(page, 'pph-unit').innerText()) || ''), JSON.stringify(h1.rows.map((x) => [x.n, x.st])))
 
     // 6단계: 그림과 단어 갤러리
     await T(page, 'pph-step-6-go').click()
@@ -550,6 +550,9 @@ export async function run(browser, baseURL) {
     await page.waitForFunction((m) => window.__speak.length > m, sp1, { timeout: 4000 })
     const spokenGal = await page.evaluate(() => window.__speak.slice(-1)[0])
     r.check(`${name} 갤러리: 단어 5개, 모음 e만 강조·자음은 회색, 그림은 승인된 3개뿐, 🔊는 단어 전체 (${spokenGal})`, gal.length === 5 && gal.every((g) => g.hl === 'e' && g.greyOthers && g.others >= 1) && gal.filter((g) => g.imgs === 1).length === 3 && words.some((w) => w.word === spokenGal), JSON.stringify(gal))
+
+    const h1b = await hub1(page)
+    r.check(`${name} 갤러리를 열면 "읽기는 Book 2에서" 설명이 보이고, next는 3–5단계(따라 말하기)로 옮겨가 그 줄에만 "단어로 따라 말해요"가 보임`, ((await T(page, 'pph-step-6').innerText()) || '').includes('읽기는 Book 2에서') && h1b.rows.filter((x) => x.st === 'next').map((x) => x.n).join() === '3' && ((await T(page, 'pph-step-3').innerText()) || '').includes('단어로 따라 말해요'), JSON.stringify(h1b.rows.map((x) => [x.n, x.st])))
 
     // 3–5단계: 기존 연습 카드(녹음 포함)
     await T(page, 'pph-step-3-go').click()
@@ -1059,7 +1062,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 소리 확인: 5문제, 진행 "소리 확인 n / 5", 힌트 없음(data-mode=challenge), 한 문제에 한 번만 고르고(고른 뒤 풍선 칸이 접힘) 틀리면 부드럽게 알려 줌`, t1.length === 5 && allOk(t1, 'label') && allOk(t1, 'mode') && allOk(t1, 'opts') && allOk(t1, 'once') && allOk(t1, 'collapsed'), JSON.stringify(t1.map((x) => [x.label, x.mode, x.once, x.collapsed])))
     r.check(`${name} 소리 확인 요약: data-score 4/5, "한 번에 맞힌 소리 4개", "다시 만나기" 있음, 다음 단계 버튼 없음`, (await T(page, 'pha-summary').getAttribute('data-score')) === '4/5' && ((await T(page, 'pha-summary').innerText()) || '').includes('한 번에 맞힌 소리 4개') && (await T(page, 'pha-review').count()) === 1 && (await T(page, 'pha-next-step').count()) === 0)
     const sm1 = await T(page, 'pha-summary').innerText()
-    r.check(`${name} 4/5 = 통과: data-passed=true, data-pass-mark=4, "통과! 5문제 중 4개 이상 맞혔어요", 다시 만나기는 보조 버튼(보라색 아님)`, (await T(page, 'pha-summary').getAttribute('data-passed')) === 'true' && (await T(page, 'pha-summary').getAttribute('data-pass-mark')) === '4' && sm1.includes('통과! 5문제 중 4개 이상 맞혔어요') && !((await T(page, 'pha-review').getAttribute('class')) || '').includes('bg-purple-600') && (await T(page, 'pha-retest').count()) === 0, sm1)
+    r.check(`${name} 4/5 = 통과: data-passed=true, data-pass-mark=4, "통과! 5문제 중 4개 이상 맞혔어요", 다시 만나기는 보조 버튼(진한 라벤더 아님)`, (await T(page, 'pha-summary').getAttribute('data-passed')) === 'true' && (await T(page, 'pha-summary').getAttribute('data-pass-mark')) === '4' && sm1.includes('통과! 5문제 중 4개 이상 맞혔어요') && !((await T(page, 'pha-review').getAttribute('class')) || '').includes('bg-violet-400') && (await T(page, 'pha-retest').count()) === 0, sm1)
     r.check(`${name} 소리 확인 결과 화면에 "이 점수는 저장되지 않아요" 안내가 정확히 1줄`, (await T(page, 'pha-not-saved').count()) === 1 && ((await T(page, 'pha-not-saved').innerText()) || '').includes('저장되지 않아요'))
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
@@ -1076,12 +1079,12 @@ export async function run(browser, baseURL) {
     const h2 = await hub1(page)
     r.check(`${name} 모두 맞히면 10단계는 다시 잠김("틀린 소리가 없어요")`, h2.rows.find((x) => x.n === 10).st === 'locked' && h2.rows.find((x) => x.n === 10).txt.includes('틀린 소리가 없어요'))
 
-    // 소리 확인을 한 번 더: 2개 틀리면 아직 통과 전 — 보라색 주 버튼은 틀린 소리 복습, 복습 뒤에는 다시 확인
+    // 소리 확인을 한 번 더: 2개 틀리면 아직 통과 전 — 진한 라벤더 주 버튼은 틀린 소리 복습, 복습 뒤에는 다시 확인
     await T(page, 'pph-step-9-go').click()
     await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
     const t2 = await testSessionRun(page, words, { detect: true, wrongAt: [0, 3] })
     const sm2 = await T(page, 'pha-summary').innerText()
-    r.check(`${name} 3/5 = 아직: data-passed=false, data-pass-mark=4, "조금만 더! 4개를 맞히면 통과예요", 실패 문구 없음, 주 버튼 = 틀린 소리 다시 만나기`, (await T(page, 'pha-summary').getAttribute('data-score')) === '3/5' && (await T(page, 'pha-summary').getAttribute('data-passed')) === 'false' && (await T(page, 'pha-summary').getAttribute('data-pass-mark')) === '4' && sm2.includes('조금만 더! 4개를 맞히면 통과예요') && !/실패|불합격/.test(sm2) && ((await T(page, 'pha-review').getAttribute('class')) || '').includes('bg-purple-600') && (await T(page, 'pha-retest').count()) === 0, sm2)
+    r.check(`${name} 3/5 = 아직: data-passed=false, data-pass-mark=4, "조금만 더! 4개를 맞히면 통과예요", 실패 문구 없음, 주 버튼 = 틀린 소리 다시 만나기`, (await T(page, 'pha-summary').getAttribute('data-score')) === '3/5' && (await T(page, 'pha-summary').getAttribute('data-passed')) === 'false' && (await T(page, 'pha-summary').getAttribute('data-pass-mark')) === '4' && sm2.includes('조금만 더! 4개를 맞히면 통과예요') && !/실패|불합격/.test(sm2) && ((await T(page, 'pha-review').getAttribute('class')) || '').includes('bg-violet-400') && (await T(page, 'pha-retest').count()) === 0, sm2)
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     const h3 = await hub1(page)
@@ -1210,6 +1213,8 @@ export async function run(browser, baseURL) {
       const words = unitWords('b1', u)
       const h = await hub1(page)
       const st = (n) => h.rows.find((x) => x.n === n)?.st
+      const ui = await page.evaluate(() => { const hub = document.querySelector('[data-testid="pph-unit"]'); return { sh: hub.scrollHeight, strong: [...hub.querySelectorAll('button')].filter((b) => b.offsetParent && b.innerText.trim() === '시작하기').length } })
+      r.check(`${name} ${u} 허브(390×844): 묶음 제목 4개가 듣기·따라 말하기·게임·복습 순서, 진한 "시작하기" 버튼 정확히 1개, scrollHeight ≤ 1200(${ui.sh}), 가로 넘침 0, 44px 미만 버튼 0`, h.chunkTitles.join() === '듣기,따라 말하기,게임,복습' && ui.strong === 1 && ui.sh <= 1200 && (await overflow(page)) <= 0 && (await smallButtons(page)) === 0, JSON.stringify(ui))
       r.check(`${name} ${u} 허브: 2단계(선생님 소리)는 잠김 — 녹음 미등록, 1·3·6·7·8·9단계는 열림`, st(2) === 'locked' && [1, 3, 6, 7, 8, 9].every((n) => st(n) && st(n) !== 'locked'), JSON.stringify(h.rows.map((x) => [x.n, x.st])))
 
       // 3–5단계: 카드 5장 — 단어, 한국어 뜻, 듣기, 첫 카드에서 녹음 → 멈춤 → 내 목소리 듣기

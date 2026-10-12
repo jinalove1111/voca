@@ -7,14 +7,20 @@ import { bubbleRound, spellParts, summarisePhonemes } from '../../utils/phonics/
 import { detectUnit, detectWords, hasGame, missedItems, readyWords, testSession, unitContext, unitTestLock } from '../../utils/phonics/curriculum.js'
 import { gameEligible } from '../../utils/pictureWords/games.js'
 import { phonemeClip } from '../../data/phonics/phonemeClips.js'
-import { imgUrl, MUTED, playEn, T2, W } from '../pictureWords/pictureImg.jsx'
+import { imgUrl, MUTED, playEn, ROLE, W } from '../pictureWords/pictureImg.jsx'
 import PhonemeListen, { LOCKED_TEXT_KO } from './PhonemeListen.jsx'
 
 export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-base btn-press disabled:opacity-40'
 const MIN_TEST_WORDS = 4
 const NONE = '단어 준비 중'
 const TEACHER_SOON = '선생님 목소리는 곧 만나요'
-const CHUNKS = ['만나요', '말해요', '놀아요']
+// 4묶음(듣기 → 따라 말하기 → 게임 → 복습): 제목 · 색 역할 · 아이콘 · 테두리/글자 색. rows 배열 순서 = 화면 순서(nextRow·after가 이 순서로 걷는다).
+const GROUPS = [
+  { t: '듣기', role: 'listen', icon: '👂', edge: 'border-sky-300', txt: 'text-sky-700' },
+  { t: '따라 말하기', role: 'say', icon: '🗣️', edge: 'border-rose-300', txt: 'text-rose-700' },
+  { t: '게임', role: 'play', icon: '🎮', edge: 'border-amber-300', txt: 'text-amber-700' },
+  { t: '복습', role: 'review', icon: '⭐', edge: 'border-violet-300', txt: 'text-violet-700' },
+]
 
 // 철자 표시: 목표 소리 글자만 강조, 나머지(도우미 글자)는 회색
 const Spelled = ({ item, big }) => (
@@ -22,21 +28,28 @@ const Spelled = ({ item, big }) => (
 )
 const Thumb = ({ item, cls }) => (item.image === 'ready' ? <img src={imgUrl(item.asset)} alt="그림" draggable={false} className={cls} /> : null)
 
-const Play = ({ w, id }) => <button type="button" data-testid={id} aria-label="단어 듣기" onClick={() => playEn(w.word)} className="min-h-[44px] min-w-[44px] rounded-2xl bg-sky-100 text-xl btn-press">🔊</button>
+const Play = ({ w, id }) => <button type="button" data-testid={id} aria-label="단어 듣기" onClick={() => playEn(w.word)} className={`min-h-[44px] min-w-[44px] rounded-2xl text-xl btn-press ${ROLE.listen.soft}`}>🔊</button>
 
-function Row({ r, onGo, children }) {
-  const next = r.state === 'next'
+// 다음 할 줄(next)만 크게 + 진한 버튼, 나머지는 한 줄(옅은 버튼), 잠김은 조용한 한 줄. 줄 번호(n)는 화면에 보이지 않고 testid에만 쓴다.
+function Row({ r, g, open, onGo, children }) {
+  const next = r.state === 'next', lock = r.state === 'locked', R = ROLE[g.role]
+  const btn = r.go && !lock && <button type="button" data-testid={`pph-step-${r.n}-go`} onClick={onGo} className={next ? `${BTN} mt-2 w-full ${R.strong}` : `min-h-[44px] min-w-[44px] shrink-0 rounded-2xl px-3 text-sm font-black btn-press ${R.soft}`}>{next ? '시작하기' : r.toggle ? '보기' : '하기'}</button>
   return (
-    <section data-testid={`pph-step-${r.n}`} data-state={r.state} data-covers={r.covers} className={`rounded-2xl border-2 p-3 ${next ? 'border-purple-400 bg-purple-50' : r.state === 'locked' ? 'border-gray-200 bg-gray-50' : 'border-sky-200 bg-white'}`}>
-      <div className="flex items-center gap-2">
-        <span className={`flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-full px-1 text-sm font-black ${r.state === 'locked' ? 'bg-gray-300 text-gray-600' : next ? 'bg-purple-600 text-white' : 'bg-sky-500 text-white'}`}>{r.badge || r.n}</span>
-        <p className="min-w-0 flex-1 break-words text-base font-black text-gray-800">{r.title}{r.tag && <span data-testid="pph-skill" className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-black text-emerald-800">{r.tag}</span>}</p>
-        {r.state === 'done' && <span data-testid={`pph-step-${r.n}-done`} className="shrink-0 text-xs font-black text-green-700">✓ 오늘 했어요</span>}
+    <section data-testid={`pph-step-${r.n}`} data-state={r.state} data-covers={r.covers} className={`rounded-2xl ${next ? `border-2 bg-white p-3 shadow ${g.edge}` : `border px-3 py-1.5 ${lock ? 'border-gray-100 bg-gray-50' : 'border-gray-200 bg-white'}`}`}>
+      <div className="flex min-h-[44px] items-center gap-2">
+        <span className={`flex shrink-0 items-center justify-center rounded-full ${next ? 'h-12 w-12 text-2xl' : 'h-9 w-9 text-lg'} ${lock ? 'bg-gray-200 opacity-50' : R.soft}`}>{g.icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className={`break-words font-black ${next ? 'text-lg text-gray-900' : lock ? 'text-sm text-gray-500' : 'text-base text-gray-800'}`}>{r.title}
+            {r.tag && <span data-testid="pph-skill" className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-black text-gray-600">{r.tag}</span>}
+            {r.state === 'done' && <span data-testid={`pph-step-${r.n}-done`} className="ml-1 text-emerald-600">✓<span className="sr-only"> 오늘 했어요</span></span>}
+            {r.res && !lock && <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-black ${R.soft}`}>{r.res}</span>}</p>
+          {lock ? <p data-testid={`pph-step-${r.n}-reason`} className="break-words text-xs font-bold text-gray-500">{r.why}</p>
+            : r.sub && (next || open) && <p className="break-words text-sm font-bold text-gray-600">{r.sub}</p>}
+        </div>
+        {!next && btn}
       </div>
-      {r.state === 'locked' ? <p data-testid={`pph-step-${r.n}-reason`} className="mt-1 break-words text-sm font-bold text-gray-500">{r.why}</p>
-        : r.sub && <p className="mt-1 break-words text-sm font-bold text-gray-600">{r.sub}</p>}
       {children}
-      {r.go && r.state !== 'locked' && <button type="button" data-testid={`pph-step-${r.n}-go`} onClick={onGo} className={`${BTN} mt-2 w-full ${next ? 'bg-purple-600 text-white' : 'bg-sky-100 text-sky-800'}`}>{next ? '시작하기' : r.toggle ? '보기' : '하기'}</button>}
+      {next && btn}
     </section>
   )
 }
@@ -82,29 +95,29 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
   const doneBy = (step) => attempts.some((r) => r.step === step)
   const bubble = { key: 'bubble', chain: true, title: 'Sound Bubble Pop', ok: bubbleWords.length > 0, why: bubbleLock, go: true, done: doneBy('bubble') }
   const train = { key: 'train', chain: true, title: 'Word Train', ok: trainWords.length > 0, why: trainLock, go: true, done: doneBy('train') }
-  const review = { key: 'review', sub: reviewWhy, ok: missed.length > 0, why: reviewWhy, go: true, run: sess('bubble', 'review', missed) }
+  const review = { key: 'review', res: missed.length ? reviewWhy : '', ok: missed.length > 0, why: reviewWhy, go: true, run: sess('bubble', 'review', missed) }
 
   if (b1) {
     const tag = '소리 찾기'
     rows = [
-      { n: 1, key: 'intro', chunk: 0, title: '오늘의 소리 만나기', ok: hasWords, why: NONE, toggle: true, go: true, done: isSeen('intro') },
-      { n: 2, key: 'hear', chunk: 0, title: '선생님 소리 듣기', ok: hasWords && allClips, why: TEACHER_SOON, info: true },
-      { n: 3, key: 'say', chunk: 1, covers: '3,4,5', badge: '3–5', title: '듣고 따라 말하고 녹음해요', sub: '단어로 따라 말해요', ok: hasWords, why: NONE, go: true, run: () => onPractice(words), done: isSeen('say') },
-      { n: 6, key: 'gallery', chunk: 1, title: '그림과 단어', sub: '단어 듣기 (읽기는 Book 2에서)', ok: hasWords, why: NONE, toggle: true, go: true, done: isSeen('gallery') },
-      { ...bubble, n: 7, chunk: 2, tag, sub: detect ? '소리가 들리는 풍선을 터뜨려요' : '소리를 듣고 알맞은 모음 풍선을 터뜨려요', run: sess('bubble', 'bubble', bubbleWords, { interleave: true }) },
-      { ...train, n: 8, chunk: 2, tag, sub: '빈 칸에 들리는 모음을 끼워요', run: sess('train', 'train', trainWords, { vowelTrain: true }) },
-      { n: 9, key: 'test', chunk: 2, tag, chain: true, title: '소리 확인', sub: `5문제, 한 문제에 한 번씩 골라요${lastTest ? (lastTest.passed ? ' · 통과' : ' · 다시 도전') : ''}`, ok: testSession(bookId, unitId, 0).length === 5, why: NONE, go: true, run: sess('bubble', 'test', [], { test: true }), done: mine.some((r) => r.unitTest) },
-      { ...review, n: 10, chunk: 2, title: '다시 만나는 소리' },
+      { n: 1, key: 'intro', g: 0, title: '오늘의 소리 만나기', ok: hasWords, why: NONE, toggle: true, go: true, done: isSeen('intro') },
+      { n: 2, key: 'hear', g: 0, title: '선생님 소리 듣기', ok: hasWords && allClips, why: TEACHER_SOON, info: true },
+      { n: 6, key: 'gallery', g: 0, title: '그림과 단어', sub: '단어 듣기 (읽기는 Book 2에서)', ok: hasWords, why: NONE, toggle: true, go: true, done: isSeen('gallery') },
+      { n: 3, key: 'say', g: 1, covers: '3,4,5', title: '듣고 따라 말하고 녹음해요', sub: '단어로 따라 말해요', ok: hasWords, why: NONE, go: true, run: () => onPractice(words), done: isSeen('say') },
+      { ...bubble, n: 7, g: 2, tag, sub: detect ? '소리가 들리는 풍선을 터뜨려요' : '소리를 듣고 알맞은 모음 풍선을 터뜨려요', run: sess('bubble', 'bubble', bubbleWords, { interleave: true }) },
+      { ...train, n: 8, g: 2, tag, sub: '빈 칸에 들리는 모음을 끼워요', run: sess('train', 'train', trainWords, { vowelTrain: true }) },
+      { n: 9, key: 'test', g: 3, tag, chain: true, title: '소리 확인', sub: '5문제, 한 문제에 한 번씩 골라요', res: lastTest ? (lastTest.passed ? '통과' : '다시 도전') : '', ok: testSession(bookId, unitId, 0).length === 5, why: NONE, go: true, run: sess('bubble', 'test', [], { test: true }), done: mine.some((r) => r.unitTest) },
+      { ...review, n: 10, g: 3, title: '다시 만나는 소리' },
     ]
   } else {
     rows = [
-      { n: 1, key: 'hear', title: '소리 듣기', ok: hasWords && allClips, why: rec.length ? LOCKED_TEXT_KO : '소리 하나를 따로 듣지 않는 Unit이에요', info: true },
-      { n: 2, key: 'repeat', title: '듣고 따라 말하기', ok: hasWords && allClips, why: rec.length ? `${LOCKED_TEXT_KO} — 소리 하나씩 따라 말하려면 선생님 녹음이 있어야 해요. 단어 따라 말하기는 3번에서 해요.` : '소리 하나를 따로 듣지 않는 Unit이에요', info: true },
-      { n: 3, key: 'pic', title: '그림과 단어', sub: '그림을 보고 단어를 듣고 따라 말해요', ok: ready.length > 0, why: '그림이 준비된 단어가 없어요', go: true, run: () => onPractice(ready), done: isSeen('pic') },
-      { ...bubble, n: 4, sub: '소리를 듣고 풍선을 터뜨려요', run: sess('bubble', 'bubble', bubbleWords, unit.review ? undefined : { interleave: true }) },
-      { ...train, n: 5, sub: '소리 블록으로 단어를 만들어요', run: sess('train', 'train', trainWords) },
-      { n: 6, key: 'test', chain: true, title: 'Unit Test', sub: '그림을 보고 단어를 골라요', ok: !testLock && ready.length >= MIN_TEST_WORDS, why: testLock || '그림이 준비된 단어가 4개 이상일 때 열려요', go: true, run: () => onTest(ready), done: isSeen('test') },
-      { ...review, n: 7, title: '틀린 소리 복습' },
+      { n: 1, key: 'hear', g: 0, title: '소리 듣기', ok: hasWords && allClips, why: rec.length ? LOCKED_TEXT_KO : '소리 하나를 따로 듣지 않는 Unit이에요', info: true },
+      { n: 2, key: 'repeat', g: 1, title: '듣고 따라 말하기', ok: hasWords && allClips, why: rec.length ? `${LOCKED_TEXT_KO} — 소리 하나씩 따라 말하려면 선생님 녹음이 있어야 해요. 단어 따라 말하기는 '그림과 단어'에서 해요.` : '소리 하나를 따로 듣지 않는 Unit이에요', info: true },
+      { n: 3, key: 'pic', g: 1, title: '그림과 단어', sub: '그림을 보고 단어를 듣고 따라 말해요', ok: ready.length > 0, why: '그림이 준비된 단어가 없어요', go: true, run: () => onPractice(ready), done: isSeen('pic') },
+      { ...bubble, n: 4, g: 2, sub: '소리를 듣고 풍선을 터뜨려요', run: sess('bubble', 'bubble', bubbleWords, unit.review ? undefined : { interleave: true }) },
+      { ...train, n: 5, g: 2, sub: '소리 블록으로 단어를 만들어요', run: sess('train', 'train', trainWords) },
+      { n: 6, key: 'test', g: 3, chain: true, title: 'Unit Test', sub: '그림을 보고 단어를 골라요', ok: !testLock && ready.length >= MIN_TEST_WORDS, why: testLock || '그림이 준비된 단어가 4개 이상일 때 열려요', go: true, run: () => onTest(ready), done: isSeen('test') },
+      { ...review, n: 7, g: 3, title: '틀린 소리 복습' },
     ]
   }
   rows = rows.map((r) => ({ ...r, state: !r.ok ? 'locked' : r.done ? 'done' : 'ready' }))
@@ -157,45 +170,43 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
     if (r.key === 'hear' && !b1) return <div className="mt-2 space-y-1">{rec.map((x) => <PhonemeListen key={x.pair} target={x} />)}</div>
     return null
   }
-  const line = (r) => <Row key={r.n} r={r} onGo={go(r)}>{body(r)}</Row>
+  const line = (r) => <Row key={r.n} r={r} g={GROUPS[r.g]} open={open[r.key]} onGo={go(r)}>{body(r)}</Row>
 
   return (
     <div data-testid="pph-unit" data-book={bookId} data-unit={unitId} data-layout={b1 ? 'book1' : 'classic'} className="space-y-3">
-      <div className="text-center">
-        <p className="text-sm font-bold text-gray-500">Book {book.no} · {book.titleEn} ({book.titleKo})</p>
-        <p className={T2}>{unitName}</p>
-        <p data-testid="pph-unit-target" className={`break-words font-black text-pink-600 ${b1 ? 'text-6xl' : 'text-lg'}`}>{targetLine}</p>
-        {b1 && <div className="flex justify-center gap-2">{keyWords.map((w) => <Thumb key={w.id} item={w} cls="h-14 w-14 rounded-xl border-2 border-pink-200 bg-white object-contain" />)}</div>}
-        <span data-testid="pph-unit-status" className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">{STATUS_LABEL_KO[unit.status]}</span>
-        <p data-testid="pph-unit-words" className="text-sm font-bold text-gray-600">{hasWords ? `단어 ${words.length}개` : NONE}</p>
-        {!unit.review && <p data-testid="pph-unit-objective" className="text-sm font-bold text-sky-700">{objectiveKo(book, unit)}</p>}
+      <div className="space-y-1 text-center">
+        <p className="text-xs font-bold text-gray-500">Book {book.no} · {book.titleKo}</p>
+        <p className="text-xl font-black text-gray-900">{unitName}</p>
+        <div className="flex items-center justify-center gap-3">
+          <p data-testid="pph-unit-target" className={`break-words font-black text-pink-600 ${b1 ? 'text-6xl leading-none' : 'text-lg'}`}>{targetLine}</p>
+          {b1 && keyWords.map((w) => <Thumb key={w.id} item={w} cls="h-14 w-14 rounded-xl border-2 border-pink-200 bg-white object-contain" />)}
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <span data-testid="pph-unit-status" className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800">{STATUS_LABEL_KO[unit.status]}</span>
+          <p data-testid="pph-unit-words" className={MUTED}>{hasWords ? `단어 ${words.length}개` : NONE}</p>
+        </div>
+        {!unit.review && <p data-testid="pph-unit-objective" className={MUTED}>{objectiveKo(book, unit)}</p>}
         {!unit.review && !b1 && <p data-testid="pph-unit-prereq" className={MUTED}>먼저 배운 것: {prereqKo(bookId, unitId)}</p>}
         {unit.note && <p className={MUTED}>{unit.note}</p>}
       </div>
 
-      {b1
-        ? CHUNKS.map((title, c) => (
-          <div key={c} data-testid={`pph-chunk-${c + 1}`} className="space-y-2">
-            <p className="pt-1 text-sm font-black text-purple-700">{title}</p>
-            {rows.filter((r) => r.chunk === c).map(line)}
-          </div>
-        ))
-        : rows.map(line)}
-
-      {(hammerOk || hiddenOk) && (
-        <div className="space-y-2 rounded-2xl border-2 border-sky-100 bg-white p-3">
-          <p className="text-center text-sm font-black text-sky-700">철자 게임</p>
-          <div className="grid grid-cols-2 gap-2">
-            {hammerOk && <button type="button" data-testid="pph-extra-hammer" onClick={() => onGame('hammer', ready)} className={`${BTN} bg-sky-100 text-sky-700`}>알파벳 망치</button>}
-            {hiddenOk && <button type="button" data-testid="pph-extra-hidden" onClick={() => onGame('hidden', ready.map(withPrefer))} className={`${BTN} bg-sky-100 text-sky-700`}>숨은 글자</button>}
-          </div>
+      {GROUPS.map((g, c) => (
+        <div key={g.t} data-testid={`pph-chunk-${c + 1}`} className="space-y-2">
+          <p className={`pt-1 text-sm font-black ${g.txt}`}>{g.t}</p>
+          {rows.filter((r) => r.g === c).map(line)}
+          {c === 2 && (hammerOk || hiddenOk) && (
+            <div className="grid grid-cols-2 gap-2">
+              {hammerOk && <button type="button" data-testid="pph-extra-hammer" onClick={() => onGame('hammer', ready)} className={`${BTN} ${ROLE.play.soft}`}>알파벳 망치</button>}
+              {hiddenOk && <button type="button" data-testid="pph-extra-hidden" onClick={() => onGame('hidden', ready.map(withPrefer))} className={`${BTN} ${ROLE.play.soft}`}>숨은 글자</button>}
+            </div>
+          )}
         </div>
-      )}
+      ))}
 
       <div data-testid="pph-progress" data-records={attempts.length} className="text-center">
-        {wrongPh.length > 0 && <p className="rounded-2xl bg-amber-50 p-2 text-sm font-black text-amber-800">다시 볼 소리: {wrongPh.join(', ')}</p>}
+        {wrongPh.length > 0 && <p className={`rounded-2xl p-2 text-sm font-black ${ROLE.review.soft}`}>다시 볼 소리: {wrongPh.join(', ')}</p>}
       </div>
-      <button type="button" data-testid="pph-back" onClick={onBack} className={`${BTN} ${W.gray}`}>Book으로 돌아가기</button>
+      <button type="button" data-testid="pph-back" onClick={onBack} className={`${BTN} ${W.gray}`}>뒤로</button>
     </div>
   )
 }

@@ -85,6 +85,7 @@ async function openScreen(page) {
 }
 // 묶음을 시작하고 세션 단어/시험 문제를 root의 data-seed로 다시 계산한다
 async function startSet(page, id, mode, firstStep) {
+  if (await T(page, 'pwh-open-speak').count()) await T(page, 'pwh-open-speak').click() // 묶음은 첫 화면이 아니라 말하기 하위 화면에 있다
   await T(page, `pwp-start-${mode}-${id}`).click()
   await waitStep(page, firstStep)
   const seed = Number(await attr(page, 'data-seed'))
@@ -208,16 +209,17 @@ export async function run(browser, baseURL) {
     const bt = await T(page, 'dash-picture-words').boundingBox()
     r.check(`${name} 첫 화면에 그림 단어 버튼(44px 이상)`, !!bt && bt.height >= 43.9, JSON.stringify(bt))
     await openScreen(page)
+    await T(page, 'pwh-open-speak').click()
     const ready = SETS.filter((s) => s.ready), notReady = SETS.filter((s) => !s.ready)
     let ok = ready.length === 6 && notReady.map((s) => s.shop).sort().join() === 'garden,pet'
     for (const id of [...ready.map((s) => s.shop), 'level-phonics', 'level-conversation']) {
       for (const m of ['practice', 'test']) if ((await T(page, `pwp-start-${m}-${id}`).count()) !== 1 || (await T(page, `pwp-start-${m}-${id}`).isDisabled())) ok = false
     }
     for (const s of notReady) for (const m of ['practice', 'test']) if (!(await T(page, `pwp-start-${m}-${s.shop}`).isDisabled())) ok = false
-    r.check(`${name} (s1) 준비된 가게 6곳 + Phonics + Conversation: 연습하기/시험 보기 활성, 정원·반려동물은 준비 중(비활성)`, ok, ready.map((s) => s.shop).join())
+    r.check(`${name} (s1) 준비된 가게 6곳 + Phonics + Conversation: 연습/시험 활성, 정원·반려동물은 준비 중(비활성)`, ok, ready.map((s) => s.shop).join())
     const txt = await T(page, 'pwp-root').innerText()
     const phLabel = await T(page, 'pwp-set-level-phonics').innerText()
-    r.check(`${name} (s1) Phonics 묶음 이름은 소리 순서를 주장하지 않음("짧고 쉬운 단어") + 준비 중 표시`, phLabel.includes('Phonics — 짧고 쉬운 단어') && !/소리|순서/.test(phLabel) && txt.includes('준비 중'), phLabel)
+    r.check(`${name} (s1) Phonics 묶음 이름은 짧은 이름이고 소리 순서를 주장하지 않음("짧고 쉬운 단어") + 준비 중 표시`, phLabel.includes('짧고 쉬운 단어') && !phLabel.includes('Phonics') && !/소리|순서/.test(phLabel) && txt.includes('준비 중'), phLabel)
     for (const id of ['level-phonics', 'level-conversation']) {
       const S = await startSet(page, id, 'practice', 'card')
       r.check(`${name} (s1) ${id}: 6단어 세션이 해당 묶음 단어로만 구성`, S.words.length === 6 && S.words.every((w) => SET_WORDS[id].some((x) => x.id === w.id)) && (await T(page, 'pwp-word').textContent()) === S.words[0].en)
@@ -229,6 +231,31 @@ export async function run(browser, baseURL) {
       await waitStep(page, 'pick')
     }
     r.check(`${name} (s1) 연습만 하고 "건너뛰고 끝내기" → 요약(연습을 마쳤어요, 점수 없음)`, true)
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (m1) 첫 화면(390x844): 큰 타일 3개, 스크롤 없음, 하위 화면 왕복 ----
+  await scenario('(m1) 첫 화면 3타일', { width: 390, height: 844 }, async ({ page, name }) => {
+    await openScreen(page)
+    const tiles = page.locator('.pw-tile-menu')
+    const nBtn = await T(page, 'pwp-root').locator('button:not([data-testid^="pwsfx"])').count()
+    r.check(`${name} (m1) 첫 화면: data-home=main, 타일 3개(파닉스 모험/말하기/게임 놀이터) + 소리 조절 + 나가기, 그 밖의 버튼 없음`, (await attr(page, 'data-home')) === 'main' && (await tiles.count()) === 3 && (await T(page, 'pwg-open-phonics').count()) === 1 && (await T(page, 'pwh-open-speak').count()) === 1 && (await T(page, 'pwh-open-play').count()) === 1 && (await T(page, 'pwsfx-root').count()) === 1 && (await T(page, 'pwp-exit').count()) === 1 && nBtn === 4, String(nBtn))
+    r.check(`${name} (m1) 제목 PAUL PHONICS`, ((await page.locator('h1').first().textContent()) || '').includes('PAUL PHONICS'))
+    r.check(`${name} (m1) 스크롤 없이 한 화면(scrollHeight<=innerHeight), 가로 넘침 0`, (await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)) && (await overflow(page)) <= 0, await page.evaluate(() => document.documentElement.scrollHeight + '/' + window.innerHeight))
+    const sizes = await tiles.evaluateAll((l) => l.map((e) => { const i = e.querySelector('img'); return { h: e.getBoundingClientRect().height, ok: !!i && i.complete && i.naturalWidth > 0 } }))
+    r.check(`${name} (m1) 타일마다 높이 168px 이상 + 그림 로드됨`, sizes.length === 3 && sizes.every((x) => x.h >= 167.9 && x.ok), JSON.stringify(sizes))
+    await T(page, 'pwh-open-speak').click()
+    const order = await page.locator('[data-testid^="pwp-set-"]').evaluateAll((l) => l.map((e) => e.getAttribute('data-testid').slice(8)))
+    r.check(`${name} (m1) 말하기 하위 화면: data-home=speak, 묶음 10개(레벨 2개가 맨 앞, 준비 중은 맨 뒤), 레벨 칩은 여기 없음(게임 놀이터로 이동), 뒤로, 가로 넘침 0`, (await attr(page, 'data-home')) === 'speak' && (await page.locator('[data-testid^="pwp-set-"]').count()) === 10 && (await T(page, 'pwg-level-phonics').count()) === 0 && order.slice(0, 2).join() === 'level-phonics,level-conversation' && order.slice(-2).sort().join() === 'garden,pet' && (await T(page, 'pwh-back').count()) === 1 && (await overflow(page)) <= 0, String(await overflow(page)))
+    await T(page, 'pwh-back').click()
+    r.check(`${name} (m1) 뒤로 → 첫 화면`, (await attr(page, 'data-home')) === 'main' && (await tiles.count()) === 3)
+    r.check(`${name} (m1) 첫 화면 높이: 제목·소리 조절·타일 3개·나가기가 스크롤 없이 들어가고 마지막 요소 아래에도 여유가 있음`, await page.evaluate(() => { const b = document.querySelector('[data-testid="pwp-exit"]').getBoundingClientRect().bottom; return b <= window.innerHeight - 16 }))
+    await T(page, 'pwh-open-play').click()
+    r.check(`${name} (m1) 게임 놀이터: data-home=play, 게임 타일 3개(망치/숨은 글자/가게 구경), 레벨 칩 3개, 가로 넘침 0`, (await attr(page, 'data-home')) === 'play' && (await T(page, 'pwg-mode-hammer').count()) === 1 && (await T(page, 'pwg-mode-hidden').count()) === 1 && (await T(page, 'pwg-mode-shelf').count()) === 1 && (await T(page, 'pwg-level-phonics').count()) === 1 && (await overflow(page)) <= 0)
+    await T(page, 'pwg-mode-hidden').click()
+    await T(page, 'pwl-root').waitFor({ state: 'visible', timeout: 20000 })
+    await T(page, 'pwg-quit').click()
+    await T(page, 'pwp-root').waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} (m1) 게임 그만하기 → 게임 놀이터로 돌아옴`, (await attr(page, 'data-home')) === 'play')
   }, { studentId: TESTER_ONLY })
 
   // ---- (r1)(r2) PC: 카드 한 장에서 듣기 → 말하기 → 내 목소리 → 다시 말하기 → 다음 ----
