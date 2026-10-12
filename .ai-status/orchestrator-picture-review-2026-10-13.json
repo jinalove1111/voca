@@ -1,0 +1,41 @@
+{
+  "agent_name": "orchestrator",
+  "role": "관리자 그림 검토 메뉴(읽기 전용) + 승인 기록 저장 방식 조사 (270차)",
+  "task_id": "paul-phonics-picture-review-2026-10-13",
+  "task": "관리자 메뉴 '그림 검토' 추가(119개 목록, 4개 필터, 승인·반려 버튼 없음), 저장 스키마·권한 조사와 미실행 SQL 초안",
+  "status": "completed_with_open_verification",
+  "progress": 90,
+  "updated_at": "2026-10-13",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "commits": ["54063ec3", "8908dc9b"],
+  "files_owned": [
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/PictureWordReviewPanel.jsx",
+    "src/data/pictureWords/index.js",
+    "scripts/testPictureWords.mjs",
+    "tests/e2e/pictureWordReview.spec.mjs",
+    "docs/design/PICTURE_REVIEW_STORAGE_2026-10-13.md",
+    "supabase_v3_52_picture_review_DRAFT.sql",
+    "handoff.md"
+  ],
+  "review_counts_real_data": { "needs_review": 119, "approved": 0, "rejected": 0, "no_image_registered_missing_file": 0, "no_image_phonics_words": 105 },
+  "verification": {
+    "passed": {
+      "build": "OK (dummy env, 0 warnings)",
+      "static": "testPictureWords 767/767, testPictureWordGames 142/142, testPhonicsGames 427/427, testPhonicsProgress 111/111, testTownV2Static 157/157 (2 drafts classified, 0 operational), testTownUiStatic 126/126, testBundleBudget 32/32 (2.180 MB), testLazyChunkGuards 116/116, testRegistryCoverage 8/8, testQaGate 17/17, testStudentPathContracts 61/61",
+      "browser": "pictureWordReview 37/0 — one run at 3.1 GB free"
+    },
+    "failed_preexisting": "testTownShop 85/1 — SSR block has no png loader for hats (unrelated, not fixed)",
+    "not_run": "townProto25d S37 (needs >= 4.5 GB free), student-side browser specs, all other browser specs, verify:all, real device, Preview"
+  },
+  "sql": "supabase_v3_52_picture_review_DRAFT.sql — DRAFT, not run anywhere, additive and idempotent, no student data",
+  "blocked_on_operator": [
+    "저장 방식 선택: (A) 파일 기반(권장) / DB 기록 병행(초안 SQL 승인 필요)",
+    "반려가 기존 119개 그림을 학생 화면에서 숨겨도 되는지 별도 승인",
+    "선택 후: validate()가 MATCH 결정을 받도록 변경 + 승인·반려 버튼 연결",
+    "pw-preview 갱신 여부 (95b7faa2 그대로)",
+    "townProto25d S37 재실행은 여유 메모리 4.5 GB 이상에서",
+    "testTownShop SSR png 로더 수정 여부"
+  ],
+  "not_done": "DB/SQL 실행/Production/main/pw-preview 갱신 0, 학생 화면·학생 데이터 변경 0, 자동 승인 0, DATABASE.md 미갱신(초안 미채택)"
+}

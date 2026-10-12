@@ -1,4 +1,23 @@
 # Paul Easy Voca — Handoff
+## 270차 (2026-10-13): 관리자 '그림 검토' 메뉴(읽기 전용) + 승인 기록 저장 방식 조사·SQL 초안(미실행)
+- **상태 한 줄**: 커밋 2개 push 완료. 관리자 화면에 그림 검토 목록이 생겼고 **승인·반려 버튼은 없다**(영구 저장 방식 검증 전). 학생 화면·학생 데이터 변경 0. SQL은 초안만 작성, 실행 0. **`townProto25d` S37과 학생 쪽 브라우저 검사는 이번에도 돌리지 않았다.**
+- **그림 검토 화면 (`54063ec3`)**: 관리자 메뉴 `🖼 그림 검토`(기존 `🖼 그림단어` 옆) → `PictureWordReviewPanel`을 `그림 검토` 탭으로 바로 연다(같은 패널의 세 번째 탭으로도 들어갈 수 있다). 자동 연결 그림 **119개**를 카드로 표시 — 이미지, 영어 단어, 한국어 뜻, 카테고리(가게), 승인 상태 배지, "학생 화면 사용 중". 필터 `검토 필요 119` / `승인 0` / `반려 0` / `이미지 없음 105`. 숫자는 전부 데이터에서 계산한다(`reviewQueue()` = `autoLink` 항목, `reviewStatus()` = 결정 `approve`→승인, `exclude`→반려, 없음→검토 필요).
+  - **이미지 없음**: (a) 등록됐는데 그림 파일이 빠진 항목(지금 0), (b) 그림을 아직 만들지 않은 파닉스 단어 105개(`image === 'needed'`).
+  - **승인·반려**: 버튼·입력·저장·네트워크 없음. 맨 위에 "읽기 전용입니다. 승인·반려는 아직 저장할 수 없어 버튼을 두지 않았습니다…" 안내. 정적 검사가 이 탭 소스에 저장 호출·`localStorage`·`fetch`·승인/반려 버튼이 없음을 고정한다.
+  - **왜 새 파일이 아니라 기존 패널 안인가**: 합계 예산이 `PictureWordReviewPanel-*` 청크만 제외하고 이 파일이 그림 주소 표를 이미 갖고 있다. 새 청크였다면 예산에 잡히고 주소 표가 중복된다. 결과: 제외 청크 36.6 KB, 예산 대상 합계 2.178 → 2.180 MB(한도 숫자 변경 0).
+  - 기존 `승인 필요` 탭(의심 31장, 이 브라우저에만 저장 + JSON 내보내기)은 그대로다.
+- **저장 방식 조사 (`8908dc9b`)**: `docs/design/PICTURE_REVIEW_STORAGE_2026-10-13.md` + `supabase_v3_52_picture_review_DRAFT.sql`(**미실행 초안**, 추가 전용·멱등, 학생 데이터 없음).
+  - **사실**: 관리자 쓰기는 브라우저가 anon 키로 직접 하지 않는다 — `callAdminContentWrite()` → Supabase Edge Function `admin-content-write`가 관리자 PIN을 서버에서 확인하고 service-role로 쓴다(`word_asset.upsert`가 같은 방식). 그래서 저장 경로는 그 함수에 액션 하나를 더하면 되고 Vercel 함수는 필요 없다. `api/`는 배포 함수 12개로 한도가 찼다(새 `api/` 파일 불가).
+  - **권장**: (A) 파일 기반 — 교사가 내보낸 결정을 `decisions.json`에 커밋하고 생성기가 다시 굽는다. 학생 화면은 지금처럼 빌드 결과만 보므로 새 실패 경로가 없다. 대신 결정 묶음마다 커밋·배포가 필요하다. DB는 "누가 언제 승인했는지" 기록용 대안(하이브리드)으로 초안을 준비했다: 테이블 `picture_reviews`(그림 1장당 1행), RLS 켬 + 정책 0, anon/authenticated 권한 전부 회수, service_role만 select/insert/update.
+  - **119개를 실제로 승인하려면 아직 필요한 것**: 검증기 `validate()`가 `MATCH` 항목 결정을 받도록 변경, 그리고 "반려가 학생 화면에서 그림을 숨겨도 되는가"에 대한 별도 승인(지금 `isLearnable`은 동결 목록 그림을 반려해도 계속 보여 준다).
+- **가드**: `testTownV2Static`이 초안 2개(`v3_51`, `v3_52`)를 "미실행 초안 — 운영 DB 반영 금지"로 분류, 운영 SQL·`api/` 변경 0 유지(157/157).
+- **검증 — 통과(정적, dummy-env build)**: build OK(경고 0). `testPictureWords` 767(760 → 767), `testPictureWordGames` 142, `testPhonicsGames` 427, `testPhonicsProgress` 111, `testTownV2Static` 157, `testTownUiStatic` 126, `testBundleBudget` 32, `testLazyChunkGuards` 116, `testRegistryCoverage` 8, `testQaGate` 17, `testStudentPathContracts` 61.
+- **검증 — 통과(브라우저 1종, 1회, 여유 3.1 GB)**: `pictureWordReview` 37/0(30 → 37), 미mock 요청 0 — 메뉴로 열기, 카드 119장·전부 검토 필요, 칩 숫자, 승인·반려 0건과 빈 상태 문구, 이미지 없음 105, 탭 안 버튼은 필터 4개뿐, localStorage 변화 없음.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1(268차와 같음).
+- **검증 — 미완료**: `townProto25d` S37(여유 4.5 GB 이상 필요, 16 GB RAM 중 여유 3.1 GB), 학생 쪽 브라우저 검사(`pictureWordPractice`·`pictureWordGames`·`phonicsGames` 등)와 `verify:all`, 실기기, Preview(`pw-preview`는 `95b7faa2` 그대로 — 이번 화면이 올라가 있지 않다). 그림 검토 카드 119장의 그림은 첫 장만 로드 확인했다(나머지는 지연 로드).
+- **문서 미갱신**: `DATABASE.md`에는 `picture_reviews`를 넣지 않았다 — 실행되지 않은 초안이고 채택 여부가 정해지지 않았기 때문. 채택되면 그때 추가한다.
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·`pw-preview` 갱신·다른 워크트리·`C:\voca` 0. 자동 승인 0.
+
 ## 269차 (2026-10-13): 그림 4상태 분리 — 기존 119개는 동결 검토 목록, 새 그림은 교사 승인 전 비공개
 - **상태 한 줄**: 커밋 2개 push 완료. 자동 승인 0, 학생 화면 변경 0(생성 데이터 바이트 동일). 정적 검증·영향받은 관리자 브라우저 2종 통과. **`townProto25d` S37과 학생 쪽 브라우저 검사는 이번에 돌리지 않았다.**
 - **CTO 결정**: 119개 자동 승인 금지 / 지금 쓰이는 그림은 숨기지 않고 유지 / 이미지 존재·자동 연결·교사 승인·학생 화면 사용을 따로 관리 / 승인 안 된 그림은 관리자 화면에 "검토 필요" / 새 그림은 승인 전 학생에게 자동 공개하지 않음.
