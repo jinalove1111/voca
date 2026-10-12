@@ -2,7 +2,7 @@
 // Never hand-edit the output. Network 0. Run: node scripts/pictureWords/buildPictureWordsData.mjs
 import fs from 'node:fs'
 import path from 'node:path'
-import { validate } from './validateDecisions.mjs'
+import { validate, isLearnable } from './validateDecisions.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '../..')
 const rd = (p) => JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8'))
@@ -12,6 +12,7 @@ const decDoc = rd('scripts/pictureWords/source/decisions.json')
 const vr = validate(decDoc, verdicts)
 if (vr.errors.length) { console.error('decisions.json invalid: ' + vr.errors.join(' | ')); process.exit(1) }
 const decisions = decDoc.decisions
+const legacy = new Set(rd('scripts/pictureWords/source/legacyAutoPublished.json').ids)
 const manifest = rd('src/assets/pictureWords/manifest.json').assets
 
 const SHOP = {
@@ -27,7 +28,7 @@ const entries = verdicts.map((v) => {
   const ph = phonics.get(v.id)
   const dx = Object.prototype.hasOwnProperty.call(decisions, v.id) ? decisions[v.id] : null
   const decision = dx ? dx.action : null
-  const learn = v.status === 'MATCH' || decision === 'approve'
+  const learn = isLearnable(v.status, decision, v.id, legacy)
   const en = decision === 'approve' && dx.en ? dx.en : v.word
   const ko = decision === 'approve' && dx.ko ? dx.ko : v.ko
   const tracks = []

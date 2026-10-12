@@ -107,6 +107,21 @@ ok(run({ [mm]: { action: 'approve', en: '' } }).errors.length === 1 && run({ [mm
 ok(run({ [um]: { action: 'approve' } }).errors.length === 1, 'validator: UNUSABLE approve rejected')
 ok(run({}, 2).errors.length === 1, 'validator: v!==1 rejected')
 
+// ---- teacher-approval rule: new pictures are not student-visible; the 119 legacy ones are a frozen review list
+const { isLearnable } = await import('../scripts/pictureWords/validateDecisions.mjs')
+const LG = rd('scripts/pictureWords/source/legacyAutoPublished.json').ids, LGS = new Set(LG)
+const realLegacy = E.filter((e) => e.learn && e.decision !== 'approve').map((e) => e.id)
+const newMatch = E.find((e) => e.status === 'MATCH' && !LGS.has(e.id))
+ok(isLearnable('MATCH', null, LG[0], LGS) === true && isLearnable('MATCH', null, 'pics2/new', LGS) === false && isLearnable('MATCH', 'approve', 'pics2/new', LGS) === true && isLearnable('MISMATCH', 'approve', 'x', LGS) === true && isLearnable('MISMATCH', null, 'x', LGS) === false && isLearnable('MATCH', 'exclude', 'pics2/new', LGS) === false, 'isLearnable: legacy MATCH true, new MATCH false, approve true, MISMATCH none false, exclude false')
+ok(LG.length === 119 && LGS.size === 119 && LG.every((id, i) => i === 0 || LG[i - 1] < id) && JSON.stringify(LG) === JSON.stringify(realLegacy.slice().sort()) && E.filter((e) => e.learn).every((e) => e.decision === 'approve' || LGS.has(e.id)), 'legacy list: 119 unique sorted ids == real learn-without-approval entries; every learn entry is approved or legacy')
+const gsrc = fs.readFileSync(path.join(ROOT, 'scripts/pictureWords/buildPictureWordsData.mjs'), 'utf8')
+ok(gsrc.includes('isLearnable(') && !gsrc.includes("v.status === 'MATCH' || decision"), 'generator uses isLearnable and not the bare auto-publish rule')
+const SC = H.pictureStateCounts(), st1 = H.pictureState({ asset: 'x', autoLink: true, decision: null, learn: true })
+ok(JSON.stringify(SC) === JSON.stringify({ hasImage: 151, autoLinked: 119, teacherApproved: 0, studentVisible: 119, needsReview: 119 }), `pictureStateCounts real data ${JSON.stringify(SC)}`)
+ok(!st1.teacherApproved && st1.studentVisible && st1.hasImage && st1.autoLinked && H.pictureState({ asset: 'x', autoLink: true, decision: 'approve', learn: true }).teacherApproved && H.pictureState({}).hasImage === false, 'pictureState: four independent flags')
+const fx = [{ asset: 'a', autoLink: true, decision: null, learn: true }, { asset: 'b', autoLink: true, decision: 'approve', learn: true }]
+ok(H.pictureStateCounts(fx).needsReview === 1 && H.pictureStateCounts(fx.slice(0, 1)).needsReview === 1 && H.pictureStateCounts([fx[0], { ...fx[1], decision: null }]).needsReview === 2, 'pictureStateCounts: an approved entry is not needsReview')
+
 // ---- practice.js (pure)
 const P = await import('../src/utils/pictureWords/practice.js')
 ok(P.STEPS.join() === 'card,end,quiz,review,summary' && P.MODES.join() === 'practice,test', 'practice STEPS (251: one card per word) + MODES')
