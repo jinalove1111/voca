@@ -3,7 +3,6 @@ import StudentSelect from './components/StudentSelect'
 import Dashboard from './components/Dashboard'
 import StudentHome, { resetStudentHomeState } from './components/StudentHome'
 import StudentGrowth from './components/StudentGrowth'
-import WritingCoach from './components/WritingCoach'
 // 208차 — Speaking(이야기 10화 데이터 포함)은 QA 전용 화면이라 lazy 로드: 메인 청크(gzip ≤135KB 예산)에 이야기 데이터가 실리지 않게.
 const SpeakingPractice = React.lazy(() => import('./components/SpeakingPractice'))
 // 2026-10-07(222차) Writing 첫 버전(주제 → 상황 → 직접 쓰기 → 예시 비교) — QA 계정 홈의 ✍️ 카드에서만 연다
@@ -19,9 +18,6 @@ const loadPilotUnits = () => import('./utils/curriculum/units')
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
-import LevelUpMission from './components/LevelUpMission'
-import DiaryPage from './components/DiaryPage'
-import StudyCalendar from './components/StudyCalendar'
 import BalloonGame from './components/BalloonGame'
 import FishingGame from './components/FishingGame'
 import PizzaGame from './components/PizzaGame'
@@ -89,6 +85,21 @@ const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
 const EntranceTest = React.lazy(() => import('./components/EntranceTest'))
 // 애착 시스템(2026-07-22) — 매일 여는 화면이 아니므로 전부 lazy(위
 // AdminScreen과 같은 이유 — 학생 메인 번들을 불리지 않는다).
+// 지연 로드 화면 공통 대기 표시(같은 JSX가 화면마다 반복돼 있던 것을 하나로 모음 — 표시 내용 동일).
+const bounceFallback = (emoji, label) => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="text-center">
+      <div className="text-5xl mb-3 animate-bounce">{emoji}</div>
+      <p className="text-gray-400 font-bold">{label}</p>
+    </div>
+  </div>
+)
+const LAZY_FALLBACK = <div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>
+// 2026-10-12 메인 청크 다이어트 — 매일 여는 화면이 아닌 4개를 같은 이유로 lazy(동작 불변, 로딩 시점만 바뀜).
+const WritingCoach = React.lazy(() => import('./components/WritingCoach'))
+const LevelUpMission = React.lazy(() => import('./components/LevelUpMission'))
+const DiaryPage = React.lazy(() => import('./components/DiaryPage'))
+const StudyCalendar = React.lazy(() => import('./components/StudyCalendar'))
 const HatCollection = React.lazy(() => import('./components/HatCollection'))
 const WordMuseum = React.lazy(() => import('./components/WordMuseum'))
 const GrowthAlbum = React.lazy(() => import('./components/GrowthAlbum'))
@@ -907,7 +918,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {qaTestStudent && screen === 'speaking' && (
         // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
-        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+        <React.Suspense fallback={LAZY_FALLBACK}>
           <SpeakingPractice studentId={studentId} initialMode={unitLink?.speakingMode || speakingMode} initialSetId={unitLink?.setId || writingLink?.setId || null} examEnabled={isFeatureEnabled('situationRecallV1')}
             menuExits={!!unitLink} onBack={() => setScreen(unitLink ? 'unit' : learningHome())}
             onWrite={(writingItemId, setId) => { if (unitLink?.storyId) setUnitLink({ ...unitLink, writingItemId }); else setWritingLink({ writingItemId, setId }); setScreen('writingCoach') }} />
@@ -921,7 +932,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {qaTestStudent && screen === 'writingCoach' && (
         // 2026-10-07(222차) QA 계정: 주제별 문장 쓰기(Speaking 문항 재사용). ← 홈 / Speaking에서 왔으면 그 세트의 연습 끝 화면으로
-        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+        <React.Suspense fallback={LAZY_FALLBACK}>
           <WritingPractice studentId={studentId} linkLabel={unitLink ? (unitLink.storyId ? '← 단원 목록으로' : '← 이 단원으로') : null} episode={unitLink?.writingEpisode || null} startItemId={unitLink?.writingItemId || writingLink?.writingItemId || null}
             onBack={() => { if (unitLink) setScreen('unit'); else if (writingLink) { setSpeakingMode('practiceDone'); setScreen('speaking') } else setScreen(learningHome()) }}
             onHome={() => { setWritingLink(null); setUnitLink(null); setScreen(learningHome()) }} />
@@ -947,7 +958,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         </div>
       )}
       {qaTestStudent && screen === 'grammarCourses' && pilotUnits && (
-        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+        <React.Suspense fallback={LAZY_FALLBACK}>
           <GrammarCourseScreen units={pilotUnits} studentId={studentId}
             initialUnitId={townReturn || worldGrammar || villageReturn ? grammarEntry.unitId : null} returnTo={townReturn ? 'town' : worldGrammar ? 'world' : villageReturn ? 'village' : null}
             placeId={villageReturn ? grammarEntry.placeId || null : null} homeLabel={villageBack ? '← 마을 지도' : '← 홈'}
@@ -957,7 +968,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         </React.Suspense>
       )}
       {qaTestStudent && screen === 'grammarVillage' && (
-        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+        <React.Suspense fallback={LAZY_FALLBACK}>
           <GrammarVillage completedUnitIds={completedUnitIds} focusId={villageFocus}
             onStart={(unitId, focusId) => { setVillageFocus(focusId); setGrammarEntry({ unitId, returnTo: 'village', placeId: focusId === 'notes' ? null : focusId }); setPilotUnitsFailed(false)
               if (!pilotUnits) loadPilotUnits().then((r) => setPilotUnits(r.UNITS)).catch(() => setPilotUnitsFailed(true)); setScreen('grammarCourses') }}
@@ -966,7 +977,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         </React.Suspense>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
-        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+        <React.Suspense fallback={LAZY_FALLBACK}>
           <UnitScreen units={pilotUnits} initialUnitId={unitLink?.unitId || null} returnedFrom={unitLink ? (unitLink.writingItemId ? 'writing' : 'speaking') : null} studentId={studentId} onBack={() => { setUnitLink(null); setCurriculumSel(null); setUnitIntent(null); setScreen(learningHome()) }}
             intent={unitIntent} initialSelection={curriculumSel} onSelectionChange={setCurriculumSel}
             onStory={(entry, mode) => { if (mode === 'writing') { setUnitLink({ storyId: entry.id, writingEpisode: entry.card.n }); setScreen('writingCoach') } else { setUnitLink({ storyId: entry.id, speakingMode: mode === 'key' ? 'key' : 'practice', setId: entry.id }); setScreen('speaking') } }}
@@ -977,13 +988,13 @@ function AppInner({ studentId, studentName, onLogout }) {
       {!qaTestStudent && screen === 'writingCoach' && (
         // 2026-10-02 학생 홈 개편 — Dashboard 로컬 state였던 WritingCoach를
         // 그대로 옮김(props 동일). 저장 없음(MVP), 닫으면 홈.
-        <WritingCoach
+        <React.Suspense fallback={LAZY_FALLBACK}><WritingCoach
           targetWords={(studentData?.round?.wordsViewed || [])
             .slice(-2)
             .map((id) => attachment.wordTextById?.get?.(id))
             .filter(Boolean)}
           onBack={() => setScreen('home')}
-          onComplete={() => setScreen('home')} />
+          onComplete={() => setScreen('home')} /></React.Suspense>
       )}
       {screen === 'dashboard'     && (
         <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
@@ -1121,20 +1132,17 @@ function AppInner({ studentId, studentName, onLogout }) {
           onQuizAnswer={studentData.recordQuizAnswer}
           onPronunciationAttempt={studentData.markPronunciationAttempt} />
       )}
+      {(screen === 'levelUpMission' || screen === 'diary' || screen === 'studyCalendar') && (
+        <React.Suspense fallback={LAZY_FALLBACK}>
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'diary'         && <DiaryPage studentData={studentData} onBack={() => setScreen('dashboard')} />}
       {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={backToOrigin} />}
+        </React.Suspense>
+      )}
       {/* 애착 시스템(2026-07-22) — 4개 화면 전부 lazy(공유 fallback), 진입은
           Dashboard "더 많은 메뉴"의 feature flag 게이트를 거친다. */}
       {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden' || screen === 'paulTown' || screen === 'bookshelf' || screen === 'timeMachine') && (
-        <React.Suspense fallback={
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <div className="text-5xl mb-3 animate-bounce">🎁</div>
-              <p className="text-gray-400 font-bold">화면을 불러오는 중...</p>
-            </div>
-          </div>
-        }>
+        <React.Suspense fallback={bounceFallback('🎁', '화면을 불러오는 중...')}>
           {screen === 'hatCollection' && (
             <HatCollection studentName={studentName} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={(id) => { studentData.equipHat(id); trackEvent(studentId, EV.hatEquipped) }}
@@ -1236,14 +1244,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         />
       )}
       {screen === 'entranceTest' && (
-        <React.Suspense fallback={
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <div className="text-5xl mb-3 animate-bounce">📝</div>
-              <p className="text-gray-400 font-bold">시험 화면을 불러오는 중...</p>
-            </div>
-          </div>
-        }>
+        <React.Suspense fallback={bounceFallback('📝', '시험 화면을 불러오는 중...')}>
           <EntranceTest studentId={studentId} studentName={studentName} onBack={() => setScreen('dashboard')}
             onExamCompleted={recordExamCompleted} />
         </React.Suspense>
@@ -1489,28 +1490,14 @@ export default function App() {
 
   if (showAdmin) return (
     <AppErrorBoundary>
-      <React.Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="text-5xl mb-3 animate-bounce">⚙️</div>
-            <p className="text-gray-400 font-bold">관리자 화면을 불러오는 중...</p>
-          </div>
-        </div>
-      }>
+      <React.Suspense fallback={bounceFallback('⚙️', '관리자 화면을 불러오는 중...')}>
         <AdminScreen onBack={() => setAdmin(false)} />
       </React.Suspense>
     </AppErrorBoundary>
   )
   if (showParent) return (
     <AppErrorBoundary>
-      <React.Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="text-5xl mb-3 animate-bounce">👨‍👩‍👧</div>
-            <p className="text-gray-400 font-bold">학부모 화면을 불러오는 중...</p>
-          </div>
-        </div>
-      }>
+      <React.Suspense fallback={bounceFallback('👨‍👩‍👧', '학부모 화면을 불러오는 중...')}>
         <ParentScreen onBack={() => setParent(false)} />
       </React.Suspense>
     </AppErrorBoundary>
