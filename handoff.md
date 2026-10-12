@@ -1,4 +1,17 @@
 # Paul Easy Voca — Handoff
+## 272차 (2026-10-13): 학생용 PAUL PHONICS 화면 검증 + `pw-preview` 갱신 (코드 변경 0)
+- **상태 한 줄**: 그림 관리 기능 개발은 운영자 지시로 일시 중단. 이번에는 **코드를 바꾸지 않았다** — 검증과 Preview 갱신만 했다. `pw-preview` = `4ead1686`(트리는 `7b73c7b5`와 동일), Vercel 배포 success. 운영자가 직접 여는 실화면 확인은 아직 남아 있다.
+- **Preview**: `https://voca-git-pw-preview-jina4926952s-projects.vercel.app` (Vercel 로그인 필요, 주소 요청 시 로그인 화면으로 넘어감). 이전 Preview 커밋 `95b7faa2` → 새 커밋 `4ead1686`(fast-forward, 강제 push 아님). 되돌리려면 `95b7faa2`의 트리로 같은 방식의 새 커밋을 올린다.
+- **덮어쓰기 전 변경 범위 확인**: 이전 Preview 대비 실행 코드 변경은 `AdminScreen.jsx`, `admin/PhonicsReviewPanel.jsx`, `admin/PictureWordReviewPanel.jsx`, `data/phonics/phonicsWords.js`(필드·헬퍼 추가), `data/pictureWords/index.js`(헬퍼 추가), `data/pictureWords/legacyReviews.json`(신규, 관리자 청크 전용) 6개뿐. 나머지는 문서·테스트·스크립트·미실행 SQL 초안. `api/`, `supabase/functions`, `package.json`, `vite.config.js`, `vercel.json` 변경 0. Speaking·Writing·Voca·Town 파일 변경 0. 생성 데이터 `pictureWords.json` 내용 동일.
+- **Vercel 대기열 메모**: 오늘 올린 커밋이 한 번에 하나씩 약 12분 간격으로 빌드돼, `pw-preview` push(16:09Z 무렵)에서 배포 완료(17:00Z)까지 약 50분 걸렸다. 그동안 GitHub 상태는 `pending`에 빈 목록으로 보인다 — 실패가 아니다. 작업 브랜치에 소커밋을 여러 번 push하면 Preview가 그만큼 늦어진다.
+- **검증 — 통과(정적, dummy-env build)**: build OK. `testPhonicsGames` 428, `testPhonicsProgress` 111, `testPictureWords` 782, `testPictureWordGames` 142, `testBundleBudget` 32, `testLazyChunkGuards` 116, `testStudentPathContracts` 61, `testWritingPractice`·`testPilotUnit` PASS, `testQaGate` 17, `testRegistryCoverage` 8, `testTownV2Static` 157, `testTownUiStatic` 126.
+- **검증 — 통과(학생 쪽 브라우저 3종, 각 1회, 1종씩, 여유 3.6~4.0 GB)**: `phonicsGames` 298/0, `pictureWordGames` 150/0, `pictureWordPractice` 110/0, 미mock 요청 0. `phonicsGames`의 시나리오 (s)가 **390×844 터치 화면에서 Book 1의 Unit 1~5 · 25단어를 완주**한다 — 듣기(보이는 단어만 읽음), 한국어 뜻, 녹음 → 멈춤 → 내 목소리 재생, 게임 2종(Sound Bubble Pop·Word Train), 소리 확인. 알파벳 망치·숨은 글자는 `pictureWordGames`가 다룬다.
+- **390px 눈으로 확인(스크래치 캡처, 저장소에 넣지 않음)**: 대시보드, 그림 단어 연습 첫 화면, 파닉스 책장, Book 1 Unit 목록, Unit 1 허브, 단어 카드(듣기 전·후), 알파벳 망치, 숨은 글자 11장. 가로 넘침 0, 깨진 그림 0, 화면 밖 버튼 0, 최소 글자 11~12px, 페이지 오류 0. 44px 미만 버튼은 단어 카드의 단어 글자 버튼 1개(40px, 눌러서 소리 듣기 — 264차 기능). Unit 2~5 허브와 풍선·기차 화면은 캡처 스크립트의 나가기 버튼 지정이 틀려 찍지 못했다(앱 문제 아님, 같은 화면을 `phonicsGames`가 통과). 다시 돌리지 않았다.
+- **학생 화면에서 알아 둘 것(기존 상태, 이번에 바뀐 것 아님)**: Book 1 25단어 중 **그림이 있는 단어는 9개**이고 16개는 글자 카드다(cat 등 — 그림 13개 미제작, 3개는 그림 없이 학습). 영국식 발음은 브라우저 음성 합성(en-GB)이며 기기에 따라 목소리가 다르다. 허브 2단계(선생님 소리)는 녹음 0 / 5라 잠겨 있다. 진도는 저장되지 않는다.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1.
+- **검증 — 미완료**: 배포된 Preview의 실제 화면(로그인 뒤)은 에이전트가 열어 보지 못했다 — Vercel 로그인 화면에서 막힌다. 실기기, 실제 스피커·마이크, iOS Safari. `townProto25d` S37(여유 4.5 GB 이상 필요). Speaking·Writing·Voca·Town 브라우저 검사와 `verify:all`은 이번에 다시 돌리지 않았다(해당 파일 변경 0이 근거).
+- **하지 않은 것**: 코드 변경 0. DB·SQL 실행·`.env`·Production·main·다른 워크트리·`C:\voca` 0. 교사 승인 기록·그림 제작·관리자 DB 저장은 범위 밖.
+
 ## 271차 (2026-10-13): 그림 검토 기록을 Git 정적 파일로 — 기록 파일·검증기·절차 문서, 꺼진 승인·반려 버튼, 이미지 없는 105개 목록
 - **상태 한 줄**: 커밋 3개 push 완료. 학생 화면·학생 데이터 변경 0, DB·SQL 실행 0. 정적 검증 통과, 관리자 브라우저 1종 1회 통과. **`townProto25d` S37과 학생 쪽 브라우저 검사는 돌리지 않았다.**
 - **CTO 결정**: 119개 검토 기록은 우선 Git 정적 파일 / 구조·검증 규칙·절차 문서화, 관리자 화면이 파일을 저장하는 것처럼 보이면 안 됨 / 승인·반려 버튼은 영구 저장 준비 전까지 비활성 + 이유 안내 / 반려 그림은 나중에 학생 화면에서 숨기고 대체 없으면 그림 없는 학습(지금은 설계만) / 이미지 없는 105개 정리와 제작 우선순위 제안 / Supabase는 추후 별도.
