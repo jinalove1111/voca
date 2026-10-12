@@ -1,4 +1,18 @@
 # Paul Easy Voca — Handoff
+## 269차 (2026-10-13): 그림 4상태 분리 — 기존 119개는 동결 검토 목록, 새 그림은 교사 승인 전 비공개
+- **상태 한 줄**: 커밋 2개 push 완료. 자동 승인 0, 학생 화면 변경 0(생성 데이터 바이트 동일). 정적 검증·영향받은 관리자 브라우저 2종 통과. **`townProto25d` S37과 학생 쪽 브라우저 검사는 이번에 돌리지 않았다.**
+- **CTO 결정**: 119개 자동 승인 금지 / 지금 쓰이는 그림은 숨기지 않고 유지 / 이미지 존재·자동 연결·교사 승인·학생 화면 사용을 따로 관리 / 승인 안 된 그림은 관리자 화면에 "검토 필요" / 새 그림은 승인 전 학생에게 자동 공개하지 않음.
+- **규칙 변경 (`d60c2444`)**: 이전 생성 규칙은 `learn = status === 'MATCH' || decision === 'approve'` — 자동 일치만 되면 곧바로 학생에게 나갔다. 지금은 `isLearnable(status, decision, id, legacy)` = `decision === 'approve'` **또는** (`MATCH`이면서 동결 목록에 있는 id). 동결 목록은 `scripts/pictureWords/source/legacyAutoPublished.json`(119개, 정렬, 추가 금지). 따라서 **앞으로 `verdicts.json`에 새로 들어오는 그림은 자동 일치여도 교사 승인(`decisions.json`의 `approve`) 전에는 `learn: false`**다. 생성기를 다시 돌린 결과 `pictureWords.json`·`pictureWordsNotes.json` 내용 변화 0.
+- **4상태 헬퍼** (`src/data/pictureWords/index.js`): `pictureState(e)` = `{ hasImage, autoLinked, teacherApproved, studentVisible }`(서로 추론하지 않음), `pictureStateCounts()` = 실제 값 **그림 있음 151 · 자동 연결 119 · 교사 승인 0 · 학생 화면 사용 119 · 검토 필요 119**(검토 필요 = 승인 기록 없이 학생 화면에 쓰이는 그림).
+- **관리자 표시 (`f94aba2a`)**: 그림 단어 탭 "분류 결과" 요약에 위 다섯 숫자 한 줄(`pwr-state-counts`)과 설명 문장. 파닉스 검토 탭은 칩 `자동 연결 · 검토 필요 32` · `그림 교사 승인 0`, 단어 표 `· 자동 연결 · 검토 필요`, Book 1 요약 `그림 있음 9 (검토 필요 9 · 교사 승인 0)`. "그림 준비"·"자동 일치" 문구는 패널에서 0건. 버튼·저장·네트워크 추가 0.
+- **가드(정적)**: `testPictureWords` 754 → 760 — 동결 목록에 없는 새 `MATCH`는 `isLearnable` false, 동결 목록 = 실제 "승인 없이 학습 가능" 항목과 정확히 같은 119개, 모든 학습 가능 항목은 승인됐거나 동결 목록 소속, 생성기에 옛 규칙 문자열 0, 4상태 숫자·픽스처. `testPhonicsGames` 426 → 427.
+- **남은 구멍(고치지 않음, 결정 필요)**: 지금은 **교사가 119개를 승인으로 기록할 방법이 없다.** `validateDecisions.validate()`가 `MATCH` 항목에 대한 결정을 오류로 거부하고, 관리자 검토 탭은 불일치·불확실·여러 개 31장만 보여 준다. 119개를 실제로 검토·승인하려면 (a) 검증기가 `MATCH`에 대한 `approve`/`exclude`를 받게 하고 (b) 검토 탭에 119개를 띄우는 작업이 필요하다 — 관리자 기능 추가라 이번 최소 변경 범위에서 뺐다. `exclude`를 `MATCH`에 허용하면 그 그림은 학생 화면에서 빠지므로(기존 동작 변화) 별도 승인이 필요하다.
+- **검증 — 통과(정적, dummy-env build)**: build OK(경고 0). `testPictureWords` 760, `testPictureWordGames` 142, `testPhonicsGames` 427, `testPhonicsProgress` 111, `testTownV2Static` 157, `testTownUiStatic` 126, `testBundleBudget` 32, `testLazyChunkGuards` 116, `testRegistryCoverage` 8, `testQaGate` 17, `testStudentPathContracts` 61, `validateDecisions` 오류 0.
+- **검증 — 통과(브라우저 2종, 각 1회, 여유 3.36 GB, 전용 preview 서버, 종료 확인)**: `phonicsReview` 50/0, `pictureWordReview` 30/0(29 → 30), 미mock 요청 0.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1(268차와 같음, 모자 PNG 로더).
+- **검증 — 미완료**: `townProto25d` S37(여유 4.5 GB 이상 필요, 현재 16 GB RAM 중 여유 3.0~3.4 GB). 학생 쪽 `pictureWordPractice`·`pictureWordGames`·`phonicsGames`와 나머지 브라우저 검사, `verify:all`은 다시 돌리지 않았다 — 학생 컴포넌트와 생성 데이터가 그대로라는 근거(파일 diff 0, 정적 통과)만 있고 브라우저 재확인은 아니다.
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·`pw-preview` 갱신·다른 워크트리·`C:\voca` 0. 학생 화면·학생 데이터 변경 0.
+
 ## 268차 (2026-10-13): CTO 결정 4건 반영 — 정규식 핀, SQL 초안 별도 분류, 그림 승인 3분리 표기 / S37 미실행
 - **상태 한 줄**: 코드·테스트 커밋 3개 push 완료. 정적 검증 전부 통과, 브라우저는 영향받은 1종만 1회 실행해 통과. **`townProto25d` S37은 메모리 기준 미달로 실행하지 않았다(미완료 그대로).**
 - **(1) `testTownUiStatic` 정규식 (`fa22991e`)**: `onGoTown || (showBuildings` 핀이 `PaulTown.jsx`에 들어온 `onGoWorld ||` 항을 받아들이도록 한 줄 수정. 앱 코드 변경 0, `showBuildings` 분기는 그대로 있음. 125/1 → **126/126**.

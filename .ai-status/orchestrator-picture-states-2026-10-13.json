@@ -1,0 +1,43 @@
+{
+  "agent_name": "orchestrator",
+  "role": "그림 4상태 분리 + 새 그림 승인 전 비공개 규칙 (269차)",
+  "task_id": "paul-phonics-picture-states-2026-10-13",
+  "task": "기존 자동 공개 119개를 동결 검토 목록으로 유지, 새 자동 일치 그림은 교사 승인 전 학생 비공개, 관리자 화면에 4상태와 '검토 필요' 표시",
+  "status": "completed_with_open_verification",
+  "progress": 95,
+  "updated_at": "2026-10-13",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "commits": ["d60c2444", "f94aba2a"],
+  "files_owned": [
+    "scripts/pictureWords/source/legacyAutoPublished.json",
+    "scripts/pictureWords/validateDecisions.mjs",
+    "scripts/pictureWords/buildPictureWordsData.mjs",
+    "src/data/pictureWords/index.js",
+    "src/components/admin/PictureWordReviewPanel.jsx",
+    "src/components/admin/PhonicsReviewPanel.jsx",
+    "scripts/testPictureWords.mjs",
+    "scripts/testPhonicsGames.mjs",
+    "tests/e2e/phonicsReview.spec.mjs",
+    "tests/e2e/pictureWordReview.spec.mjs",
+    "handoff.md"
+  ],
+  "picture_states_real_data": { "hasImage": 151, "autoLinked": 119, "teacherApproved": 0, "studentVisible": 119, "needsReview": 119 },
+  "verification": {
+    "passed": {
+      "build": "OK (dummy env, 0 warnings)",
+      "generated_data": "pictureWords.json and pictureWordsNotes.json content-identical after regeneration",
+      "static": "testPictureWords 760/760, testPictureWordGames 142/142, testPhonicsGames 427/427, testPhonicsProgress 111/111, testTownV2Static 157/157, testTownUiStatic 126/126, testBundleBudget 32/32, testLazyChunkGuards 116/116, testRegistryCoverage 8/8, testQaGate 17/17, testStudentPathContracts 61/61",
+      "browser": "phonicsReview 50/0, pictureWordReview 30/0 — one run each at 3.36 GB free"
+    },
+    "failed_preexisting": "testTownShop 85/1 — SSR block has no png loader for hats (unrelated, not fixed)",
+    "not_run": "townProto25d S37 (needs >= 4.5 GB free), student-side specs pictureWordPractice/pictureWordGames/phonicsGames, all other browser specs, verify:all"
+  },
+  "blocked_on_operator": [
+    "교사가 119개를 승인으로 기록할 경로가 없음 — validate()가 MATCH 항목 결정을 거부, 검토 탭은 31장만 표시. 검토 화면 추가 여부 결정",
+    "MATCH 그림에 '제외'를 허용하면 학생 화면에서 빠짐 — 허용 여부",
+    "townProto25d S37 재실행은 여유 메모리 4.5 GB 이상에서",
+    "testTownShop SSR png 로더 수정 여부",
+    "pw-preview 갱신 여부 (95b7faa2 그대로)"
+  ],
+  "not_done": "DB/SQL 실행/Production/main/pw-preview 갱신 0, 학생 화면·학생 데이터 변경 0, 자동 승인 0"
+}
