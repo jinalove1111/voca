@@ -609,5 +609,12 @@ export const GamePicture = ({ testid }) => React.createElement('div', { 'data-te
   ok(count(appr, 'pwp-text-card') === 1 && count(appr, 'pwp-word') === 1 && count(appr, 'pwp-ko') === 1 && />개<\/p>/.test(appr) && appr.indexOf('pwp-word') < appr.indexOf('pwp-ko'), 'ssr: the approved word renders its meaning under the card')
   ok(count(pic, 'pwp-picture-card') === 1 && count(pic, 'pwp-text-card') === 0 && count(pic, 'pwp-word') === 1 && count(pic, 'pwp-ko') === 1 && pic.includes(`>${jam.ko}</p>`), 'ssr: a picture word keeps picture card + word button + its picture meaning')
 }
+// image backlog doc (2026-10-13): every needed word appears in the doc as a whole word and the doc states the real total
+{
+  const { imageBacklog } = await import('./phonics/listImageBacklog.mjs')
+  const bl = imageBacklog()
+  const doc = read('docs/design/PHONICS_IMAGE_BACKLOG_2026-10-13.md')
+  ok(bl.total === ITEMS.filter((i) => i.image === 'needed').length && doc.includes(`**${bl.total}개**`) && bl.words.every((w) => new RegExp(`(^|[^a-z])${w.word}([^a-z]|$)`).test(doc)), 'image backlog doc lists every image:needed word and states the real total')
+}
 console.log(`${fail ? 'FAIL' : 'PASS'} ${n - fail}/${n} testPhonicsGames`)
 process.exit(fail ? 1 : 0)
