@@ -2,7 +2,7 @@ Paul Easy Voca — PAUL PHONICS 선생님 캐릭터 (src/assets/phonics/teacher/
 
 phonics-teacher-stand.webp, phonics-teacher-sit.webp 는 Paul Town 캐릭터
 (src/assets/town/character/)와 같은 생성 원본에서 2026-10-13
-scripts/phonics/deriveTeacherArt.py 로 더 큰 크기(384x512)로 내보낸 것이다.
+scripts/phonics/deriveTeacherArt.py 로 원본 해상도 그대로(배율 1.0, 투명 여백만 잘라냄) 내보낸 것이다.
 리페인트 없음. 생성 모델/버전은 기록되어 있지 않다.
 
 사용 승인: operator (Paul Easy Voca), 2026-10-13 — PAUL PHONICS 학습 화면에서
