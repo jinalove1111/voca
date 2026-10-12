@@ -6,11 +6,10 @@ import { LEVELS, learnableWords, shopSets, wordsForLevel } from '../../data/pict
 import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise } from '../../utils/pictureWords/practice.js'
 import { stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
-import { RecorderControls } from '../SpeakingPracticeItem'
-import { BTN, GamePicture, GameStyle, MUTED, MenuPic, PwProgress, ROLE, T2, T3, W, playEn } from './pictureImg.jsx'
+import { BTN, ClassScene, GamePicture, GameStyle, MUTED, MenuPic, PwProgress, ROLE, T2, T3, W, WordStrip, playEn } from './pictureImg.jsx'
+import LessonRecorder from './LessonRecorder.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
-import { PICTURE_REC_LABELS } from './recLabels.js'
 
 // 게임/가게 선반은 열 때만 받는 추가 청크
 const PictureGames = React.lazy(() => import('./PictureGames'))
@@ -19,7 +18,6 @@ const PaulPhonics = React.lazy(() => import('../phonics/PaulPhonics'))
 
 const GO = `${BTN} ${ROLE.go.strong}`
 const GO_SOFT = `${BTN} ${ROLE.go.soft}`
-const LISTEN = `${BTN} ${ROLE.listen.soft}`
 const PLAY = `${BTN} ${ROLE.play.soft}`
 const SETBTN = 'min-h-[44px] rounded-xl text-base font-black btn-press disabled:opacity-40'
 const SESSION_SIZE = 6
@@ -37,29 +35,31 @@ const Tile = ({ id, role, asset, title, sub, badge, onClick }) => (
 )
 
 // 단어를 누르면 "발음 듣기"와 같은 함수로 전체 단어 소리가 난다. hide = 글자 카드(단어가 카드 안에 이미 있음)
-const WordBtn = ({ word, className }) => <button type="button" data-testid="pwp-word" onClick={() => playEn(word.en)} className={className}>{word.en}</button>
+const WordBtn = ({ word, className, onPlay }) => <button type="button" data-testid="pwp-word" onClick={() => { onPlay?.(); playEn(word.en) }} className={className}>{word.en}</button>
 
-function WordText({ word, hide }) {
+function WordText({ word, hide, onPlay }) {
   if (hide && !word.ko) return null
   return (
     <div className="text-center">
-      {!hide && <WordBtn word={word} className={`${T3} min-h-[44px]`} />}
+      {!hide && <WordBtn word={word} onPlay={onPlay} className={`${T3} min-h-[44px]`} />}
       {word.ko && <p data-testid="pwp-ko" className="text-lg text-gray-600 break-words">{word.ko}</p>}
     </div>
   )
 }
 
-const ListenBtn = ({ word }) => (
-  <button type="button" data-testid="pwp-listen" onClick={() => playEn(word.en)} className={`${LISTEN} w-full`}>🔊 발음 듣기</button>
+// round: 레슨 카드의 둥근 스피커(글자는 sr-only)
+const ListenBtn = ({ word, strong, onPlay, round }) => (
+  <button type="button" data-testid="pwp-listen" onClick={() => { onPlay?.(); playEn(word.en) }} className={round ? `pw-spk ml-auto ${ROLE.listen.strong}` : `${BTN} ${strong ? ROLE.listen.strong : ROLE.listen.soft} w-full`}>{round ? <><span aria-hidden="true">🔊</span><span className="sr-only"> 발음 듣기</span></> : '🔊 발음 듣기'}</button>
 )
 
 // 연습 카드: 단어마다 한 장에 그림·단어·뜻·듣기·녹음(따라 말하기/내 목소리 듣기/다시 말하기)·다음.
 // 녹음기는 이 컴포넌트가 단어들 사이에서 하나를 쓴다(마이크는 카드 묶음을 떠날 때 놓는다). 단어를 바꾸면 녹음을 버린다 — 녹음 중에 넘기면 멈춘 뒤 버린다.
 // "말해 봤어요" 표시는 판정이 아니다 — 점수·별 없음, 녹음은 기기 밖으로 나가지 않는다.
-export function PracticeCards({ words, onDone, single = false, nextLabel = '➡️ 다음 단어' }) {
+export function PracticeCards({ words, onDone, onExit, single = false, nextLabel = '➡️ 다음 단어' }) {
   const rec = useLocalRecorder()
   const [i, setI] = useState(0)
   const [said, setSaid] = useState(() => new Set())
+  const [heard, setHeard] = useState(() => new Set()) // 듣기/단어 버튼을 누른 단어 — 지금 단계(듣기→말하기→다음)만 강조한다
   const discard = useRef(false)
   const w = words[i]
   const status = rec.st.status
@@ -76,21 +76,35 @@ export function PracticeCards({ words, onDone, single = false, nextLabel = '➡�
     fn()
   }
   const lastOne = i + 1 >= words.length
+  const hear = () => setHeard((s) => new Set(s).add(w.id))
+  const step = !heard.has(w.id) ? 'listen' : !said.has(w.id) ? 'say' : 'next'
+  const line = { listen: '잘 들어 봐요!', say: '따라 말해 볼까요?', next: '좋아요! 다음으로 가요' }[step]
+  const jump = (k) => k !== i && leave(() => setI(k))
   return (
-    <div data-testid="pwp-card" data-word-index={i} className="space-y-3">
-      <PwProgress testid="pwp-progress" n={i + 1} total={words.length} />
-      {w.asset ? <GamePicture word={w} testid="pwp-picture" /> : <div data-testid="pwp-text-card" className="pw-card"><div className="pw-pic flex flex-col items-center justify-center gap-2"><span className="pw-card-tag">듣고 따라 말해요</span><WordBtn word={w} className="break-words text-4xl font-black text-gray-900" /></div></div>}
-      <WordText word={w} hide={!w.asset} />
-      {said.has(w.id) && <p data-testid="pwp-said-mark" className="text-center text-sm font-bold text-emerald-700">말해 봤어요</p>}
-      <ListenBtn word={w} />
-      <div data-testid="pwp-rec" className="space-y-1">
+    <div data-testid="pwp-card" data-word-index={i} data-step={step} className="pw-cls-card space-y-3">
+      <div className="flex items-center justify-between">
+        {onExit ? <button type="button" data-testid="pwp-back" aria-label="뒤로" onClick={() => leave(onExit)} className="pw-back btn-press">←</button> : <span />}
+        <span className="pw-chip"><PwProgress testid="pwp-progress" n={i + 1} total={words.length} /></span>
+      </div>
+      <ClassScene line={line} bubble={<button type="button" data-testid="pwp-listen-bubble" aria-label="발음 듣기" onClick={() => { hear(); playEn(w.en) }} className={`pw-spk pw-bub ${ROLE.listen.strong}`} />}>
+        <div className="pw-cls-box">
+          {w.asset ? <GamePicture word={w} testid="pwp-picture" /> : <div data-testid="pwp-text-card" className="pw-card"><div className="pw-pic flex flex-col items-center justify-center gap-2"><span className="pw-card-tag">듣고 따라 말해요</span><WordBtn word={w} onPlay={hear} className="break-words text-4xl font-black text-gray-900" /></div></div>}
+          <div className="mt-1 flex items-center gap-2">
+            <div className="min-w-0 flex-1"><WordText word={w} hide={!w.asset} onPlay={hear} /></div>
+            <ListenBtn word={w} round onPlay={hear} />
+          </div>
+          {said.has(w.id) && <p data-testid="pwp-said-mark" className="text-center text-sm font-bold text-emerald-700">말해 봤어요</p>}
+        </div>
+      </ClassScene>
+      <div data-testid="pwp-rec" className={`space-y-1 rounded-2xl p-1${step === 'say' ? ' ring-2 ring-rose-300' : ''}`}>
         {status === 'recording' && <p data-testid="pwp-rec-live" className="text-center text-base font-black text-red-600">녹음 중… {rec.elapsed}초</p>}
-        <RecorderControls rec={rec} prefix="pwp-rec" labels={PICTURE_REC_LABELS} idleText="" />
+        <LessonRecorder rec={rec} />
       </div>
       <div className="flex gap-2">
-        {!single && <button type="button" data-testid="pwp-prev" onClick={() => leave(() => setI(i - 1))} disabled={i === 0} className={`${BTN} flex-1 bg-gray-200 text-gray-700`}>이전</button>}
-        <button type="button" data-testid="pwp-next" onClick={() => (lastOne ? (stopSpeaking(), onDone()) : leave(() => setI(i + 1)))} className={`${GO} flex-1`}>{single ? nextLabel : '➡️ 다음 단어'}</button>
+        {!single && <button type="button" data-testid="pwp-prev" onClick={() => leave(() => setI(i - 1))} disabled={i === 0} className={`${SETBTN} flex-1 bg-gray-200 text-gray-700`}>이전</button>}
+        <button type="button" data-testid="pwp-next" onClick={() => (lastOne ? (stopSpeaking(), onDone()) : leave(() => setI(i + 1)))} className={`${SETBTN} flex-1 ${step === 'next' ? 'bg-emerald-300 text-emerald-950' : ROLE.go.soft}`}>{single ? nextLabel : '➡️ 다음 단어'}</button>
       </div>
+      {!single && <WordStrip words={words} i={i} said={said} onPick={jump} />}
     </div>
   )
 }
@@ -158,7 +172,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
 
   let body, progress = ''
   if (stage === 'card') {
-    body = <PracticeCards words={all} onDone={() => setStage('end')} />
+    body = <PracticeCards words={all} onDone={() => setStage('end')} onExit={onOther} />
   } else if (stage === 'end') {
     body = (
       <div data-testid="pwp-end" className="space-y-3 text-center">
@@ -186,7 +200,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
       body = rev.phase === 'card' ? (
         <div data-testid="pwp-review-card" data-kind="word" className="space-y-3">
           <p className="text-center text-sm font-black text-amber-700">다시 볼 단어 {rev.queue.length}개 남았어요</p>
-          <PracticeCards key={`${rw.id}-${rev.round}`} words={[rw]} single nextLabel="➡️ 문제 풀기" onDone={() => setRev({ ...rev, phase: 'quiz' })} />
+          <PracticeCards key={`${rw.id}-${rev.round}`} words={[rw]} single nextLabel="➡️ 문제 풀기" onExit={onOther} onDone={() => setRev({ ...rev, phase: 'quiz' })} />
         </div>
       ) : (
         <QuizCard key={`${rw.id}-${rev.round}`} label="복습" n={1} total={rev.queue.length} word={rw} q={buildQuiz([rw], POOL, seed + 7919 * (rev.round + 1))[0]} onAnswered={answer(rw.id)} onNext={afterReviewAnswer} />
@@ -304,9 +318,9 @@ export default function PictureWordPractice({ onExit, studentId }) {
   }
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 to-emerald-50 px-4 py-4 pb-8">
-      <div className="mx-auto max-w-lg min-w-0 space-y-3">
+      <div className="pw-wrap mx-auto max-w-lg min-w-0 space-y-3">
         <GameStyle />
-        <h1 className="text-center text-xl font-black text-gray-800">PAUL PHONICS <span className="text-xs text-red-600">(테스트)</span></h1>
+        <h1 className="pw-sign">PAUL PHONICS <span>(테스트)</span></h1>
         {body}
         {phx && (
           <div hidden={fromPhx}>

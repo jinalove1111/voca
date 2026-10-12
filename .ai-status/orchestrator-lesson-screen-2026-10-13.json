@@ -1,0 +1,55 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PAUL PHONICS 학습 화면 — 운영자 디자인 레퍼런스 적용 (274차)",
+  "task_id": "paul-phonics-lesson-screen-2026-10-13",
+  "task": "공통 학습 카드 화면을 레퍼런스 구조로 구현(간판·선생님·말풍선·카드·녹음/재생·단어 줄), 기존 폴 선생님 캐릭터를 원본 해상도로 재사용",
+  "status": "completed_awaiting_operator_review",
+  "progress": 85,
+  "updated_at": "2026-10-13",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "commits": ["f81ab962", "ee38a175", "217cc289", "dbbde70b"],
+  "files_owned": [
+    "scripts/phonics/deriveTeacherArt.py",
+    "src/assets/phonics/teacher/phonics-teacher-stand.webp",
+    "src/assets/phonics/teacher/phonics-teacher-sit.webp",
+    "src/assets/phonics/teacher/NOTICE.md",
+    "src/assets/phonics/teacher/LICENSE.txt",
+    "src/components/pictureWords/PictureWordPractice.jsx",
+    "src/components/pictureWords/pictureImg.jsx",
+    "src/components/pictureWords/LessonRecorder.jsx",
+    "tests/e2e/pictureWordPractice.spec.mjs",
+    "tests/e2e/phonicsGames.spec.mjs",
+    "tests/e2e/pictureWordGames.spec.mjs",
+    "scripts/testBundleBudget.mjs",
+    "scripts/testPictureWords.mjs",
+    "scripts/testPictureWordGames.mjs",
+    "scripts/testPhonicsGames.mjs",
+    "scripts/testPhonicsProgress.mjs",
+    "handoff.md"
+  ],
+  "teacher_art": "same originals as the town character (sha256 verified), scale 1.0, transparent margin trimmed only: stand 514x1466 (150 KB), sit 678x1445 (unused)",
+  "temporary_stand_ins": [
+    "standing pose instead of the pointing pose (no such frame supplied)",
+    "classroom, bookshelf, window landscape, rug drawn with CSS shapes (no background art supplied)",
+    "wooden sign drawn with CSS (no sign art supplied)"
+  ],
+  "bundle": "2.183 -> 2.191 MB of 2.2 MB; about 9 KB headroom left; budget number unchanged",
+  "verification": {
+    "passed": {
+      "build": "OK (dummy env)",
+      "static": "testBundleBudget 33, testPictureWords 785, testPictureWordGames 142, testPhonicsGames 428, testPhonicsProgress 111, testLazyChunkGuards 116, testPaulSpriteAssets 125, testStudentPathContracts, testKeySentenceFlow",
+      "browser": "pictureWordPractice 150/0, phonicsGames 304/0 (first run 301/3: a pinned pink card border, assertion updated to the new design), pictureWordGames 151/0 — one at a time",
+      "visual_390": "screenshots viewed; teacher face and word picture sharp; review copies in C:\\Users\\jinal\\voca-review\\2026-10-13-lesson-screen-v2"
+    },
+    "speech_and_recording": "automated: speechSynthesis called with en-GB, mocked microphone record -> stop -> play. NOT verified: real speaker output, real microphone, iOS Safari",
+    "failed_preexisting": "testTownShop 85/1 (unrelated, not fixed)",
+    "not_run": "real device, townProto25d S37, Speaking/Writing/Voca/Town browser specs, verify:all, phonicsProgress and phonicsReview specs this round"
+  },
+  "blocked_on_operator": [
+    "디자인 확인 (확인 전 Production 반영 금지)",
+    "그림 파일 3종: 가리키는 자세 캐릭터, 교실 배경, 나무 간판",
+    "의상의 타사 브랜드 표식을 그대로 둘지",
+    "번들 여유 약 9 KB — 다음 화면 작업 전 축소 방안 필요"
+  ],
+  "not_done": "DB/SQL/Production/main/다른 워크트리 0, SpeakingPracticeItem.jsx 변경 0, 점수·판정 기능 0"
+}

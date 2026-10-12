@@ -359,14 +359,17 @@ const VILLAGE_KIT_FILE_RE = new RegExp(String.raw`^(${VILLAGE_KIT_BASENAMES.join
 // 2026-10-11 그림 단어 검토 패널(admin/PictureWordReviewPanel, 관리자 lazy 청크 전용): 151장 WebP는 manifest 기준으로 허용(파일명 = <asset>-<hash>.webp).
 const PICTURE_WORD_BASENAMES = Object.values(JSON.parse(readFileSync(path.join(process.cwd(), 'src/assets/pictureWords/manifest.json'), 'utf8')).assets).map((a) => a.asset)
 const PICTURE_WORD_FILE_RE = new RegExp(String.raw`^(${PICTURE_WORD_BASENAMES.join('|')})-[\w-]+\.webp$`)
+// 2026-10-13 PAUL PHONICS 선생님 캐릭터(pictureWords/pictureImg.jsx, 그림 단어 lazy 청크 전용): phonics-teacher-stand/sit WebP 2장은 별도 파일로 허용. 파일명에 paul-idle-front/paul-sit 없음 → 4c 규칙과 무관.
+const PHONICS_TEACHER_FILE_RE = /^phonics-teacher-(stand|sit)-[\w-]+\.webp$/
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f) && !VILLAGE_KIT_FILE_RE.test(f) && !PICTURE_WORD_FILE_RE.test(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f) && !TOWN_MISSION_KIT_FILE_RE.test(f) && !PARK_KIT_FILE_RE.test(f) && !VILLAGE_KIT_FILE_RE.test(f) && !PICTURE_WORD_FILE_RE.test(f) && !PHONICS_TEACHER_FILE_RE.test(f),
 )
 check(
-  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) + 그림 단어 검토/PAUL PHONICS 선생님 이미지(2026-10-13) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
 )
+check("메인 청크(index-*.js)에 'phonics-teacher' 문자열 0건(선생님 이미지는 지연 로드되는 그림 단어 청크에서만 참조)", !mainSrc.includes('phonics-teacher'))
 const foundEnvArtwork = assetFiles.filter(isExpectedEnvArtwork)
 const foundEnvArtworkBases = new Set(
   foundEnvArtwork.map((f) => EXPECTED_ENV_ARTWORK_BASENAMES.find((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)),
