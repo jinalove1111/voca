@@ -36,6 +36,10 @@ export function pictureStateCounts(entries = PICTURE_WORDS) {
   return { hasImage: c('hasImage'), autoLinked: c('autoLinked'), teacherApproved: c('teacherApproved'), studentVisible: c('studentVisible'), needsReview: s.filter((x) => x.studentVisible && !x.teacherApproved).length }
 }
 
+export const reviewStatus = (e) => (e.decision === 'approve' ? 'approved' : e.decision === 'exclude' ? 'rejected' : 'needs-review')
+// review list only; it does not decide what students see (`learn` does)
+export const reviewQueue = (entries = PICTURE_WORDS) => entries.filter((e) => e.autoLink)
+
 export const learnableWords = (entries = PICTURE_WORDS) => entries.filter((e) => e.learn)
 export const pendingWords = (entries = PICTURE_WORDS) => entries.filter((e) => ['MISMATCH', 'UNCERTAIN', 'MULTIPLE'].includes(e.status) && !e.decision)
 

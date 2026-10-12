@@ -187,6 +187,17 @@ for (const id of ['pwr-root', 'pwr-tab-', 'pwr-card-', 'pwr-img-', 'pwr-approve-
 }
 ok(panel.includes('학습 순서 미확정') && panel.includes('이 브라우저에만 저장됩니다') && panel.includes('설계 — 미구현'), 'required notices present')
 
+// ---- 그림 검토 (read-only review view)
+const RQ = H.reviewQueue()
+ok(RQ.length === 119 && JSON.stringify(RQ) === JSON.stringify(E.filter((e) => e.autoLink)), 'reviewQueue = the 119 autoLink entries')
+ok(RQ.every((e) => H.reviewStatus(e) === 'needs-review'), 'reviewQueue: all needs-review today')
+ok(H.reviewStatus({ decision: 'approve' }) === 'approved' && H.reviewStatus({ decision: 'exclude' }) === 'rejected' && H.reviewStatus({ decision: null }) === 'needs-review', 'reviewStatus fixtures')
+const tabSrc = panel.slice(panel.indexOf('function PictureReviewTab'), panel.indexOf('export default function'))
+ok(tabSrc.length > 100 && tabSrc.includes('pwr-pic-readonly'), 'PictureReviewTab has the read-only notice')
+ok(!/onSave|saveDecisions|localStorage|sessionStorage|fetch\(/.test(tabSrc), 'PictureReviewTab: no save / storage / network')
+ok(!/pwr-pic-approve|pwr-pic-reject|>승인<\/button>|>반려<\/button>/.test(tabSrc) && (tabSrc.match(/<button/g) || []).length === 1 && tabSrc.includes('pwr-pic-f-${v}'), 'PictureReviewTab: only the filter chip button, no approve/reject controls')
+ok(admin.includes("'picturereview'") && admin.includes('initialTab="pictures"'), 'AdminScreen: 그림 검토 menu entry opens the panel on the pictures tab')
+
 // ---- practice screen source pins (249차)
 const app = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8')
 ok(!/data\/pictureWords|assets\/pictureWords/.test(app), 'App.jsx imports neither the data nor the assets (only the lazy screen)')
