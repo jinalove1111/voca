@@ -1,5 +1,5 @@
 // Shared by the practice screen and the games chunk: picture lookup, neutral picture, reduced-motion hook, game CSS.
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { playWordAudio } from '../../utils/speech'
 import teacherStand from '../../assets/phonics/teacher/phonics-teacher-stand.webp'
 
@@ -24,14 +24,35 @@ export const PwProgress = ({ n, total, label, testid = 'pw-progress' }) => (
   </div>
 )
 
-// Classroom strip (PAUL PHONICS teacher + speech bubble): decorative CSS shapes, quiet colours, nothing animated. The teacher is the existing Paul Town character (see assets/phonics/teacher/NOTICE.md).
-export const ClassScene = ({ line }) => (
+// Lesson scene. Wall/shelf/window/rug/sign are CSS-only TEMPORARY STAND-INS until the operator supplies art. Teacher: STANDING image, a temporary substitute for the missing pointing pose (assets/phonics/teacher/NOTICE.md).
+export const ClassScene = ({ line, bubble, children }) => (
   <div data-testid="pw-cls" className="pw-cls">
-    <span className="pw-cls-win" /><span className="pw-cls-shelf"><i style={{ height: 14, background: '#A7D7BE' }} /><i style={{ height: 11, background: '#E8B4BC' }} /><i style={{ height: 13, background: '#A9CBE3' }} /></span>
-    <img src={teacherStand} width={96} height={128} alt="" draggable={false} className="pw-cls-teacher" />
-    <p data-testid="pw-cls-line" className="pw-cls-line text-base font-black text-gray-800">{line}</p>
+    <span className="pw-cls-win" /><span className="pw-cls-shelf">{[30, 24, 34, 26, 32, 22].map((h, k) => <i key={k} style={{ height: h }} />)}</span>
+    <img src={teacherStand} width={120} height={290} alt="" draggable={false} className="pw-cls-teacher" />
+    <div className="pw-cls-main">
+      <p data-testid="pw-cls-line" className="pw-cls-line">{line}{bubble}</p>
+      {children}
+    </div>
   </div>
 )
+
+// Word strip: practice only (shows English words; never mounted by quiz screens).
+export function WordStrip({ words, i, said, onPick }) {
+  const cur = useRef(null)
+  const first = useRef(true) // skip the mount scroll (no page jump)
+  useEffect(() => { if (first.current) first.current = false; else cur.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'auto' }) }, [i])
+  return (
+    <div data-testid="pwp-strip" className="pw-strip">
+      {words.map((w, k) => (
+        <button key={w.id} ref={k === i ? cur : null} type="button" data-testid="pwp-strip-item" data-index={k} aria-current={k === i ? 'true' : undefined} onClick={() => onPick(k)} className="pw-st">
+          {w.asset ? <img src={imgUrl(w.asset)} alt="" draggable={false} /> : <b>{w.en}</b>}
+          <span>{w.en}</span>
+          {said.has(w.id) && <i aria-hidden="true">✓</i>}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export const playEn = (en) => playWordAudio(null, en, { source: 'pictureWords' })
 
@@ -113,19 +134,33 @@ const CSS = `
 .pwt-train.pwt-depart{animation:pwt-go .6s ease-in .25s forwards}
 .pwt-result{animation:pwt-in .3s ease-out .85s both}
 .pwt-engine{display:flex;align-items:center;justify-content:center;min-width:48px;min-height:48px;font-size:1.75rem}
-.pw-cls{position:relative;box-sizing:border-box;height:132px;overflow:hidden;border-radius:20px;background:#FFF9EE;box-shadow:inset 0 0 0 2px #F3E8D2}
-.pw-cls::after{content:"";position:absolute;left:0;right:0;bottom:0;height:26px;background:#EBD9BC}
-.pw-cls-win{position:absolute;right:12px;top:14px;box-sizing:border-box;width:64px;height:52px;overflow:hidden;border:4px solid #fff;border-radius:10px;background:linear-gradient(#DCEEFB,#EEF7FC)}
-.pw-cls-win::before{content:"";position:absolute;left:-8px;bottom:-16px;width:80px;height:34px;border-radius:50%;background:#CFE6C8}
-.pw-cls-win::after{content:"";position:absolute;inset:0;background:linear-gradient(#fff,#fff) center/100% 4px no-repeat,linear-gradient(#fff,#fff) center/4px 100% no-repeat}
-.pw-cls-shelf{position:absolute;right:12px;top:70px;display:flex;align-items:flex-end;gap:3px;width:64px;height:17px;box-sizing:border-box;border-bottom:3px solid #D9C3A0}
-.pw-cls-shelf i{width:10px;border-radius:2px 2px 0 0}
-.pw-cls-teacher{position:absolute;z-index:1;left:6px;bottom:2px;width:96px;height:128px;object-fit:contain}
-.pw-cls-line{position:absolute;z-index:1;left:112px;right:88px;top:24px;box-sizing:border-box;margin:0;padding:8px 12px;border-radius:16px;background:#fff;line-height:1.3;word-break:keep-all;overflow-wrap:anywhere;box-shadow:0 2px 0 #F3E8D2}
-.pw-cls-line::before{content:"";position:absolute;left:-6px;top:18px;width:12px;height:12px;background:#fff;transform:rotate(45deg)}
-@media(max-width:639px){.pw-cls-card .pw-card{width:min(100%,13rem)}}
-@media(min-width:768px){.pw-cls{height:200px}.pw-cls::after{height:36px}.pw-cls-shelf{display:none}.pw-cls-win{top:92px;width:72px;height:56px}.pw-cls-teacher{width:144px;height:192px}.pw-cls-line{left:160px;right:12px;top:18px}
-.pw-cls-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 24px;align-items:start;width:44rem;margin-left:calc(50% - 22rem)}.pw-cls-card>*{margin:0!important;grid-column:2}.pw-cls-card>.pw-cls{grid-column:1;grid-row:1/span 7}}
+.pw-sign{position:relative;display:block;width:fit-content;margin:22px auto 0!important;padding:6px 20px 7px;border:3px solid #6B4423;border-radius:14px;background:linear-gradient(#A9743F,#8A5A2E);box-shadow:inset 0 0 0 2px #C99A64;color:#FFF3D6;font-size:1.25rem;line-height:1.2;white-space:nowrap}
+.pw-sign::before{content:"👑";position:absolute;left:50%;top:-24px;translate:-50%;line-height:1}
+.pw-sign::after{content:"";position:absolute;left:16%;right:16%;top:-14px;height:11px;border:solid #6B4423;border-width:0 3px}
+.pw-sign span{margin-left:4px;padding:0 6px;border-radius:99px;background:#FFF3D6;color:#B91C1C;font-size:.7rem;vertical-align:middle}
+.pw-back{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;background:#fff;font-size:1.5rem;font-weight:900}
+.pw-chip{padding:6px 12px;border-radius:99px;background:#fff}.pw-chip .pw-bar{flex:none;width:2.5rem}
+.pw-cls{position:relative;display:grid;grid-template-columns:34% minmax(0,1fr);gap:6px;align-items:end;min-height:330px;padding:8px 8px 6px;overflow:hidden;border-radius:24px;background:linear-gradient(#FFF7E8 72%,#EBD9BC 72%)}
+.pw-cls::after{content:"";position:absolute;left:30%;right:-8%;bottom:-20px;height:100px;border-radius:50%;background:#D5E5F1}
+.pw-cls-win{position:absolute;right:10px;top:10px;box-sizing:border-box;width:104px;height:120px;border:5px solid #fff;border-radius:99px 99px 0 0;background:radial-gradient(ellipse at 25% 125%,#CFE6C8 48%,#0000 49%),radial-gradient(ellipse at 95% 130%,#BFDDB9 52%,#0000 53%),linear-gradient(#DCEEFB,#F1F8FC)}
+.pw-cls-win::after{content:"";position:absolute;left:58%;bottom:22px;width:16px;height:26px;background:#E4CFC6;clip-path:polygon(0 100%,0 38%,50% 0,100% 38%,100% 100%)}
+.pw-cls-shelf{position:absolute;left:8px;top:24px;display:flex;align-items:flex-end;gap:3px;width:36%;height:64px;border-bottom:4px solid #DCC8A6}
+.pw-cls-shelf i{flex:1;max-width:14px;background:#B9D8C6}.pw-cls-shelf i:nth-child(3n+2){background:#EBC0C6}.pw-cls-shelf i:nth-child(3n){background:#B4D0E6}
+.pw-cls-teacher{position:relative;z-index:1;width:100%;height:290px;object-fit:contain;object-position:center bottom}
+.pw-cls-main{position:relative;z-index:1;align-self:start;min-width:0}
+.pw-cls-line{position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 10px;padding:4px 6px 4px 12px;border-radius:18px;background:#fff;font-size:.95rem;font-weight:900;line-height:1.25;word-break:keep-all}
+.pw-cls-line::before{content:"";position:absolute;left:-6px;bottom:16px;width:12px;height:12px;background:#fff;transform:rotate(45deg)}
+.pw-spk{flex:none;display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;font-size:1.4rem}
+.pw-bub{width:44px;height:44px}.pw-bub::before{content:"🔊"}
+.pw-cls-box{max-width:25rem;padding:8px;border:3px solid #BFDBFE;border-radius:22px;background:#fff}
+.pw-cls-box .pw-card{width:100%;padding:0;border:0;background:none;box-shadow:none}.pw-cls-box .pw-pic{padding:4px;box-shadow:none}
+.pw-big{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:76px;padding:8px;border-radius:20px;font-weight:900;line-height:1.2;word-break:keep-all}
+.pw-strip{display:flex;gap:8px;width:fit-content;max-width:100%;margin-inline:auto;padding:6px 4px 8px;overflow-x:auto;scroll-snap-type:x proximity}
+.pw-st{position:relative;flex:none;box-sizing:border-box;width:72px;padding:6px 4px;scroll-snap-align:center;border-radius:14px;background:#fff;font-size:.75rem;font-weight:800;line-height:1.2;overflow-wrap:anywhere}
+.pw-st img,.pw-st b{display:flex;align-items:center;justify-content:center;width:48px;height:48px;margin:0 auto 2px;object-fit:contain;border-radius:10px;background:#FFF4DE}
+.pw-st img{background:none}.pw-st[aria-current=true]{outline:3px solid #3B82F6}
+.pw-st i{position:absolute;top:2px;right:4px;font-style:normal;color:#059669}
+@media(min-width:768px){.pw-wrap:has(.pw-cls-card){max-width:45rem}.pw-cls{min-height:420px}.pw-cls-teacher{height:380px}}
 @media (prefers-reduced-motion: reduce){[class*=pw-],[class*=pbp-],[class*=pwt-]{animation:none!important;transition:none!important}.pwt-train.pwt-depart{visibility:hidden}.pw-spark-star{display:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>

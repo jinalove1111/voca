@@ -583,9 +583,10 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
   const TMP = path.join(ROOT, 'scripts/.tmp/pwp-ssr'); fs.mkdirSync(TMP, { recursive: true })
   const STUBS = [
     [/pictureImg\.jsx$/, `import React from 'react'
-export const BTN = '', W = {}, T2 = '', T3 = '', MUTED = '', ROLE = { go: {}, say: {}, play: {}, review: {}, listen: {} }, GameStyle = () => null, ClassScene = () => null, MenuPic = () => null, PwProgress = () => null, playEn = () => {}
+export const BTN = '', W = {}, T2 = '', T3 = '', MUTED = '', ROLE = { go: {}, say: {}, play: {}, review: {}, listen: {} }, GameStyle = () => null, ClassScene = ({ children }) => children, WordStrip = () => null, MenuPic = () => null, PwProgress = () => null, playEn = () => {}
 export const GamePicture = ({ testid }) => React.createElement('div', { 'data-testid': testid + '-card', className: 'pw-card' })`],
     [/SpeakingPracticeItem$/, 'export const RecorderControls = () => null'],
+    [/LessonRecorder\.jsx$/, 'export default () => null'],
     [/hooks[\/]useLocalRecorder$/, 'export default () => ({ st: { status: \'idle\' }, elapsed: 0, reset() {}, stop() {} })'],
     [/utils[\/]speech$/, 'export const stopSpeaking = () => {}, playWordAudio = () => {}'],
     [/pictureWords[\/]sfx\.js$/, 'export const playSfx = () => {}'],

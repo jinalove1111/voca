@@ -565,19 +565,19 @@ export async function run(browser, baseURL) {
     await scenario('(d1) 디자인', vp, async ({ page, name }) => {
       const minTile = vp.width <= 360 ? 47.9 : 55.9
       const covered = (loc) => loc.evaluate((el) => { el.scrollIntoView({ block: 'center' }); const b = el.getBoundingClientRect(); const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return !(top === el || el.contains(top)) })
-      const cardInfo = (picId) => page.evaluate((id) => {
-        const img = document.querySelector(`[data-testid="${id}"]`), card = img.closest('.pw-card'), cs = getComputedStyle(card)
+      const cardInfo = (picId, box) => page.evaluate(([id, bx]) => {
+        const img = document.querySelector(`[data-testid="${id}"]`), card = img.closest(bx || '.pw-card'), cs = getComputedStyle(card)
         const inner = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
         return { border: cs.borderTopColor, radius: parseFloat(cs.borderTopLeftRadius), ratio: img.getBoundingClientRect().width / inner, imgW: img.getBoundingClientRect().width, cropped: getComputedStyle(img).objectFit !== 'contain', bg: cs.backgroundImage.includes('linear-gradient') }
-      }, picId)
-      const check = async (label, picId, progressId, progressText, tileSel, primary) => {
-        const c = await cardInfo(picId)
+      }, [picId, box])
+      const check = async (label, picId, progressId, progressText, tileSel, primary, box) => {
+        const c = await cardInfo(picId, box)
         const prog = ((await T(page, progressId).textContent()) || '').trim()
         const tl = tileSel ? await page.locator(tileSel).evaluateAll((l) => l.map((e) => { const b = e.getBoundingClientRect(); return [b.width, b.height] })) : []
         let cov = false
         for (const p of primary) if (await covered(T(page, p))) cov = true
         const ov = await overflow(page)
-        r.check(`${name} (d1) ${label}: 카드 테두리 #F472B6 / 둥근 모서리 ≥ 12 / 그림 ≥ 70% / 그림 ≤ 384px / contain / 그라데이션 배경`, c.border === 'rgb(244, 114, 182)' && c.radius >= 12 && c.ratio >= 0.7 && c.imgW <= 384 && !c.cropped && c.bg, JSON.stringify(c))
+        r.check(`${name} (d1) ${label}: 카드 테두리 #F472B6(연습 카드는 레슨 흰 카드 파란 테두리 #BFDBFE) / 둥근 모서리 ≥ 12 / 그림 ≥ 70% / 그림 ≤ 384px / contain / 그라데이션 배경`, c.border === (box ? 'rgb(191, 219, 254)' : 'rgb(244, 114, 182)') && c.radius >= 12 && c.ratio >= 0.7 && c.imgW <= 384 && !c.cropped && (box ? true : c.bg), JSON.stringify(c))
         r.check(`${name} (d1) ${label}: 진행 "${progressText}" + 진행 막대 / 타일 ≥ ${Math.round(minTile + 0.1)}px / 가로 넘침 0 / 주요 버튼 가림 0`, prog.endsWith(progressText) && (await T(page, progressId).locator('.pw-bar-fill').count()) === 1 && tl.every(([w2, h2]) => w2 >= minTile && h2 >= minTile) && ov <= 0 && !cov, JSON.stringify({ prog, small: tl.filter(([w2, h2]) => w2 < minTile || h2 < minTile), ov, cov }))
       }
       await openScreen(page)
@@ -593,7 +593,7 @@ export async function run(browser, baseURL) {
       await T(page, 'pwh-open-speak').click()
       await T(page, 'pwp-start-practice-food').click()
       await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
-      await check('연습 카드', 'pwp-picture', 'pwp-progress', '1 / 6', null, ['pwp-listen', 'pwp-rec-record', 'pwp-next'])
+      await check('연습 카드', 'pwp-picture', 'pwp-progress', '1 / 6', null, ['pwp-listen', 'pwp-rec-record', 'pwp-next'], '.pw-cls-box')
       for (let i = 0; i < 6; i++) await T(page, 'pwp-next').click()
       await T(page, 'pwp-go-test').click()
       await T(page, 'pwp-quiz').waitFor({ state: 'visible', timeout: 10000 })

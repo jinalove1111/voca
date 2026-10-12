@@ -218,7 +218,7 @@ if (exists('src/components/pictureWords/PictureGames.jsx')) {
   const img = read(`${dir}/pictureImg.jsx`)
   const css = img.slice(img.indexOf('const CSS = `'))
   ok(/\.pw-card\{[^}]*border:3px solid #F472B6/.test(css) && /\.pw-card\{[^}]*border-radius:24px/.test(css) && /linear-gradient\(160deg,#FFE4EF[^)]*#FFF8EC/.test(css), 'design: .pw-card pink #F472B6 border, rounded, pink -> cream gradient')
-  ok(/\.pw-pic\{[^}]*width:100%[^}]*object-fit:contain/.test(css) && !/object-fit:cover/.test(css), 'design: picture fills the card width, contain, never cropped')
+  ok(/\.pw-pic\{[^}]*width:100%[^}]*object-fit:contain/.test(css) && !/object-fit:cover/.test(css.replace(/\.pw-cls-teacher\{[^}]*\}/, '')), 'design: picture fills the card width, contain, never cropped (only the decorative teacher figure crops its transparent margins)')
   ok(['pw-c0', 'pw-c1', 'pw-c2', 'pw-c3', 'pw-slot', 'pw-slot-on', 'pw-progress', 'pw-bar-fill'].every((c) => css.includes(`.${c}`)), 'design: pastel letter colours, slots, progress classes')
   const reduce = css.slice(css.indexOf('@media (prefers-reduced-motion'))
   const anims = [...new Set([...css.slice(0, css.indexOf('@media (prefers-reduced-motion')).matchAll(/\.(pw-[a-z-]+)\{animation:/g)].map((m) => m[1]))]

@@ -1173,10 +1173,10 @@ export async function run(browser, baseURL) {
           await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
           await sleep(1100)
           await T(page, 'pwp-rec-stop').click()
-          await T(page, 'pwp-rec-play').waitFor({ state: 'visible', timeout: 8000 })
+          await T(page, 'pwp-rec-retake').waitFor({ state: 'visible', timeout: 8000 })
           await T(page, 'pwp-rec-play').click()
           await T(page, 'pwp-rec-retake').click()
-          recOk = (await T(page, 'pwp-rec-record').count()) === 1 && (await T(page, 'pwp-rec-play').count()) === 0
+          recOk = (await T(page, 'pwp-rec-record').count()) === 1 && (await T(page, 'pwp-rec-play').isDisabled())
         }
         await T(page, 'pwp-next').click()
         await page.waitForFunction(() => !!document.querySelector('[data-testid="pwp-card"], [data-testid="pwp-end"]'), null, { timeout: 5000 })
@@ -1236,7 +1236,7 @@ export async function run(browser, baseURL) {
           await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
           await sleep(1100)
           await click(page, T(page, 'pwp-rec-stop'), true)
-          await T(page, 'pwp-rec-play').waitFor({ state: 'visible', timeout: 8000 })
+          await T(page, 'pwp-rec-retake').waitFor({ state: 'visible', timeout: 8000 })
           await click(page, T(page, 'pwp-rec-play'), true)
           recOk = await page.waitForFunction((m) => window.__plays > m, p0, { timeout: 4000 }).then(() => true).catch(() => false)
         }
@@ -1322,7 +1322,7 @@ export async function run(browser, baseURL) {
       }
       const P = geo.filter((x) => !x.text), X = geo.filter((x) => x.text)
       const same = (a, b) => Math.abs(a.w - b.w) <= 1 && Math.abs(a.h - b.h) <= 1 && Math.abs(a.mw - b.mw) <= 1 && Math.abs(a.mh - b.mh) <= 1 && a.border === b.border && a.radius === b.radius && a.shadow === b.shadow && a.bg === b.bg && a.matBg === b.matBg
-      r.check(`${name} Unit 4: 그림 카드 ${P.length}장 + 글자 카드 ${X.length}장, 겉 크기(±1px)·테두리·모서리·그림자·배경·안쪽 매트가 같음`, P.length === 1 && X.length === 4 && geo.every((x) => same(x, P[0])) && P[0].border.startsWith('rgb(244, 114, 182)'), JSON.stringify(geo.map((x) => [x.text, Math.round(x.w), Math.round(x.h)])))
+      r.check(`${name} Unit 4: 그림 카드 ${P.length}장 + 글자 카드 ${X.length}장, 겉 크기(±1px)·테두리·모서리·그림자·배경·안쪽 매트가 같음(2026-10-13: 분홍 테두리 대신 공통 흰 카드 틀 — 틀의 파란 테두리는 pictureWordPractice가 확인)`, P.length === 1 && X.length === 4 && geo.every((x) => same(x, P[0])), JSON.stringify(geo.map((x) => [x.text, Math.round(x.w), Math.round(x.h)])))
       r.check(`${name} 큰 단어가 매트 안에 전부 보임(잘림·말줄임·가로 넘침 0), 카드가 화면 안`, geo.every((x) => x.inside && x.fits) && (await overflow(page)) <= 0, JSON.stringify(geo.map((x) => x.inside)))
       r.check(`${name} 단어를 누르면 그 단어 전체 소리가 정확히 1번(5장 모두); 빠르게 두 번 눌러도 같은 단어만, 최대 2번`, tapOk && dblOk, `${tapOk}/${dblOk}`)
       r.check(`${name} 승인된 뜻이 글자 카드 4장에 보임(box 상자·pot 냄비·hot 뜨거운·dog 개) + 그림 단어 뜻 1개 = 5줄, 자리표시 문구 없음`, koCount === 5 && ['box:상자', 'pot:냄비', 'hot:뜨거운', 'dog:개'].every((x) => kos.includes(x)) && !/준비 중|뜻 없음/.test(await T(page, 'pwp-root').innerText()), kos.join())

@@ -216,7 +216,10 @@ ok(!/studentId|studentName|currentStudent/.test(read('src/components/phonics/Pho
 
   // recorder parity: the picture-word card and the phoneme card use the shared Speaking recorder hook and controls (no forked recorder)
   const pwp = read('src/components/pictureWords/PictureWordPractice.jsx'), pl = read('src/components/phonics/PhonemeListen.jsx')
-  ok([pwp, pl].every((t) => t.includes("import useLocalRecorder from '../../hooks/useLocalRecorder'") && t.includes("import { RecorderControls } from '../SpeakingPracticeItem'") && /const rec = useLocalRecorder\(\)/.test(t) && /<RecorderControls rec=\{rec\}/.test(t)), 'recorder parity: picture-word and phoneme cards use useLocalRecorder + RecorderControls from Speaking practice')
+  // 2026-10-13: the picture-word lesson card draws its own two big buttons (LessonRecorder) on the SAME rec object, status text helper and in-app-browser guard — still no forked recorder logic
+  const lr = read('src/components/pictureWords/LessonRecorder.jsx')
+  const t2 = (t) => t.includes("import { RecorderControls } from '../SpeakingPracticeItem'") && /<RecorderControls rec=\{rec\}/.test(t)
+  ok([pwp, pl].every((t) => t.includes("import useLocalRecorder from '../../hooks/useLocalRecorder'") && /const rec = useLocalRecorder\(\)/.test(t)) && t2(pl) && /<LessonRecorder rec=\{rec\}/.test(pwp) && lr.includes("import { recStatusText } from '../SpeakingPracticeItem'") && lr.includes('isInAppBrowser()') && !/MediaRecorder|getUserMedia/.test(lr + pwp), 'recorder parity: both cards use the shared useLocalRecorder; the phoneme card uses RecorderControls, the lesson card uses LessonRecorder on the same rec object (no forked recorder)')
   ok([...walk('src/components/pictureWords'), ...walk('src/components/phonics')].every((f2) => !/MediaRecorder|getUserMedia/.test(read(f2))), 'no forked recorder in picture-word / phonics components')
 
   // approved picture mapping untouched: every Book 1 ready word still points at its own approved asset
