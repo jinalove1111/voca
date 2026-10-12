@@ -1,0 +1,62 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PAUL PHONICS 학생용 모바일 화면 재설계 (273차)",
+  "task_id": "paul-phonics-student-ux-redesign-2026-10-13",
+  "task": "첫 화면 3타일(파닉스 모험·말하기·게임 놀이터), 하위 화면 2개, 역할별 색, 책장·Book 정리, Unit 허브 4묶음(듣기→따라 말하기→게임→복습)",
+  "status": "completed_awaiting_operator_review",
+  "progress": 90,
+  "updated_at": "2026-10-13",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "commits": ["1a31b369", "ee941a1b", "df28686b"],
+  "files_owned": [
+    "docs/design/PHONICS_STUDENT_UX_REDESIGN_2026-10-13.md",
+    "src/components/pictureWords/PictureWordPractice.jsx",
+    "src/components/pictureWords/pictureImg.jsx",
+    "src/components/pictureWords/PictureGames.jsx",
+    "src/components/pictureWords/AlphabetHammer.jsx",
+    "src/components/pictureWords/HiddenLetters.jsx",
+    "src/components/pictureWords/ShopShelf.jsx",
+    "src/components/phonics/PaulPhonics.jsx",
+    "src/components/phonics/UnitHub.jsx",
+    "src/components/phonics/PhonicsAdventure.jsx",
+    "src/components/phonics/SoundBubblePop.jsx",
+    "src/components/phonics/WordTrain.jsx",
+    "src/components/phonics/PhonicsProgress.jsx",
+    "src/components/phonics/ProgressViews.jsx",
+    "tests/e2e/pictureWordPractice.spec.mjs",
+    "tests/e2e/pictureWordGames.spec.mjs",
+    "tests/e2e/phonicsGames.spec.mjs",
+    "scripts/testPhonicsGames.mjs",
+    "handoff.md"
+  ],
+  "measured_390px": {
+    "home": "no scroll (844), 5 buttons (was 30)",
+    "speak": "1080px",
+    "play": "892px",
+    "book1_unit_hub": "1074px (was about 2400)",
+    "book2_unit_hub": "1296px"
+  },
+  "bundle": "2.179 -> 2.183 MB of 2.2 MB; budget number unchanged",
+  "verification": {
+    "passed": {
+      "build": "OK (dummy env)",
+      "static": "testPhonicsGames 428, testPhonicsProgress 111, testPictureWords 782, testPictureWordGames 142, testBundleBudget 32, testLazyChunkGuards 116, testStudentPathContracts, testKeySentenceFlow, testWritingPractice, testRegistryCoverage, testQaGate 17, testTownV2Static 157, testTownUiStatic 126",
+      "browser": "pictureWordPractice 123/0, pictureWordGames 151/0, phonicsGames 304/0, phonicsProgress 62/0, phonicsReview 50/0 — one at a time; pictureWordPractice first run 116/1 from a misplaced new assertion (test code), fixed and rerun",
+      "visual_390": "9 scratch screenshots viewed"
+    },
+    "failed_preexisting": "testTownShop 85/1 (unrelated, not fixed)",
+    "not_run": "real device, iOS, real speaker/microphone, deployed Preview behind login, townProto25d S37, Speaking/Writing/Voca/Town browser specs, verify:all"
+  },
+  "intended_behaviour_changes": [
+    "Book 1 next-step order: intro -> gallery -> say -> bubble -> train -> test (gallery now precedes say)",
+    "step numbers no longer shown; sub-lines only on the next row or when expanded",
+    "level chips live in the game sub-screen; shop sets live in the speaking sub-screen"
+  ],
+  "blocked_on_operator": [
+    "운영자가 Preview에서 새 화면 직접 확인",
+    "메뉴·책 표지용 전용 일러스트 제작 여부(지금은 기존 그림 단어 그림 재사용)",
+    "게임 이름 한글화 여부(Sound Bubble Pop, Word Train)",
+    "녹음 버튼 색(Speaking 공용 부품) 변경 허용 여부"
+  ],
+  "not_done": "DB/SQL 실행/Production/main/다른 워크트리 0, 학생 데이터 변경 0, 새 그림 파일 0"
+}
