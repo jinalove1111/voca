@@ -7,6 +7,9 @@ const ACTIONS = ['approve', 'exclude']
 const DOUBTFUL = ['MISMATCH', 'UNCERTAIN', 'MULTIPLE'] // pending = doubtful without a decision (UNUSABLE is never pending)
 const okText = (s) => typeof s === 'string' && s.trim() === s && s.length > 0 && s.length <= 40
 
+// a new auto-matched picture is not student-visible until a teacher approves it; `legacy` = frozen Set of ids in source/legacyAutoPublished.json
+export const isLearnable = (status, decision, id, legacy) => decision === 'approve' || (status === 'MATCH' && legacy.has(id))
+
 // entries: [{ id, status }]. Returns { errors, approved, edited, excluded, pending, unknown }.
 export function validate(doc, entries) {
   const errors = []

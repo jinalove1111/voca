@@ -107,6 +107,21 @@ ok(run({ [mm]: { action: 'approve', en: '' } }).errors.length === 1 && run({ [mm
 ok(run({ [um]: { action: 'approve' } }).errors.length === 1, 'validator: UNUSABLE approve rejected')
 ok(run({}, 2).errors.length === 1, 'validator: v!==1 rejected')
 
+// ---- teacher-approval rule: new pictures are not student-visible; the 119 legacy ones are a frozen review list
+const { isLearnable } = await import('../scripts/pictureWords/validateDecisions.mjs')
+const LG = rd('scripts/pictureWords/source/legacyAutoPublished.json').ids, LGS = new Set(LG)
+const realLegacy = E.filter((e) => e.learn && e.decision !== 'approve').map((e) => e.id)
+const newMatch = E.find((e) => e.status === 'MATCH' && !LGS.has(e.id))
+ok(isLearnable('MATCH', null, LG[0], LGS) === true && isLearnable('MATCH', null, 'pics2/new', LGS) === false && isLearnable('MATCH', 'approve', 'pics2/new', LGS) === true && isLearnable('MISMATCH', 'approve', 'x', LGS) === true && isLearnable('MISMATCH', null, 'x', LGS) === false && isLearnable('MATCH', 'exclude', 'pics2/new', LGS) === false, 'isLearnable: legacy MATCH true, new MATCH false, approve true, MISMATCH none false, exclude false')
+ok(LG.length === 119 && LGS.size === 119 && LG.every((id, i) => i === 0 || LG[i - 1] < id) && JSON.stringify(LG) === JSON.stringify(realLegacy.slice().sort()) && E.filter((e) => e.learn).every((e) => e.decision === 'approve' || LGS.has(e.id)), 'legacy list: 119 unique sorted ids == real learn-without-approval entries; every learn entry is approved or legacy')
+const gsrc = fs.readFileSync(path.join(ROOT, 'scripts/pictureWords/buildPictureWordsData.mjs'), 'utf8')
+ok(gsrc.includes('isLearnable(') && !gsrc.includes("v.status === 'MATCH' || decision"), 'generator uses isLearnable and not the bare auto-publish rule')
+const SC = H.pictureStateCounts(), st1 = H.pictureState({ asset: 'x', autoLink: true, decision: null, learn: true })
+ok(JSON.stringify(SC) === JSON.stringify({ hasImage: 151, autoLinked: 119, teacherApproved: 0, studentVisible: 119, needsReview: 119 }), `pictureStateCounts real data ${JSON.stringify(SC)}`)
+ok(!st1.teacherApproved && st1.studentVisible && st1.hasImage && st1.autoLinked && H.pictureState({ asset: 'x', autoLink: true, decision: 'approve', learn: true }).teacherApproved && H.pictureState({}).hasImage === false, 'pictureState: four independent flags')
+const fx = [{ asset: 'a', autoLink: true, decision: null, learn: true }, { asset: 'b', autoLink: true, decision: 'approve', learn: true }]
+ok(H.pictureStateCounts(fx).needsReview === 1 && H.pictureStateCounts(fx.slice(0, 1)).needsReview === 1 && H.pictureStateCounts([fx[0], { ...fx[1], decision: null }]).needsReview === 2, 'pictureStateCounts: an approved entry is not needsReview')
+
 // ---- practice.js (pure)
 const P = await import('../src/utils/pictureWords/practice.js')
 ok(P.STEPS.join() === 'card,end,quiz,review,summary' && P.MODES.join() === 'practice,test', 'practice STEPS (251: one card per word) + MODES')
@@ -171,6 +186,40 @@ for (const id of ['pwr-root', 'pwr-tab-', 'pwr-card-', 'pwr-img-', 'pwr-approve-
   ok(panel.includes(id), `testid ${id}`)
 }
 ok(panel.includes('학습 순서 미확정') && panel.includes('이 브라우저에만 저장됩니다') && panel.includes('설계 — 미구현'), 'required notices present')
+
+// ---- 그림 검토 (read-only review view)
+const RQ = H.reviewQueue()
+ok(RQ.length === 119 && JSON.stringify(RQ) === JSON.stringify(E.filter((e) => e.autoLink)), 'reviewQueue = the 119 autoLink entries')
+ok(RQ.every((e) => H.reviewStatus(e) === 'needs-review'), 'reviewQueue: all needs-review today')
+ok(H.reviewStatus({ decision: 'approve' }) === 'approved' && H.reviewStatus({ decision: 'exclude' }) === 'rejected' && H.reviewStatus({ decision: null }) === 'needs-review', 'reviewStatus fixtures')
+const tabSrc = panel.slice(panel.indexOf('function PictureReviewTab'), panel.indexOf('export default function'))
+ok(tabSrc.length > 100 && tabSrc.includes('pwr-pic-readonly') && tabSrc.includes('영구 저장하는 기능이 아직 없기 때문입니다'), 'PictureReviewTab has the read-only notice (no persistent save yet)')
+ok(!/onSave|saveDecisions|localStorage|sessionStorage|fetch\(/.test(tabSrc), 'PictureReviewTab: no save / storage / network')
+ok(tabSrc.includes('pwr-pic-approve') && tabSrc.includes('pwr-pic-reject'), 'PictureReviewTab: approve + reject buttons are shown')
+const btnSegs = tabSrc.split('<button').slice(1)
+ok(btnSegs.length === 3 && btnSegs.filter((s) => !s.includes('pwr-pic-f-${v}')).length === 2 && btnSegs.filter((s) => !s.includes('pwr-pic-f-${v}')).every((s) => /\bdisabled\b/.test(s.split('>')[0]) && s.includes('aria-disabled="true"')), 'PictureReviewTab: every non-chip button is disabled')
+ok((tabSrc.match(/onClick/g) || []).length === 1 && tabSrc.includes('onClick={() => setF(v)}'), 'PictureReviewTab: no onClick other than the chip setF')
+ok(/const OFF = '[^']*opacity-50 cursor-not-allowed/.test(panel) && (tabSrc.match(/className=\{OFF\}/g) || []).length === 2, 'disabled buttons look greyed')
+ok(panel.includes("import LEGACY_REVIEWS from '../../data/pictureWords/legacyReviews.json'") && tabSrc.includes('statusOf(e)') && !/reviewStatus/.test(tabSrc), 'PictureReviewTab status comes from legacyReviews.json')
+// ---- legacyReviews.json (Git-versioned review record file)
+const { validateLegacyReviews: VL } = await import('../scripts/pictureWords/validateLegacyReviews.mjs')
+const LEG = rd('scripts/pictureWords/source/legacyAutoPublished.json').ids
+const REAL = VL(rd('src/data/pictureWords/legacyReviews.json'), LEG)
+ok(REAL.errors.length === 0 && REAL.approved === 0 && REAL.rejected === 0 && REAL.pending === 119, `legacyReviews.json: 0 errors, approved 0 / rejected 0 / pending 119 (${JSON.stringify(REAL)})`)
+const mk = (rec, id = LEG[0]) => VL({ v: 1, reviews: { [id]: rec } }, LEG)
+const okRec = { action: 'approve', reviewer: '교사A', at: '2026-10-13' }
+ok(mk(okRec).errors.length === 0 && mk(okRec).approved === 1 && mk(okRec).pending === 118, 'validator: valid approve passes')
+ok(mk({ action: 'reject', reviewer: '교사A', at: '2026-10-13', note: '뜻 불일치', replacement: 'apple-red' }).rejected === 1, 'validator: valid reject with replacement passes')
+ok(mk(okRec, 'pics2/nope').errors.length === 1, 'validator: unknown id')
+ok(mk({ ...okRec, action: 'exclude' }).errors.length === 1, 'validator: bad action')
+ok(mk({ action: 'approve', at: '2026-10-13' }).errors.length === 1, 'validator: missing reviewer')
+ok(mk({ ...okRec, at: '2026-13-40' }).errors.length === 1 && mk({ ...okRec, at: '2026-02-30' }).errors.length === 1 && mk({ ...okRec, at: '26-1-1' }).errors.length === 1, 'validator: bad date')
+ok(mk({ ...okRec, extra: 1 }).errors.length === 1, 'validator: unknown key')
+ok(mk({ ...okRec, replacement: 'x' }).errors.length === 1, 'validator: replacement on approve')
+ok(mk({ ...okRec, note: 'a'.repeat(201) }).errors.length === 1 && mk([]).errors.length === 1 && VL({ v: 2, reviews: {} }, LEG).errors.length === 1 && VL({ v: 1, reviews: [] }, LEG).errors.length === 1, 'validator: long note / non-object record / bad v / bad reviews')
+const stu = [...walk(path.join(ROOT, 'src/components/phonics')), ...walk(path.join(ROOT, 'src/components/pictureWords')), path.join(ROOT, 'src/data/pictureWords/index.js')]
+ok(stu.length > 3 && stu.every((f) => !fs.readFileSync(f, 'utf8').includes('legacyReviews')), 'students never read legacyReviews (phonics / pictureWords components, data index)')
+ok(admin.includes("'picturereview'") && admin.includes('initialTab="pictures"'), 'AdminScreen: 그림 검토 menu entry opens the panel on the pictures tab')
 
 // ---- practice screen source pins (249차)
 const app = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8')

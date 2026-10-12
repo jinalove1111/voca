@@ -212,9 +212,30 @@ for (const rel of V1_UNCHANGED_FILES) {
 
 // ── 5. api/**, *.sql — origin/main 대비 무변경(DDL/서버 로직 무접촉) ──────
 section('5. api/** 및 *.sql — origin/main 대비 무변경')
+// 미실행 초안만 별도 분류: 신규 추가(A) + 루트 + supabase_v<n>_*_DRAFT.sql. 수정/이름변경/삭제/api/하위경로는 전부 운영 변경.
+function classifySqlApiDiff(lines) {
+  const drafts = [], operational = []
+  for (const line of lines) {
+    const [status, ...paths] = line.split('\t')
+    const p = paths[0] || ''
+    if (status === 'A' && paths.length === 1 && !p.includes('/') && /^supabase_v\d[\w.]*_DRAFT\.sql$/.test(p)) drafts.push(p)
+    else operational.push(paths.join(' -> ') || line)
+  }
+  return { drafts, operational }
+}
+{
+  const cls = (l) => classifySqlApiDiff([l])
+  const T = 'supabase_v3_51_phonics_progress_DRAFT.sql'
+  check('classifySqlApiDiff — A 루트 *_DRAFT.sql은 draft', cls(`A\t${T}`).drafts.length === 1 && cls(`A\t${T}`).operational.length === 0)
+  for (const l of [`M\t${T}`, 'A\tsupabase_v3_52_new_table.sql', 'M\tsupabase_v1_6_student_identity.sql', 'A\tapi/foo_DRAFT.sql', 'A\tapi/x.js', 'A\tsub/supabase_v3_9_x_DRAFT.sql', 'R100\told.sql\tsupabase_v3_9_x_DRAFT.sql', `D\t${T}`]) {
+    check(`classifySqlApiDiff — operational: ${l.replace(/\t/g, ' ')}`, cls(l).operational.length === 1 && cls(l).drafts.length === 0)
+  }
+}
 try {
-  const diffOut = execFileSync('git', ['diff', '--name-only', BASE_REF, '--', 'api', '*.sql'], { cwd: ROOT, encoding: 'utf8' }).trim()
-  check('git diff origin/main -- api **/*.sql — 변경 파일 0개', diffOut === '', diffOut)
+  const diffOut = execFileSync('git', ['diff', '--name-status', BASE_REF, '--', 'api', '*.sql'], { cwd: ROOT, encoding: 'utf8' }).trim()
+  const { drafts, operational } = classifySqlApiDiff(diffOut ? diffOut.split('\n') : [])
+  check('git diff origin/main -- api **/*.sql — 운영 변경 파일 0개 (미실행 초안은 별도 분류)', operational.length === 0, operational.join(', '))
+  check(`미실행 초안 — 운영 DB 반영 금지: ${drafts.length}개${drafts.length ? ' (' + drafts.join(', ') + ')' : ''}`, true)
 } catch (err) {
   // 위 12개 byte-identity 체크(gitShow)와 동일한 관례 — BASE_REF가 이
   // 체크아웃에 없어서(fatal: bad revision 등) git 자체가 실행 안 되는

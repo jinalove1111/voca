@@ -1,4 +1,68 @@
 # Paul Easy Voca — Handoff
+## 271차 (2026-10-13): 그림 검토 기록을 Git 정적 파일로 — 기록 파일·검증기·절차 문서, 꺼진 승인·반려 버튼, 이미지 없는 105개 목록
+- **상태 한 줄**: 커밋 3개 push 완료. 학생 화면·학생 데이터 변경 0, DB·SQL 실행 0. 정적 검증 통과, 관리자 브라우저 1종 1회 통과. **`townProto25d` S37과 학생 쪽 브라우저 검사는 돌리지 않았다.**
+- **CTO 결정**: 119개 검토 기록은 우선 Git 정적 파일 / 구조·검증 규칙·절차 문서화, 관리자 화면이 파일을 저장하는 것처럼 보이면 안 됨 / 승인·반려 버튼은 영구 저장 준비 전까지 비활성 + 이유 안내 / 반려 그림은 나중에 학생 화면에서 숨기고 대체 없으면 그림 없는 학습(지금은 설계만) / 이미지 없는 105개 정리와 제작 우선순위 제안 / Supabase는 추후 별도.
+- **기록 파일 (`590591db`)**: `src/data/pictureWords/legacyReviews.json` — `{ v: 1, note, reviews: {} }`, **지금 기록 0건**(검토한 사람이 없으므로 지어내지 않았다). 기록 모양 `reviews[그림 id] = { action: approve|reject, reviewer, at: YYYY-MM-DD, note?, replacement?(reject에만) }`. 검증기 `scripts/pictureWords/validateLegacyReviews.mjs`(순수 함수 + CLI): 동결 119개 밖의 id, 모르는 키, 잘못된 action·reviewer·날짜(`2026-13-40` 같은 없는 날짜 포함)·note 길이, 승인에 붙은 replacement를 오류로 낸다. 실행 결과 `approved 0 · rejected 0 · pending 119 · errors 0`. **학생 쪽 코드(`components/phonics`, `components/pictureWords`, `data/pictureWords/index.js`)는 이 파일을 언급하지 않는다**는 정적 가드 포함. `testPictureWords` 767 → 782.
+- **관리자 화면 (`4ca2bae4`)**: 그림 검토 탭의 상태가 이제 기록 파일에서 온다(119 / 0 / 0). 카드마다 `승인`·`반려` 버튼이 **보이지만 꺼져 있다**(`disabled`, 회색, 클릭 핸들러 없음, 설명 title). 안내 문구: "승인·반려 버튼은 꺼져 있습니다. 이 화면에는 검토 기록을 영구 저장하는 기능이 아직 없기 때문입니다. 지금 검토 기록은 개발자가 저장소의 기록 파일에 반영해 배포해야 바뀝니다…". 기록이 있는 카드는 기록자·날짜·메모를 보여 준다. 저장·네트워크 0.
+- **절차 문서**: `docs/operations/PICTURE_REVIEW_FILE_PROCEDURE_2026-10-13.md` — 파일 구조(예시는 가짜로 표시), 검증 규칙, 적용 절차(교사가 화면에서 보고 개발자에게 전달 → 개발자가 파일 수정·검증·커밋 → 운영자 배포 승인 → 화면에 반영), 이 기록이 지금 하는 일/하지 않는 일.
+- **반려 → 학생 화면 숨김 (설계만, 미구현)**: 같은 문서 6절. `isLearnable`에 "반려면 동결 목록 id라도 학습 대상 아님" 우선순위를 추가하고, `replacement`가 승인되면 그 그림 사용, 없으면 그림 없는 학습. **확인된 주의점**: 파닉스 단어는 그림이 없다고 자동으로 "그림 없이 학습"이 되지 않는다 — `NOIMG` 목록에 있어야 `not-needed`이고 아니면 `needed`(제작 대기)로 분류된다. 그림 단어 연습에서는 단어가 묶음에서 빠지고 가게 묶음이 4단어 미만이면 `ready`가 아니게 된다. 학생 화면이 바뀌는 작업이라 별도 승인과 브라우저 검증이 필요하다.
+- **이미지 없는 105개 (`fd3cd41f`)**: `docs/design/PHONICS_IMAGE_BACKLOG_2026-10-13.md` + 생성 스크립트 `scripts/phonics/listImageBacklog.mjs`. 실제 값 **105 = 새 제작 98 + 기존 마을 그림 재사용 후보 7(cat·duck·fox·gate·tent·lamp·tree, 승인 결정 필요)**, 교사 확인 필요 ⚠ 10개(vet·mule·prune·cub·moth·cloth·globe·horn·thread·head). Book별(첫 등장 기준) 13 / 14 / 13 / 29 / 36. Book·Unit 표는 데이터에서 생성, 카테고리(동물 16·음식 8·탈것 5·사람/신체 13·자연/장소 22·사물 41)와 그리기 난이도는 **제안/추정**으로 표시. 우선순위 제안 5단계: Book 1 12 → Book 2 12 → Book 3 12 → Book 4 27 → Book 5 35(단계 안에서는 여러 Unit에 나오는 단어 먼저, ⚠ 단어 맨 뒤). 그림 없이 가도 될 후보 10개(oil·thread·cloth·food·night·storm·town·zoo·neck·vet) 제안. 260차 P1/P2/P3와의 차이는 문서에 적었다(재사용 후보를 제작 수에서 뺌). 문서가 데이터와 어긋나지 않도록 정적 단언 1건(`testPhonicsGames` 427 → 428).
+- **검증 — 통과(정적, dummy-env build)**: build OK(경고 0). `testPictureWords` 782, `testPictureWordGames` 142, `testPhonicsGames` 428, `testPhonicsProgress` 111, `testTownV2Static` 157, `testTownUiStatic` 126, `testBundleBudget` 32(예산 대상 합계 2.179 MB, 제외 청크 37.6 KB), `testLazyChunkGuards` 116, `testRegistryCoverage` 8, `testQaGate` 17, `testStudentPathContracts` 61, `validateLegacyReviews` 오류 0.
+- **검증 — 통과(브라우저 1종, 1회, 여유 3.6 GB)**: `pictureWordReview` 39/0(37 → 39) — 필터 4개만 켜져 있고 승인·반려 버튼 238개는 전부 꺼짐, 꺼진 버튼을 강제로 눌러도 카드 119장·칩 숫자·localStorage 변화 없음.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1.
+- **검증 — 미완료**: `townProto25d` S37(여유 4.5 GB 이상 필요), 학생 쪽 브라우저 검사와 `verify:all`, 실기기, Preview(`pw-preview` 미갱신). 꺼진 버튼의 실제 모양은 사람 눈으로 확인하지 않았다.
+- **남은 작업(승인 필요)**: ① 교사가 119개 검토 → 결과를 개발자가 기록 파일에 반영 ② 반려 그림 숨김 구현(학생 화면 변경) ③ 재사용 후보 7개 승인 여부, ⚠ 10개 단어 확정, 그림 없이 갈 후보 결정 ④ 그림 98개 제작 ⑤ Supabase 저장은 추후(초안 `supabase_v3_52_picture_review_DRAFT.sql` 미실행, 초안의 값은 `exclude`·파일은 `reject`라 변환 필요).
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·`pw-preview` 갱신·다른 워크트리·`C:\voca` 0. 자동 승인 0.
+
+## 270차 (2026-10-13): 관리자 '그림 검토' 메뉴(읽기 전용) + 승인 기록 저장 방식 조사·SQL 초안(미실행)
+- **상태 한 줄**: 커밋 2개 push 완료. 관리자 화면에 그림 검토 목록이 생겼고 **승인·반려 버튼은 없다**(영구 저장 방식 검증 전). 학생 화면·학생 데이터 변경 0. SQL은 초안만 작성, 실행 0. **`townProto25d` S37과 학생 쪽 브라우저 검사는 이번에도 돌리지 않았다.**
+- **그림 검토 화면 (`54063ec3`)**: 관리자 메뉴 `🖼 그림 검토`(기존 `🖼 그림단어` 옆) → `PictureWordReviewPanel`을 `그림 검토` 탭으로 바로 연다(같은 패널의 세 번째 탭으로도 들어갈 수 있다). 자동 연결 그림 **119개**를 카드로 표시 — 이미지, 영어 단어, 한국어 뜻, 카테고리(가게), 승인 상태 배지, "학생 화면 사용 중". 필터 `검토 필요 119` / `승인 0` / `반려 0` / `이미지 없음 105`. 숫자는 전부 데이터에서 계산한다(`reviewQueue()` = `autoLink` 항목, `reviewStatus()` = 결정 `approve`→승인, `exclude`→반려, 없음→검토 필요).
+  - **이미지 없음**: (a) 등록됐는데 그림 파일이 빠진 항목(지금 0), (b) 그림을 아직 만들지 않은 파닉스 단어 105개(`image === 'needed'`).
+  - **승인·반려**: 버튼·입력·저장·네트워크 없음. 맨 위에 "읽기 전용입니다. 승인·반려는 아직 저장할 수 없어 버튼을 두지 않았습니다…" 안내. 정적 검사가 이 탭 소스에 저장 호출·`localStorage`·`fetch`·승인/반려 버튼이 없음을 고정한다.
+  - **왜 새 파일이 아니라 기존 패널 안인가**: 합계 예산이 `PictureWordReviewPanel-*` 청크만 제외하고 이 파일이 그림 주소 표를 이미 갖고 있다. 새 청크였다면 예산에 잡히고 주소 표가 중복된다. 결과: 제외 청크 36.6 KB, 예산 대상 합계 2.178 → 2.180 MB(한도 숫자 변경 0).
+  - 기존 `승인 필요` 탭(의심 31장, 이 브라우저에만 저장 + JSON 내보내기)은 그대로다.
+- **저장 방식 조사 (`8908dc9b`)**: `docs/design/PICTURE_REVIEW_STORAGE_2026-10-13.md` + `supabase_v3_52_picture_review_DRAFT.sql`(**미실행 초안**, 추가 전용·멱등, 학생 데이터 없음).
+  - **사실**: 관리자 쓰기는 브라우저가 anon 키로 직접 하지 않는다 — `callAdminContentWrite()` → Supabase Edge Function `admin-content-write`가 관리자 PIN을 서버에서 확인하고 service-role로 쓴다(`word_asset.upsert`가 같은 방식). 그래서 저장 경로는 그 함수에 액션 하나를 더하면 되고 Vercel 함수는 필요 없다. `api/`는 배포 함수 12개로 한도가 찼다(새 `api/` 파일 불가).
+  - **권장**: (A) 파일 기반 — 교사가 내보낸 결정을 `decisions.json`에 커밋하고 생성기가 다시 굽는다. 학생 화면은 지금처럼 빌드 결과만 보므로 새 실패 경로가 없다. 대신 결정 묶음마다 커밋·배포가 필요하다. DB는 "누가 언제 승인했는지" 기록용 대안(하이브리드)으로 초안을 준비했다: 테이블 `picture_reviews`(그림 1장당 1행), RLS 켬 + 정책 0, anon/authenticated 권한 전부 회수, service_role만 select/insert/update.
+  - **119개를 실제로 승인하려면 아직 필요한 것**: 검증기 `validate()`가 `MATCH` 항목 결정을 받도록 변경, 그리고 "반려가 학생 화면에서 그림을 숨겨도 되는가"에 대한 별도 승인(지금 `isLearnable`은 동결 목록 그림을 반려해도 계속 보여 준다).
+- **가드**: `testTownV2Static`이 초안 2개(`v3_51`, `v3_52`)를 "미실행 초안 — 운영 DB 반영 금지"로 분류, 운영 SQL·`api/` 변경 0 유지(157/157).
+- **검증 — 통과(정적, dummy-env build)**: build OK(경고 0). `testPictureWords` 767(760 → 767), `testPictureWordGames` 142, `testPhonicsGames` 427, `testPhonicsProgress` 111, `testTownV2Static` 157, `testTownUiStatic` 126, `testBundleBudget` 32, `testLazyChunkGuards` 116, `testRegistryCoverage` 8, `testQaGate` 17, `testStudentPathContracts` 61.
+- **검증 — 통과(브라우저 1종, 1회, 여유 3.1 GB)**: `pictureWordReview` 37/0(30 → 37), 미mock 요청 0 — 메뉴로 열기, 카드 119장·전부 검토 필요, 칩 숫자, 승인·반려 0건과 빈 상태 문구, 이미지 없음 105, 탭 안 버튼은 필터 4개뿐, localStorage 변화 없음.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1(268차와 같음).
+- **검증 — 미완료**: `townProto25d` S37(여유 4.5 GB 이상 필요, 16 GB RAM 중 여유 3.1 GB), 학생 쪽 브라우저 검사(`pictureWordPractice`·`pictureWordGames`·`phonicsGames` 등)와 `verify:all`, 실기기, Preview(`pw-preview`는 `95b7faa2` 그대로 — 이번 화면이 올라가 있지 않다). 그림 검토 카드 119장의 그림은 첫 장만 로드 확인했다(나머지는 지연 로드).
+- **문서 미갱신**: `DATABASE.md`에는 `picture_reviews`를 넣지 않았다 — 실행되지 않은 초안이고 채택 여부가 정해지지 않았기 때문. 채택되면 그때 추가한다.
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·`pw-preview` 갱신·다른 워크트리·`C:\voca` 0. 자동 승인 0.
+
+## 269차 (2026-10-13): 그림 4상태 분리 — 기존 119개는 동결 검토 목록, 새 그림은 교사 승인 전 비공개
+- **상태 한 줄**: 커밋 2개 push 완료. 자동 승인 0, 학생 화면 변경 0(생성 데이터 바이트 동일). 정적 검증·영향받은 관리자 브라우저 2종 통과. **`townProto25d` S37과 학생 쪽 브라우저 검사는 이번에 돌리지 않았다.**
+- **CTO 결정**: 119개 자동 승인 금지 / 지금 쓰이는 그림은 숨기지 않고 유지 / 이미지 존재·자동 연결·교사 승인·학생 화면 사용을 따로 관리 / 승인 안 된 그림은 관리자 화면에 "검토 필요" / 새 그림은 승인 전 학생에게 자동 공개하지 않음.
+- **규칙 변경 (`d60c2444`)**: 이전 생성 규칙은 `learn = status === 'MATCH' || decision === 'approve'` — 자동 일치만 되면 곧바로 학생에게 나갔다. 지금은 `isLearnable(status, decision, id, legacy)` = `decision === 'approve'` **또는** (`MATCH`이면서 동결 목록에 있는 id). 동결 목록은 `scripts/pictureWords/source/legacyAutoPublished.json`(119개, 정렬, 추가 금지). 따라서 **앞으로 `verdicts.json`에 새로 들어오는 그림은 자동 일치여도 교사 승인(`decisions.json`의 `approve`) 전에는 `learn: false`**다. 생성기를 다시 돌린 결과 `pictureWords.json`·`pictureWordsNotes.json` 내용 변화 0.
+- **4상태 헬퍼** (`src/data/pictureWords/index.js`): `pictureState(e)` = `{ hasImage, autoLinked, teacherApproved, studentVisible }`(서로 추론하지 않음), `pictureStateCounts()` = 실제 값 **그림 있음 151 · 자동 연결 119 · 교사 승인 0 · 학생 화면 사용 119 · 검토 필요 119**(검토 필요 = 승인 기록 없이 학생 화면에 쓰이는 그림).
+- **관리자 표시 (`f94aba2a`)**: 그림 단어 탭 "분류 결과" 요약에 위 다섯 숫자 한 줄(`pwr-state-counts`)과 설명 문장. 파닉스 검토 탭은 칩 `자동 연결 · 검토 필요 32` · `그림 교사 승인 0`, 단어 표 `· 자동 연결 · 검토 필요`, Book 1 요약 `그림 있음 9 (검토 필요 9 · 교사 승인 0)`. "그림 준비"·"자동 일치" 문구는 패널에서 0건. 버튼·저장·네트워크 추가 0.
+- **가드(정적)**: `testPictureWords` 754 → 760 — 동결 목록에 없는 새 `MATCH`는 `isLearnable` false, 동결 목록 = 실제 "승인 없이 학습 가능" 항목과 정확히 같은 119개, 모든 학습 가능 항목은 승인됐거나 동결 목록 소속, 생성기에 옛 규칙 문자열 0, 4상태 숫자·픽스처. `testPhonicsGames` 426 → 427.
+- **남은 구멍(고치지 않음, 결정 필요)**: 지금은 **교사가 119개를 승인으로 기록할 방법이 없다.** `validateDecisions.validate()`가 `MATCH` 항목에 대한 결정을 오류로 거부하고, 관리자 검토 탭은 불일치·불확실·여러 개 31장만 보여 준다. 119개를 실제로 검토·승인하려면 (a) 검증기가 `MATCH`에 대한 `approve`/`exclude`를 받게 하고 (b) 검토 탭에 119개를 띄우는 작업이 필요하다 — 관리자 기능 추가라 이번 최소 변경 범위에서 뺐다. `exclude`를 `MATCH`에 허용하면 그 그림은 학생 화면에서 빠지므로(기존 동작 변화) 별도 승인이 필요하다.
+- **검증 — 통과(정적, dummy-env build)**: build OK(경고 0). `testPictureWords` 760, `testPictureWordGames` 142, `testPhonicsGames` 427, `testPhonicsProgress` 111, `testTownV2Static` 157, `testTownUiStatic` 126, `testBundleBudget` 32, `testLazyChunkGuards` 116, `testRegistryCoverage` 8, `testQaGate` 17, `testStudentPathContracts` 61, `validateDecisions` 오류 0.
+- **검증 — 통과(브라우저 2종, 각 1회, 여유 3.36 GB, 전용 preview 서버, 종료 확인)**: `phonicsReview` 50/0, `pictureWordReview` 30/0(29 → 30), 미mock 요청 0.
+- **검증 — 실패(기존, 무관, 미수정)**: `testTownShop` 85/1(268차와 같음, 모자 PNG 로더).
+- **검증 — 미완료**: `townProto25d` S37(여유 4.5 GB 이상 필요, 현재 16 GB RAM 중 여유 3.0~3.4 GB). 학생 쪽 `pictureWordPractice`·`pictureWordGames`·`phonicsGames`와 나머지 브라우저 검사, `verify:all`은 다시 돌리지 않았다 — 학생 컴포넌트와 생성 데이터가 그대로라는 근거(파일 diff 0, 정적 통과)만 있고 브라우저 재확인은 아니다.
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·`pw-preview` 갱신·다른 워크트리·`C:\voca` 0. 학생 화면·학생 데이터 변경 0.
+
+## 268차 (2026-10-13): CTO 결정 4건 반영 — 정규식 핀, SQL 초안 별도 분류, 그림 승인 3분리 표기 / S37 미실행
+- **상태 한 줄**: 코드·테스트 커밋 3개 push 완료. 정적 검증 전부 통과, 브라우저는 영향받은 1종만 1회 실행해 통과. **`townProto25d` S37은 메모리 기준 미달로 실행하지 않았다(미완료 그대로).**
+- **(1) `testTownUiStatic` 정규식 (`fa22991e`)**: `onGoTown || (showBuildings` 핀이 `PaulTown.jsx`에 들어온 `onGoWorld ||` 항을 받아들이도록 한 줄 수정. 앱 코드 변경 0, `showBuildings` 분기는 그대로 있음. 125/1 → **126/126**.
+- **(2) SQL 변경 0 가드 (`ed4fb4c7`)**: `testTownV2Static` 5번 절이 `git diff --name-status`를 읽고 `classifySqlApiDiff()`로 나눈다. **초안으로 분류되는 조건은 셋 다 만족할 때뿐** — 상태가 정확히 `A`(신규 추가), 저장소 루트, 이름이 `supabase_v<n>…_DRAFT.sql`. 수정(M)·이름 변경(R)·삭제(D)·`api/` 아래·하위 폴더·`_DRAFT` 없는 새 SQL은 전부 운영 변경으로 남아 계속 FAIL한다(고정 입력 자가 검사 9건으로 고정). 지금 분류된 초안 1개: `supabase_v3_51_phonics_progress_DRAFT.sql` — **실행하지 않았고 운영 DB에 반영하지 않았다.** 146/1 → **157/157**.
+- **(3) 그림 승인 3분리 (`04be890a`)**: 사실 확인 — `pictureWords.json`의 학습 가능 119개는 전부 `status: MATCH` + `decision: null`, `counts.approved` 0, `decisions.json` 비어 있음. 즉 **교사 승인 기록이 있는 그림은 0개**다. 자동 승인하지 않았다.
+  - `phonicsWords.js`: `pictureApprovalOf(pic)` 추가(`null` = 그림 없음 / `'auto'` = 자동 일치·승인 기록 없음 / `'approved'` = `decision === 'approve'`), 항목에 `pictureApproval` 필드. 기존 `image: 'ready'` 값과 학생 코드는 그대로.
+  - `PhonicsReviewPanel.jsx`(관리자 전용): "그림 준비" 표기를 전부 "그림 있음"으로, 요약 칩 `그림 있음 32` · `자동 일치 · 승인 기록 없음 32` · `그림 교사 승인 0`, Book 1 요약 `그림 있음 9 (자동 일치 9 · 교사 승인 0)`, 단어 표 그림 상태에 `· 자동 일치` / `· 교사 승인`, Unit 표 열 이름 `이미지 준비` → `그림 있음`. 버튼·저장·네트워크 추가 0.
+  - 정적 단언 3건 추가(`testPhonicsGames` 423 → 426: 헬퍼 3경우, 32개 전부 `auto`·승인 0, 패널에 "그림 준비" 문자열 0).
+- **운영자 확인 필요(고치지 않음)**: 이 119개 자동 일치 그림은 250차부터 테스터 전용 그림 단어 연습·파닉스 게임에 쓰이고 있다(`learnableWords()` = `learn: true`). "승인 안 된 그림은 학생에게 나가지 않는다"는 원칙을 테스터 화면에도 적용할지는 결정이 필요하다 — 적용하면 테스터 연습 단어가 0개가 되고 관련 검사 다수가 바뀐다. 이번에는 표기만 고쳤다.
+- **검증 — 통과(정적, dummy-env build)**: build OK(38초, 경고 0). `testTownV2Static` 157, `testTownUiStatic` 126, `testPhonicsGames` 426, `testPhonicsProgress` 111, `testPictureWords` 754, `testPictureWordGames` 142, `testBundleBudget` 32(합계 실측 2.178 MB, 한도 숫자 변경 0), `testLazyChunkGuards` 116, `testRegistryCoverage` 8, `testQaGate` 17.
+- **검증 — 통과(브라우저 1종, 1회)**: `phonicsReview` 50/0, 미mock 요청 0. 표기를 바꾼 화면이라 이 spec만 여유 3.1 GB에서 전용 preview 서버로 한 번 실행했고, 끝난 뒤 서버·헤드리스 브라우저 0개 확인. 재실행 0.
+- **검증 — 실패(기존, 이번 변경과 무관, 미수정)**: `testTownShop` 85/**1** — 7번 절 SSR 묶음이 `src/assets/hats/*.png`에 esbuild 로더가 없어 실패한다(모자 PNG가 들어온 뒤 테스트가 따라가지 못한 것, 앱 문제 아님). 테스트의 esbuild 호출에 png 로더 한 줄을 넣으면 될 것으로 보이나 확인하지 않았다.
+- **검증 — 미완료**: `townProto25d` S37(기준 여유 4.5 GB 이상, 이번 세션 여유 3.1~3.4 GB). 나머지 브라우저 27종과 `verify:all`은 이번에 다시 돌리지 않았다(267차 결과 그대로, `.env` 없음). `phonicsGames.spec` 683·722행 검사 이름에 "그림 준비된"이라는 말이 남아 있다(검사 설명 문구일 뿐, 화면 문구 단언 아님).
+- **하지 않은 것**: DB·SQL 실행·`.env`·Production·main·`pw-preview` 갱신·다른 워크트리·`C:\voca` 0. 학생 화면 변경 0. 예산 숫자 변경 0.
+- **미검증**: 실기기, Preview(`pw-preview`는 `95b7faa2` 그대로라 이번 변경이 올라가 있지 않음), `townProto25d` S37.
+
 ## 267차 (2026-10-12): 번들 여유 확보(인라인 이미지 분리) + 관리자 집계 기준 교정 + 브라우저 29종 — 검증 1건 미완료
 - **상태 한 줄**: 커밋·push 완료, **검증은 미완료 1건**(`townProto25d` S37 가게 여닫기 실패, 원인 미확정). 그 밖의 28종은 통과.
 - **번들 원인**: 합계 예산(2.2 MB)은 pdf·xlsx·`PictureWordReviewPanel`만 뺀 모든 JS 청크의 raw 합이라 lazy 분할로는 줄지 않는다(분할하면 청크 머리말만큼 늘어난다). 실제로 줄일 수 있는 것을 in-memory 빌드로 측정: 모듈 프리로드 폴리필 끄기 −568 B, 라이선스 주석 제거 −964 B, `console.log` 제거 −185 B, **4KB 미만 이미지 인라인 끄기 −22,067 B**. 인라인은 마을 그림 5개(cat·owl·puppy·shop-lamp·stone-fountain)가 base64로 JS 청크(20,158 B)에 실려 있던 것이다.

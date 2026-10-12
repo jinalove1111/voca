@@ -29,6 +29,17 @@ export function reuseSummary(entries = PICTURE_WORDS) {
   return { existing: learn.filter((e) => e.existingWord), newCandidates: learn.filter((e) => !e.existingWord), pendingApproval: entries.length - learn.length }
 }
 
+// four independent states — none is inferred from another (image exists / auto-linked / teacher-approved / shown to students)
+export const pictureState = (e) => ({ hasImage: !!e.asset, autoLinked: !!e.autoLink, teacherApproved: e.decision === 'approve', studentVisible: !!e.learn })
+export function pictureStateCounts(entries = PICTURE_WORDS) {
+  const s = entries.map(pictureState), c = (k) => s.filter((x) => x[k]).length
+  return { hasImage: c('hasImage'), autoLinked: c('autoLinked'), teacherApproved: c('teacherApproved'), studentVisible: c('studentVisible'), needsReview: s.filter((x) => x.studentVisible && !x.teacherApproved).length }
+}
+
+export const reviewStatus = (e) => (e.decision === 'approve' ? 'approved' : e.decision === 'exclude' ? 'rejected' : 'needs-review')
+// review list only; it does not decide what students see (`learn` does)
+export const reviewQueue = (entries = PICTURE_WORDS) => entries.filter((e) => e.autoLink)
+
 export const learnableWords = (entries = PICTURE_WORDS) => entries.filter((e) => e.learn)
 export const pendingWords = (entries = PICTURE_WORDS) => entries.filter((e) => ['MISMATCH', 'UNCERTAIN', 'MULTIPLE'].includes(e.status) && !e.decision)
 

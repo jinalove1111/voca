@@ -557,6 +557,12 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
   const stu = ['src/components/phonics', 'src/components/pictureWords'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).map((f) => `${d}/${f}`)).filter((f) => /\.jsx?$/.test(f))
   ok(stu.length > 10 && stu.every((f) => !/koProposed|PROPOSED_KO/.test(read(f))), 'ko: student code never reads koProposed / PROPOSED_KO')
   ok(/koProposed/.test(read('src/components/admin/PhonicsReviewPanel.jsx')) && /phr-b1-ko/.test(read('src/components/admin/PhonicsReviewPanel.jsx')), 'ko: only the admin review panel shows the proposals')
+  // 그림 승인 3분리: 그림 있음(image) / 자동 일치 / 교사 승인 기록(decision) - 승인 기록 없는 그림은 승인으로 표시 금지
+  const rdy = ITEMS.filter((i) => i.image === 'ready')
+  ok(D.pictureApprovalOf({ decision: 'approve' }) === 'approved' && D.pictureApprovalOf({ decision: null }) === 'auto' && D.pictureApprovalOf(null) === null, 'picture approval: approve -> approved, no decision -> auto, no picture -> null')
+  ok(rdy.length === 32 && rdy.every((i) => i.pictureApproval === 'auto') && !ITEMS.some((i) => i.pictureApproval === 'approved') && ITEMS.filter((i) => i.image !== 'ready').every((i) => i.pictureApproval === null), 'picture approval: 32 ready items are all auto-matched, none approved, non-ready items have null')
+  ok(!read('src/components/admin/PhonicsReviewPanel.jsx').includes('그림 준비') && read('src/components/admin/PhonicsReviewPanel.jsx').includes('교사 승인') && D.IMAGE_LABEL_KO.ready === '그림 있음', 'picture approval: the admin panel never says 그림 준비 and shows 교사 승인 separately')
+  ok(read('src/components/admin/PhonicsReviewPanel.jsx').includes('자동 연결 · 검토 필요') && !read('src/components/admin/PhonicsReviewPanel.jsx').includes('자동 일치'), 'picture approval: an unapproved picture reads 자동 연결 · 검토 필요 (never 자동 일치)')
   // 267차 관리자 집계 기준: 승인 수는 승인 목록·실제 파일에서만 계산한다(제안·미리보기·고정 숫자 금지).
   const phr = read('src/components/admin/PhonicsReviewPanel.jsx'), ppp = read('src/components/admin/PhonicsProgressPanel.jsx')
   ok(/prop\.filter\(\(x\) => APPROVED_KO\.has\(x\.word\)\)\.length/.test(phr) && /APPROVED_KO\.has\(x\.word\) \? ' 승인' : ' 뜻 검토 필요'/.test(phr) && !/x\.ko \? ' 승인'/.test(phr), 'admin counts: "뜻 승인" counts APPROVED_KO membership, not any truthy ko (a picture ko must not read as an approved proposal)')
@@ -602,6 +608,13 @@ export const GamePicture = ({ testid }) => React.createElement('div', { 'data-te
   ok(/<button type="button" data-testid="pwp-word"[^>]*>dog<\/button>/.test(none) && none.indexOf('pwp-text-card') < none.indexOf('pwp-word') && none.indexOf('pwp-word') < none.indexOf('pwp-listen'), 'ssr: the word is a real button inside the text card, before the 발음 듣기 button')
   ok(count(appr, 'pwp-text-card') === 1 && count(appr, 'pwp-word') === 1 && count(appr, 'pwp-ko') === 1 && />개<\/p>/.test(appr) && appr.indexOf('pwp-word') < appr.indexOf('pwp-ko'), 'ssr: the approved word renders its meaning under the card')
   ok(count(pic, 'pwp-picture-card') === 1 && count(pic, 'pwp-text-card') === 0 && count(pic, 'pwp-word') === 1 && count(pic, 'pwp-ko') === 1 && pic.includes(`>${jam.ko}</p>`), 'ssr: a picture word keeps picture card + word button + its picture meaning')
+}
+// image backlog doc (2026-10-13): every needed word appears in the doc as a whole word and the doc states the real total
+{
+  const { imageBacklog } = await import('./phonics/listImageBacklog.mjs')
+  const bl = imageBacklog()
+  const doc = read('docs/design/PHONICS_IMAGE_BACKLOG_2026-10-13.md')
+  ok(bl.total === ITEMS.filter((i) => i.image === 'needed').length && doc.includes(`**${bl.total}개**`) && bl.words.every((w) => new RegExp(`(^|[^a-z])${w.word}([^a-z]|$)`).test(doc)), 'image backlog doc lists every image:needed word and states the real total')
 }
 console.log(`${fail ? 'FAIL' : 'PASS'} ${n - fail}/${n} testPhonicsGames`)
 process.exit(fail ? 1 : 0)

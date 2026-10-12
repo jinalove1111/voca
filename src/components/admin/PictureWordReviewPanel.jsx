@@ -1,8 +1,11 @@
 // 관리자 전용 — 그림 단어 승인 검토(248차). 운영 DB·단어 데이터·학생 기록을 읽거나 쓰지 않는다.
 // 결정은 이 브라우저의 localStorage에만 저장된다. 네트워크 0, 보상 호출 0.
 import React, { useMemo, useState } from 'react'
-import { PICTURE_WORDS, COUNTS, SHOP_LABEL_KO, byStatus, phonicsGroups, shopGroups, reuseSummary, applyDecisions } from '../../data/pictureWords/index.js'
+import { PICTURE_WORDS, COUNTS, SHOP_LABEL_KO, byStatus, phonicsGroups, shopGroups, reuseSummary, applyDecisions, pictureStateCounts } from '../../data/pictureWords/index.js'
 import NOTES from '../../data/pictureWords/pictureWordsNotes.json'
+import { reviewQueue } from '../../data/pictureWords/index.js'
+import LEGACY_REVIEWS from '../../data/pictureWords/legacyReviews.json'
+import { PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
 
 const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, query: '?url', import: 'default' })
 const imgUrl = (asset) => IMG[`../../assets/pictureWords/${asset}.webp`]
@@ -127,12 +130,14 @@ function Thumb({ e }) {
 
 function ResultTab() {
   const reuse = reuseSummary()
+  const SC = pictureStateCounts()
   const groups = phonicsGroups()
   return (
     <div className="space-y-5 text-sm">
       <section className="bg-white rounded-2xl p-3 border-2 border-gray-200">
         <h3 className="font-black text-gray-800 mb-1">요약</h3>
         <p>전체 {COUNTS.total}장 · 일치 {COUNTS.byStatus.MATCH} · 불일치 {COUNTS.byStatus.MISMATCH} · 불확실 {COUNTS.byStatus.UNCERTAIN} · 여러 개 {COUNTS.byStatus.MULTIPLE} · 사용 불가 {COUNTS.byStatus.UNUSABLE}</p>
+        <p data-testid="pwr-state-counts">그림 있음 {SC.hasImage} · 단어 자동 연결 {SC.autoLinked} · 교사 승인 {SC.teacherApproved} · 학생 화면 사용 {SC.studentVisible} · 검토 필요 {SC.needsReview} <span className="text-xs text-gray-600">검토 필요 = 교사 승인 기록 없이 학생 화면에 쓰이는 그림(기존 자동 공개분). 새 그림은 교사 승인 전 학생에게 공개되지 않습니다.</span></p>
         <p className="text-xs text-gray-600 mt-1"><b>직접 확인</b> = 그림을 직접 열어 본 것(그림 내용). <b>추론</b> = 뜻·카테고리·미국식·파닉스 그룹처럼 그림과 철자에서 추정한 값. 기존 단어 대조는 문자열 비교.</p>
       </section>
       <section>
@@ -180,8 +185,69 @@ function ResultTab() {
   )
 }
 
-export default function PictureWordReviewPanel() {
-  const [tab, setTab] = useState('review')
+const REVIEW_KO = { 'needs-review': '검토 필요', approved: '승인', rejected: '반려' }
+const REVIEW_CLS = { 'needs-review': 'bg-amber-100 text-amber-800', approved: 'bg-green-100 text-green-700', rejected: 'bg-gray-200 text-gray-700' }
+
+// 읽기 전용 — 상태는 저장소 기록 파일(legacyReviews.json)에서만 온다. 승인/반려 버튼은 꺼져 있고 저장 없음. 필터 상태만 로컬 state.
+const REV = LEGACY_REVIEWS.reviews
+const statusOf = (e) => (REV[e.id]?.action === 'approve' ? 'approved' : REV[e.id]?.action === 'reject' ? 'rejected' : 'needs-review')
+const OFF = 'min-h-[36px] px-3 rounded-xl text-xs font-black border-2 border-gray-300 text-gray-400 bg-gray-50 opacity-50 cursor-not-allowed'
+function PictureReviewTab() {
+  const [f, setF] = useState('needs-review')
+  const queue = useMemo(() => reviewQueue(), [])
+  const missing = queue.filter((e) => !imgUrl(e.asset))
+  const waiting = PHONICS_ITEMS.filter((i) => i.image === 'needed')
+  const n = (s) => queue.filter((e) => statusOf(e) === s).length
+  const chip = (v, label) => (
+    <button key={v} data-testid={`pwr-pic-f-${v}`} onClick={() => setF(v)} className={`min-h-[44px] px-3 rounded-full text-xs font-black border-2 ${f === v ? 'bg-purple-500 text-white border-purple-500' : 'bg-white text-gray-500 border-gray-200'}`}>{label}</button>
+  )
+  const shown = f === 'noimage' ? [] : queue.filter((e) => statusOf(e) === f)
+  return (
+    <div className="min-w-0">
+      <p data-testid="pwr-pic-readonly" className="text-xs font-bold text-amber-800 bg-amber-50 rounded-xl px-3 py-2 mb-3">승인·반려 버튼은 꺼져 있습니다. 이 화면에는 검토 기록을 영구 저장하는 기능이 아직 없기 때문입니다. 지금 검토 기록은 개발자가 저장소의 기록 파일에 반영해 배포해야 바뀝니다. 아래 그림은 교사 승인 기록 없이 학생 화면에서 계속 쓰이고 있습니다.</p>
+      <div className="flex flex-wrap gap-2 mb-3">
+        {chip('needs-review', `검토 필요 ${n('needs-review')}`)}{chip('approved', `승인 ${n('approved')}`)}{chip('rejected', `반려 ${n('rejected')}`)}{chip('noimage', `이미지 없음 ${missing.length + waiting.length}`)}
+      </div>
+      {f === 'noimage' ? (
+        <div className="min-w-0">
+          {missing.length > 0 && <p className="text-sm font-bold text-red-600 mb-2">그림 파일이 빠진 등록 항목 {missing.length}: {missing.map((e) => e.en).join(', ')}</p>}
+          <div className="flex flex-wrap gap-2">
+            {waiting.map((i) => (
+              <div key={i.id} data-testid="pwr-pic-noimage" className="bg-white rounded-xl border-2 border-gray-200 px-2 py-1 min-w-0 text-xs break-words">
+                <p className="font-black text-gray-800">{i.word}</p>
+                <p className="text-gray-600">{i.ko || '뜻 없음'} · 파닉스 단어</p>
+                <p className="text-gray-400">이미지 없음 · 제작 대기</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : shown.length === 0 ? (
+        <p data-testid="pwr-pic-empty" className="text-sm text-gray-400 text-center py-4">해당 항목이 없습니다. 기록 파일에 승인·반려 기록이 아직 없습니다.</p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {shown.map((e) => { const r = REV[e.id]; return (
+            <div key={e.id} data-testid="pwr-pic-card" data-id={e.id} data-review={statusOf(e)} className="bg-white rounded-2xl border-2 border-gray-200 p-2 min-w-0 text-center break-words">
+              <img src={imgUrl(e.asset)} alt={NOTES[e.id].shown} loading="lazy" className="w-24 h-24 mx-auto object-contain bg-gray-50 rounded-lg" />
+              <p className="font-black text-sm text-gray-800">{e.en}</p>
+              <p className="text-xs text-gray-700">{e.ko}</p>
+              <p className="text-[11px] text-gray-500">{SHOP_LABEL_KO[e.shop]} · {e.shop}</p>
+              <span className={`inline-block text-[11px] font-black px-2 py-0.5 rounded-full ${REVIEW_CLS[statusOf(e)]}`}>{REVIEW_KO[statusOf(e)]}</span>
+              <p className="text-[10px] text-gray-400">{e.learn ? '학생 화면 사용 중' : '학생 화면 미사용'}</p>
+              {r && <p data-testid="pwr-pic-record" className="text-[10px] text-gray-600">{r.reviewer} · {r.at}{r.note ? ` — ${r.note}` : ''}</p>}
+              <div className="flex gap-1 justify-center mt-1">
+                <button data-testid="pwr-pic-approve" disabled aria-disabled="true" title="영구 저장 기능 준비 전 — 사용할 수 없습니다" className={OFF}>승인</button>
+                <button data-testid="pwr-pic-reject" disabled aria-disabled="true" title="영구 저장 기능 준비 전 — 사용할 수 없습니다" className={OFF}>반려</button>
+              </div>
+            </div>
+          )})}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function PictureWordReviewPanel({ initialTab = 'review' }) {
+  const [tab, setTab] = useState(initialTab)
   const [decisions, setDecisions] = useState(loadDecisions)
   const commit = (next) => { setDecisions(next); saveDecisions(next) }
   const onSave = (id, d) => commit({ ...decisions, [id]: { ...d, at: Date.now() } })
@@ -192,8 +258,8 @@ export default function PictureWordReviewPanel() {
   return (
     <div data-testid="pwr-root" className="min-w-0 overflow-x-hidden">
       <p data-testid="pwr-local-notice" className="text-xs font-bold text-blue-700 bg-blue-50 rounded-xl px-3 py-2 mb-3">이 브라우저에만 저장됩니다. 운영 DB·단어 데이터·학생 기록은 바뀌지 않습니다.</p>
-      <div className="flex gap-2 mb-3">{tabBtn('review', '승인 필요')}{tabBtn('result', '분류 결과')}</div>
-      {tab === 'review' ? <ReviewTab decisions={decisions} onSave={onSave} onReset={onReset} onClear={() => commit({})} /> : <ResultTab />}
+      <div className="flex gap-2 mb-3">{tabBtn('review', '승인 필요')}{tabBtn('result', '분류 결과')}{tabBtn('pictures', '그림 검토')}</div>
+      {tab === 'review' ? <ReviewTab decisions={decisions} onSave={onSave} onReset={onReset} onClear={() => commit({})} /> : tab === 'pictures' ? <PictureReviewTab /> : <ResultTab />}
     </div>
   )
 }

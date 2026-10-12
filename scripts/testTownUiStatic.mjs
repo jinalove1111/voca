@@ -237,7 +237,7 @@ check('PaulTown.jsx — onGoTown && 가드로 카드 렌더', /\{onGoTown\s*&&\s
 check("PaulTown.jsx — '들어가기' 버튼 텍스트 존재", (paulTownSrc || '').includes('들어가기'))
 check("PaulTown.jsx — '들어가기' 버튼/배지 44px 터치 타겟", /들어가기/.test(paulTownSrc || '') &&
   /min-h-\[44px\][^]*?들어가기/.test(paulTownSrc || ''))
-check('PaulTown.jsx — onGoTown이 undefined/null이면 섹션 조건에 기존 showBuildings 분기 보존', /onGoTown\s*\|\|\s*\(showBuildings/.test(paulTownCode))
+check('PaulTown.jsx — onGoTown이 undefined/null이면 섹션 조건에 기존 showBuildings 분기 보존', /onGoTown\s*\|\|\s*(?:onGoWorld\s*\|\|\s*)?\(showBuildings/.test(paulTownCode))
 
 // ── 7. 터치 타겟(≥44px) — 주요 CTA 버튼 ─────────────────────────────────
 section('7. 주요 CTA 버튼 — min-h-[44px] 또는 py-3+')
