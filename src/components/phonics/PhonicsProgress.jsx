@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { EMPTY_KO, emptyState } from '../../utils/phonics/progress.js'
 import { SAMPLE_NOTICE_KO, SAMPLE_STUDENTS } from '../../data/phonics/sampleProgress.js'
+import { ROLE } from '../pictureWords/pictureImg.jsx'
 import ProgressViews from './ProgressViews.jsx'
 
 export default function PhonicsProgress({ onBack }) {
@@ -17,7 +18,7 @@ export default function PhonicsProgress({ onBack }) {
       </div>
       <p className="text-center text-xs font-black text-amber-800">지금은 점수가 저장되지 않아요</p>
       <div data-testid="ppg-sample-switch" className="flex gap-2">
-        {[[0, 'A'], [SAMPLE_STUDENTS.length - 1, 'G']].map(([k, n]) => <button key={n} type="button" data-testid={`ppg-sample-${n}`} aria-pressed={i === k} onClick={() => setI(k)} className={`min-h-[44px] flex-1 rounded-2xl text-sm font-black ${i === k ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-800'}`}>샘플 학생 {n}</button>)}
+        {[[0, 'A'], [SAMPLE_STUDENTS.length - 1, 'G']].map(([k, n]) => <button key={n} type="button" data-testid={`ppg-sample-${n}`} aria-pressed={i === k} onClick={() => setI(k)} className={`min-h-[44px] flex-1 rounded-2xl text-sm font-black ${ROLE.review[i === k ? 'strong' : 'soft']}`}>샘플 학생 {n}</button>)}
       </div>
       {emptyState(s.records).empty ? <p data-testid="ppg-empty" className="rounded-2xl bg-white p-4 text-center text-base font-black text-gray-700">{EMPTY_KO}</p> : <ProgressViews records={s.records} prefix="ppg" kid />}
       <button type="button" data-testid="ppg-back" onClick={onBack} className="min-h-[44px] w-full rounded-2xl bg-gray-200 px-4 py-3 text-base font-black text-gray-700 btn-press">돌아가기</button>

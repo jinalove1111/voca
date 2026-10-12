@@ -6,8 +6,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { phonicsAttempt, trainRound, trainRoundVowel, trainStart, trainTap, vowelTap } from '../../utils/phonics/games.js'
 import { playPhonemes, allApproved } from '../../utils/phonics/playPhonemes.js'
 import { getSfxSettings, playSfx, SUCCESS_MS } from '../../utils/pictureWords/sfx.js'
-import { GamePicture, PwProgress, playEn, useReducedMotion, W } from '../pictureWords/pictureImg.jsx'
-import { BTN, KO, PUR, WRONG } from './SoundBubblePop.jsx'
+import { GamePicture, PwProgress, ROLE, playEn, useReducedMotion } from '../pictureWords/pictureImg.jsx'
+import { BTN, KO, NEXT, WRONG } from './SoundBubblePop.jsx'
 import { Sparkles, useSuccessThenSpeak } from '../pictureWords/gameFx.jsx'
 
 
@@ -102,7 +102,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
         </div>
       )}
       {item.ko && (item.asset || st.done) && <p data-testid="pwt-ko" className={KO}>{item.ko}</p>}
-      <button type="button" data-testid="pwt-listen" onClick={() => playEn(item.word)} className={`${BTN} ${W.sky}`}>🔊 듣기</button>
+      <button type="button" data-testid="pwt-listen" onClick={() => playEn(item.word)} className={`${BTN} w-full ${ROLE.listen.soft}`}>🔊 듣기</button>
       <p className="text-center text-sm font-bold text-gray-600">{vowelMode ? '회색 글자는 도우미예요. 빈 칸의 모음을 골라요' : '소리 블록을 차례로 이어 보세요'}</p>
       <div className="pwt-track">
         <div data-testid="pwt-train" className={`pwt-train ${st.done ? 'pwt-depart' : ''}`}>
@@ -141,7 +141,7 @@ export default function WordTrain({ item, seed, index, total, studentId, onRecor
           <p data-testid="pwt-word" className="break-words text-3xl font-black text-gray-900">{graphemes.join(' · ')}</p>
           <p data-testid="pwt-spelled" className="break-words text-xl font-bold text-gray-600">{item.display}</p>
           <p data-testid="pwt-feedback" data-result="right" className="rounded-2xl bg-green-50 p-2 text-base font-black text-green-700">기차가 출발해요!</p>
-          <button ref={nextBtn} type="button" data-testid="pwt-next" onClick={next} className={PUR}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
+          <button ref={nextBtn} type="button" data-testid="pwt-next" onClick={next} className={NEXT}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
         </div>
       )}
     </div>

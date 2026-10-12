@@ -8,12 +8,12 @@ import { phonemeClip } from '../../data/phonics/phonemeClips.js'
 import { playPhonemes } from '../../utils/phonics/playPhonemes.js'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { stopSpeaking } from '../../utils/speech'
-import { GamePicture, PwProgress, playEn, T3, useReducedMotion, W } from '../pictureWords/pictureImg.jsx'
+import { GamePicture, PwProgress, ROLE, playEn, T3, useReducedMotion } from '../pictureWords/pictureImg.jsx'
 
 export const WRONG = 'rounded-2xl bg-amber-50 p-2 text-center text-base font-black text-amber-700'
 export const KO = 'text-center text-lg font-bold text-gray-700 break-words'
 export const BTN = 'min-h-[48px] min-w-[48px] px-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
-export const PUR = `${BTN} ${W.purple}`
+export const NEXT = `${BTN} w-full ${ROLE.go.strong}`
 const PRAISE = ['좋아요!', '잘 들었어요!', '바로 그 소리예요!']
 
 export default function SoundBubblePop({ item, seed, index, total, autoplay, onHeard, studentId, onRecord, onNext, ctx }) {
@@ -81,7 +81,7 @@ export default function SoundBubblePop({ item, seed, index, total, autoplay, onH
     <div data-testid="pbp-root" data-mode={test ? 'challenge' : 'practice'} data-position={round.target.position} data-detect={item.detect ? 'true' : 'false'} data-item-index={index} data-done={st.done ? 'true' : 'false'} data-wrong={st.wrong} className="space-y-3">
       <PwProgress testid="pbp-progress" label={label} n={index + 1} total={total} />
       <p className="text-center text-base font-bold text-gray-700">{item.detect ? `잘 듣고 ${item.vowel} 소리가 나는지 골라요` : `잘 듣고 ${posKo} 소리 풍선을 터뜨려요`}</p>
-      <button type="button" data-testid="pbp-listen" onClick={listen} className={`${BTN} ${W.sky} ${!played || (st.last === 'wrong' && !st.done) ? 'pbp-pulse' : ''}`}>{played ? '🔊 다시 듣기' : '🔊 듣기'}</button>
+      <button type="button" data-testid="pbp-listen" onClick={listen} className={`${BTN} w-full ${ROLE.listen.soft} ${!played || (st.last === 'wrong' && !st.done) ? 'pbp-pulse' : ''}`}>{played ? '🔊 다시 듣기' : '🔊 듣기'}</button>
       {clip && <button type="button" data-testid="pbp-listen-sound" onClick={() => playPhonemes([round.target.ipa])} className={`${BTN} w-full bg-pink-100 text-pink-700`}>소리 듣기</button>}
       {!(st.done && gone) && (
         <div className="grid grid-cols-2 place-items-center gap-3 py-2">
@@ -111,7 +111,7 @@ export default function SoundBubblePop({ item, seed, index, total, autoplay, onH
           {st.last === 'right'
             ? <p data-testid="pbp-feedback" data-result="right" className="rounded-2xl bg-green-50 p-2 text-center text-base font-black text-green-700">{PRAISE[seed % 3]}</p>
             : <p data-testid="pbp-feedback" data-result="wrong" className={WRONG}>이 소리를 다시 만나 볼게요</p>}
-          <button type="button" data-testid="pbp-next" onClick={finish} className={PUR}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
+          <button type="button" data-testid="pbp-next" onClick={finish} className={NEXT}>{index + 1 >= total ? '결과 보기' : '다음'}</button>
         </>
       )}
     </div>

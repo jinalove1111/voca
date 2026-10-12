@@ -5,14 +5,14 @@ import { BOOKS, GAME_NAME } from '../../data/phonics/curriculum.js'
 import { RECORDINGS } from '../../data/phonics/recordings.js'
 import { bookProgress, recentActivity, recommendations, reviewWords, testTrend, unitName, unitStates, unitTestResults, weakPhonemes } from '../../utils/phonics/progress.js'
 
-const BAR_COLOR = { b1: 'bg-pink-400', b2: 'bg-emerald-400', b3: 'bg-sky-400', b4: 'bg-yellow-400', b5: 'bg-purple-400' }
-const BOX = 'min-w-0 rounded-2xl border-2 border-purple-100 bg-white p-3'
+const BAR_COLOR = { b1: 'bg-pink-400', b2: 'bg-emerald-400', b3: 'bg-sky-400', b4: 'bg-yellow-400', b5: 'bg-violet-400' }
+const BOX = 'min-w-0 rounded-2xl border-2 border-violet-100 bg-white p-3'
 const H = 'text-base font-black text-gray-800'
 const GAME_KO = { bubble: GAME_NAME.B, train: GAME_NAME.T }
 export const slash = (p) => `/${p}/`
 // child screens show a letter and a key word instead of the phonetic symbol
 const KEY = new Map(RECORDINGS.slice().reverse().map((r) => [r.ipa, `${r.grapheme} (${r.exampleWord})`]))
-const STATE = { 'not-started': ['아직', 'bg-gray-200'], 'in-progress': ['하는 중', 'bg-amber-300'], done: ['했어요', 'bg-emerald-400'], 'needs-review': ['다시 보기', 'bg-sky-400'] }
+const STATE = { 'not-started': ['아직', 'bg-gray-200'], 'in-progress': ['하는 중', 'bg-amber-300'], done: ['했어요', 'bg-emerald-400'], 'needs-review': ['다시 보기', 'bg-violet-400'] }
 const trendKo = (t) => (!t ? '' : t.first ? '첫 시험' : t.delta > 0 ? `지난번보다 +${t.delta}` : t.delta === 0 ? '지난번과 같아요' : '다시 해 보면 좋아요')
 export const Empty = ({ children }) => <p className="text-sm font-bold text-gray-500">{children}</p>
 
@@ -82,7 +82,7 @@ export default function ProgressViews({ records, prefix, kid }) {
         <p className={H}>복습이 필요한 단어</p>
         {words.length ? (
           <ul className="mt-2 flex flex-wrap gap-2">
-            {words.map((w) => <li key={w.itemId} data-testid={`${prefix}-review-word`} className="rounded-full bg-sky-50 px-3 py-1 text-sm font-black text-sky-800">{w.word}</li>)}
+            {words.map((w) => <li key={w.itemId} data-testid={`${prefix}-review-word`} className="rounded-full bg-violet-100 px-3 py-1 text-sm font-black text-violet-800">{w.word}</li>)}
           </ul>
         ) : <Empty>복습할 단어가 아직 없어요.</Empty>}
       </section>
