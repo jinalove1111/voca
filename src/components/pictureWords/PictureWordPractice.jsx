@@ -7,7 +7,7 @@ import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise 
 import { stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls } from '../SpeakingPracticeItem'
-import { BTN, GamePicture, GameStyle, MUTED, MenuPic, PwProgress, ROLE, T2, T3, W, playEn } from './pictureImg.jsx'
+import { BTN, ClassScene, GamePicture, GameStyle, MUTED, MenuPic, PwProgress, ROLE, T2, T3, W, playEn } from './pictureImg.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { PICTURE_REC_LABELS } from './recLabels.js'
@@ -19,7 +19,6 @@ const PaulPhonics = React.lazy(() => import('../phonics/PaulPhonics'))
 
 const GO = `${BTN} ${ROLE.go.strong}`
 const GO_SOFT = `${BTN} ${ROLE.go.soft}`
-const LISTEN = `${BTN} ${ROLE.listen.soft}`
 const PLAY = `${BTN} ${ROLE.play.soft}`
 const SETBTN = 'min-h-[44px] rounded-xl text-base font-black btn-press disabled:opacity-40'
 const SESSION_SIZE = 6
@@ -37,20 +36,20 @@ const Tile = ({ id, role, asset, title, sub, badge, onClick }) => (
 )
 
 // 단어를 누르면 "발음 듣기"와 같은 함수로 전체 단어 소리가 난다. hide = 글자 카드(단어가 카드 안에 이미 있음)
-const WordBtn = ({ word, className }) => <button type="button" data-testid="pwp-word" onClick={() => playEn(word.en)} className={className}>{word.en}</button>
+const WordBtn = ({ word, className, onPlay }) => <button type="button" data-testid="pwp-word" onClick={() => { onPlay?.(); playEn(word.en) }} className={className}>{word.en}</button>
 
-function WordText({ word, hide }) {
+function WordText({ word, hide, onPlay }) {
   if (hide && !word.ko) return null
   return (
     <div className="text-center">
-      {!hide && <WordBtn word={word} className={`${T3} min-h-[44px]`} />}
+      {!hide && <WordBtn word={word} onPlay={onPlay} className={`${T3} min-h-[44px]`} />}
       {word.ko && <p data-testid="pwp-ko" className="text-lg text-gray-600 break-words">{word.ko}</p>}
     </div>
   )
 }
 
-const ListenBtn = ({ word }) => (
-  <button type="button" data-testid="pwp-listen" onClick={() => playEn(word.en)} className={`${LISTEN} w-full`}>🔊 발음 듣기</button>
+const ListenBtn = ({ word, strong, onPlay }) => (
+  <button type="button" data-testid="pwp-listen" onClick={() => { onPlay?.(); playEn(word.en) }} className={`${BTN} ${strong ? ROLE.listen.strong : ROLE.listen.soft} w-full`}>🔊 발음 듣기</button>
 )
 
 // 연습 카드: 단어마다 한 장에 그림·단어·뜻·듣기·녹음(따라 말하기/내 목소리 듣기/다시 말하기)·다음.
@@ -60,6 +59,7 @@ export function PracticeCards({ words, onDone, single = false, nextLabel = '➡�
   const rec = useLocalRecorder()
   const [i, setI] = useState(0)
   const [said, setSaid] = useState(() => new Set())
+  const [heard, setHeard] = useState(() => new Set()) // 듣기/단어 버튼을 누른 단어 — 지금 단계(듣기→말하기→다음)만 강조한다
   const discard = useRef(false)
   const w = words[i]
   const status = rec.st.status
@@ -76,20 +76,24 @@ export function PracticeCards({ words, onDone, single = false, nextLabel = '➡�
     fn()
   }
   const lastOne = i + 1 >= words.length
+  const hear = () => setHeard((s) => new Set(s).add(w.id))
+  const step = !heard.has(w.id) ? 'listen' : !said.has(w.id) ? 'say' : 'next'
+  const line = { listen: '잘 들어 봐요!', say: '따라 말해 볼까요?', next: '좋아요! 다음으로 가요' }[step]
   return (
-    <div data-testid="pwp-card" data-word-index={i} className="space-y-3">
+    <div data-testid="pwp-card" data-word-index={i} data-step={step} className="pw-cls-card space-y-3">
+      <ClassScene line={line} />
       <PwProgress testid="pwp-progress" n={i + 1} total={words.length} />
-      {w.asset ? <GamePicture word={w} testid="pwp-picture" /> : <div data-testid="pwp-text-card" className="pw-card"><div className="pw-pic flex flex-col items-center justify-center gap-2"><span className="pw-card-tag">듣고 따라 말해요</span><WordBtn word={w} className="break-words text-4xl font-black text-gray-900" /></div></div>}
-      <WordText word={w} hide={!w.asset} />
+      {w.asset ? <GamePicture word={w} testid="pwp-picture" /> : <div data-testid="pwp-text-card" className="pw-card"><div className="pw-pic flex flex-col items-center justify-center gap-2"><span className="pw-card-tag">듣고 따라 말해요</span><WordBtn word={w} onPlay={hear} className="break-words text-4xl font-black text-gray-900" /></div></div>}
+      <WordText word={w} hide={!w.asset} onPlay={hear} />
       {said.has(w.id) && <p data-testid="pwp-said-mark" className="text-center text-sm font-bold text-emerald-700">말해 봤어요</p>}
-      <ListenBtn word={w} />
-      <div data-testid="pwp-rec" className="space-y-1">
+      <ListenBtn word={w} strong={step === 'listen'} onPlay={hear} />
+      <div data-testid="pwp-rec" className={`space-y-1 rounded-2xl p-1${step === 'say' ? ' ring-2 ring-rose-300' : ''}`}>
         {status === 'recording' && <p data-testid="pwp-rec-live" className="text-center text-base font-black text-red-600">녹음 중… {rec.elapsed}초</p>}
         <RecorderControls rec={rec} prefix="pwp-rec" labels={PICTURE_REC_LABELS} idleText="" />
       </div>
       <div className="flex gap-2">
         {!single && <button type="button" data-testid="pwp-prev" onClick={() => leave(() => setI(i - 1))} disabled={i === 0} className={`${BTN} flex-1 bg-gray-200 text-gray-700`}>이전</button>}
-        <button type="button" data-testid="pwp-next" onClick={() => (lastOne ? (stopSpeaking(), onDone()) : leave(() => setI(i + 1)))} className={`${GO} flex-1`}>{single ? nextLabel : '➡️ 다음 단어'}</button>
+        <button type="button" data-testid="pwp-next" onClick={() => (lastOne ? (stopSpeaking(), onDone()) : leave(() => setI(i + 1)))} className={`${step === 'next' ? GO : GO_SOFT} flex-1`}>{single ? nextLabel : '➡️ 다음 단어'}</button>
       </div>
     </div>
   )

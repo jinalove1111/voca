@@ -403,6 +403,26 @@ export async function run(browser, baseURL) {
     r.check(`${name} 6장 모두 가로 넘침 0, 다음 버튼 가림 0, 작은 버튼 0 → 끝 카드`, (await overflow(page)) <= 0 && (await small()) === 0)
   }, { studentId: TESTER_ONLY, hasTouch: true })
 
+  // ---- (c1) 교실 장면: 폰(390x844)에서 한 번에 한 단계만 강조 (듣기 → 따라 말하기 → 다음) ----
+  await scenario('(c1) 교실 장면 단계 강조', { width: 390, height: 844 }, async ({ page, name }) => {
+    await openScreen(page)
+    await startSet(page, 'food', 'practice', 'card')
+    const cls = (id) => T(page, id).evaluate((e) => e.className)
+    const stepNow = () => T(page, 'pwp-card').getAttribute('data-step')
+    const line = async () => ((await T(page, 'pw-cls-line').textContent()) || '').trim()
+    const t = await T(page, 'pw-cls').locator('img').evaluate((i) => { const b = i.getBoundingClientRect(); return { nat: i.naturalWidth, w: Math.round(b.width), h: Math.round(b.height), ok: i.complete, alt: i.getAttribute('alt') } })
+    r.check(`${name} (c1) 선생님 이미지 로드(naturalWidth 384) + 폰에서 96x128로 표시 + 장식(alt 빈 값)`, (await T(page, 'pw-cls').isVisible()) && t.ok && t.nat === 384 && t.w === 96 && t.h === 128 && t.alt === '', JSON.stringify(t))
+    const fit = await page.evaluate(() => ({ s: document.documentElement.scrollHeight, h: window.innerHeight }))
+    r.check(`${name} (c1) 그림 단어 카드가 스크롤 없이 한 화면(scrollHeight<=innerHeight) + 가로 넘침 0`, fit.s <= fit.h && (await overflow(page)) <= 0, JSON.stringify(fit))
+    r.check(`${name} (c1) 1단계 듣기: data-step=listen · 말풍선 "잘 들어 봐요!" · 듣기만 강조(sky-500), 다음은 연한 색`, (await stepNow()) === 'listen' && (await line()) === '잘 들어 봐요!' && (await cls('pwp-listen')).includes('bg-sky-500') && !(await cls('pwp-next')).includes('bg-emerald-500') && (await cls('pwp-next')).includes('bg-emerald-100'))
+    await T(page, 'pwp-listen').click()
+    r.check(`${name} (c1) 2단계 말하기: data-step=say · "따라 말해 볼까요?" · 듣기/다음 모두 연한 색 · 녹음 묶음에 강조 링`, (await stepNow()) === 'say' && (await line()) === '따라 말해 볼까요?' && !(await cls('pwp-listen')).includes('bg-sky-500') && !(await cls('pwp-next')).includes('bg-emerald-500') && (await cls('pwp-rec')).includes('ring-rose-300'))
+    await recordOnce(page)
+    r.check(`${name} (c1) 3단계 다음: data-step=next · "좋아요! 다음으로 가요" · 다음만 강조(emerald-500), 듣기는 연한 색 · 링 없음`, (await stepNow()) === 'next' && (await line()) === '좋아요! 다음으로 가요' && (await cls('pwp-next')).includes('bg-emerald-500') && !(await cls('pwp-listen')).includes('bg-sky-500') && !(await cls('pwp-rec')).includes('ring-rose-300'))
+    const small = await page.locator('button:visible').evaluateAll((l) => l.filter((b) => b.getBoundingClientRect().height < 43.9).length)
+    r.check(`${name} (c1) 보이는 버튼 모두 높이 44px 이상 + 가로 넘침 0`, small === 0 && (await overflow(page)) <= 0, String(small))
+  }, { studentId: TESTER_ONLY })
+
   // ---- (t1) 시험 모드: 그림만 → 오답 → 복습(연습 카드 + 녹음기) → 요약 ----
   await scenario('(t1) 시험 모드', { width: 1280, height: 800 }, async ({ page, name }) => {
     await openScreen(page)

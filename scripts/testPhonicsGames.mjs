@@ -575,7 +575,7 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
   ok(/const reveal = st\.done \|\| hinted/.test(sbp) && sbp.indexOf('pbp-ko') > sbp.indexOf('{reveal && ('), 'ko: Sound Bubble Pop shows the meaning only inside the reveal block (after the answer or a practice hint)')
   const quizCard = pwp.slice(pwp.indexOf('function QuizCard'), pwp.indexOf('// stage:'))
   ok(quizCard.indexOf('<WordText') > quizCard.indexOf('{answered && ('), 'ko: the picture-word quiz renders word/meaning only after answering')
-  ok(/<WordBtn word=\{w\} className="break-words text-4xl/.test(pwp) && /<WordText word=\{w\} hide=\{!w\.asset\} \/>/.test(pwp) && /onClick=\{\(\) => playEn\(word\.en\)\}/.test(pwp) && /<button type="button" data-testid="pwp-listen" onClick=\{\(\) => playEn\(word\.en\)\}/.test(pwp), 'ko: tapping the word (a real button) calls the same playEn as the 발음 듣기 button; the text card keeps the word once, inside the mat')
+  ok(/<WordBtn word=\{w\} onPlay=\{hear\} className="break-words text-4xl/.test(pwp) && /<WordText word=\{w\} hide=\{!w\.asset\} onPlay=\{hear\} \/>/.test(pwp) && /onClick=\{\(\) => \{ onPlay\?\.\(\); playEn\(word\.en\) \}\}/.test(pwp) && /<button type="button" data-testid="pwp-listen" onClick=\{\(\) => \{ onPlay\?\.\(\); playEn\(word\.en\) \}\}/.test(pwp), 'ko: tapping the word (a real button) calls the same playEn as the 발음 듣기 button; the text card keeps the word once, inside the mat')
 }
 // 264차: SSR of the practice card with the real component (stubbed browser-only deps) — default state and an approved-meaning state, without touching product data
 {
@@ -583,7 +583,7 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
   const TMP = path.join(ROOT, 'scripts/.tmp/pwp-ssr'); fs.mkdirSync(TMP, { recursive: true })
   const STUBS = [
     [/pictureImg\.jsx$/, `import React from 'react'
-export const BTN = '', W = {}, T2 = '', T3 = '', MUTED = '', ROLE = { go: {}, say: {}, play: {}, review: {}, listen: {} }, GameStyle = () => null, MenuPic = () => null, PwProgress = () => null, playEn = () => {}
+export const BTN = '', W = {}, T2 = '', T3 = '', MUTED = '', ROLE = { go: {}, say: {}, play: {}, review: {}, listen: {} }, GameStyle = () => null, ClassScene = () => null, MenuPic = () => null, PwProgress = () => null, playEn = () => {}
 export const GamePicture = ({ testid }) => React.createElement('div', { 'data-testid': testid + '-card', className: 'pw-card' })`],
     [/SpeakingPracticeItem$/, 'export const RecorderControls = () => null'],
     [/hooks[\/]useLocalRecorder$/, 'export default () => ({ st: { status: \'idle\' }, elapsed: 0, reset() {}, stop() {} })'],

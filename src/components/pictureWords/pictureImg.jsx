@@ -1,6 +1,7 @@
 // Shared by the practice screen and the games chunk: picture lookup, neutral picture, reduced-motion hook, game CSS.
 import React, { useEffect, useState } from 'react'
 import { playWordAudio } from '../../utils/speech'
+import teacherStand from '../../assets/phonics/teacher/phonics-teacher-stand.webp'
 
 const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, query: '?url', import: 'default' })
 export const imgUrl = (asset) => IMG[`../../assets/pictureWords/${asset}.webp`]
@@ -20,6 +21,15 @@ export const PwProgress = ({ n, total, label, testid = 'pw-progress' }) => (
   <div data-testid={testid} data-n={n} data-total={total} className="pw-progress">
     <span className="pw-progress-text">{`${label ? label + ' ' : ''}${n} / ${total}`}</span>
     <span className="pw-bar"><span className="pw-bar-fill" style={{ width: `${Math.min(100, Math.max(0, (n / total) * 100))}%` }} /></span>
+  </div>
+)
+
+// Classroom strip (PAUL PHONICS teacher + speech bubble): decorative CSS shapes, quiet colours, nothing animated. The teacher is the existing Paul Town character (see assets/phonics/teacher/NOTICE.md).
+export const ClassScene = ({ line }) => (
+  <div data-testid="pw-cls" className="pw-cls">
+    <span className="pw-cls-win" /><span className="pw-cls-shelf"><i style={{ height: 14, background: '#A7D7BE' }} /><i style={{ height: 11, background: '#E8B4BC' }} /><i style={{ height: 13, background: '#A9CBE3' }} /></span>
+    <img src={teacherStand} width={96} height={128} alt="" draggable={false} className="pw-cls-teacher" />
+    <p data-testid="pw-cls-line" className="pw-cls-line text-base font-black text-gray-800">{line}</p>
   </div>
 )
 
@@ -103,6 +113,19 @@ const CSS = `
 .pwt-train.pwt-depart{animation:pwt-go .6s ease-in .25s forwards}
 .pwt-result{animation:pwt-in .3s ease-out .85s both}
 .pwt-engine{display:flex;align-items:center;justify-content:center;min-width:48px;min-height:48px;font-size:1.75rem}
+.pw-cls{position:relative;box-sizing:border-box;height:132px;overflow:hidden;border-radius:20px;background:#FFF9EE;box-shadow:inset 0 0 0 2px #F3E8D2}
+.pw-cls::after{content:"";position:absolute;left:0;right:0;bottom:0;height:26px;background:#EBD9BC}
+.pw-cls-win{position:absolute;right:12px;top:14px;box-sizing:border-box;width:64px;height:52px;overflow:hidden;border:4px solid #fff;border-radius:10px;background:linear-gradient(#DCEEFB,#EEF7FC)}
+.pw-cls-win::before{content:"";position:absolute;left:-8px;bottom:-16px;width:80px;height:34px;border-radius:50%;background:#CFE6C8}
+.pw-cls-win::after{content:"";position:absolute;inset:0;background:linear-gradient(#fff,#fff) center/100% 4px no-repeat,linear-gradient(#fff,#fff) center/4px 100% no-repeat}
+.pw-cls-shelf{position:absolute;right:12px;top:70px;display:flex;align-items:flex-end;gap:3px;width:64px;height:17px;box-sizing:border-box;border-bottom:3px solid #D9C3A0}
+.pw-cls-shelf i{width:10px;border-radius:2px 2px 0 0}
+.pw-cls-teacher{position:absolute;z-index:1;left:6px;bottom:2px;width:96px;height:128px;object-fit:contain}
+.pw-cls-line{position:absolute;z-index:1;left:112px;right:88px;top:24px;box-sizing:border-box;margin:0;padding:8px 12px;border-radius:16px;background:#fff;line-height:1.3;word-break:keep-all;overflow-wrap:anywhere;box-shadow:0 2px 0 #F3E8D2}
+.pw-cls-line::before{content:"";position:absolute;left:-6px;top:18px;width:12px;height:12px;background:#fff;transform:rotate(45deg)}
+@media(max-width:639px){.pw-cls-card .pw-card{width:min(100%,13rem)}}
+@media(min-width:768px){.pw-cls{height:200px}.pw-cls::after{height:36px}.pw-cls-shelf{display:none}.pw-cls-win{top:92px;width:72px;height:56px}.pw-cls-teacher{width:144px;height:192px}.pw-cls-line{left:160px;right:12px;top:18px}
+.pw-cls-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 24px;align-items:start;width:44rem;margin-left:calc(50% - 22rem)}.pw-cls-card>*{margin:0!important;grid-column:2}.pw-cls-card>.pw-cls{grid-column:1;grid-row:1/span 7}}
 @media (prefers-reduced-motion: reduce){[class*=pw-],[class*=pbp-],[class*=pwt-]{animation:none!important;transition:none!important}.pwt-train.pwt-depart{visibility:hidden}.pw-spark-star{display:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>

@@ -249,7 +249,7 @@ ok(scr.includes('useLocalRecorder') && scr.includes('RecorderControls') && /play
 
 // ---- 251차: one card per word (listen + recorder together), test mode, privacy pins
 const cardSrc = scr.slice(scr.indexOf('function PracticeCards'), scr.indexOf('function QuizCard'))
-ok(/<ListenBtn word=\{w\} \/>[\s\S]*<RecorderControls rec=\{rec\} prefix="pwp-rec" labels=\{PICTURE_REC_LABELS\}/.test(cardSrc) && /pwp-picture|<Picture word=\{w\}/.test(cardSrc) && /<WordText word=\{w\}/.test(cardSrc), 'card: picture + word/meaning + listen + recorder mount together on one card')
+ok(/<ListenBtn word=\{w\}[^>]*\/>[\s\S]*<RecorderControls rec=\{rec\} prefix="pwp-rec" labels=\{PICTURE_REC_LABELS\}/.test(cardSrc) && /pwp-picture|<Picture word=\{w\}/.test(cardSrc) && /<WordText word=\{w\}/.test(cardSrc), 'card: picture + word/meaning + listen + recorder mount together on one card')
 ok(/const rec = useLocalRecorder\(\)/.test(cardSrc) && /import useLocalRecorder from '\.\.\/\.\.\/hooks\/useLocalRecorder'/.test(scr), 'card: recorder comes from the shared useLocalRecorder hook')
 ok(/rec\.reset\('RESET'\)/.test(cardSrc) && /discard\.current = true; rec\.stop\(\)/.test(cardSrc), 'card: recorder is reset on every word change (a running recording is stopped, then dropped)')
 ok(!/disabled=\{[^}]*(status|rec\.st)/.test(cardSrc.slice(cardSrc.indexOf('pwp-prev'))), 'card: next/prev are never disabled by recorder state')
