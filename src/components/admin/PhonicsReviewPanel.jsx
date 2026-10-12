@@ -1,10 +1,11 @@
 // 관리자 전용 — PAUL PHONICS 검토 자료 (255차, 읽기 전용). 43개 Unit은 구조만 승인됐고 전부 임시다.
-// 운영 DB·학생 기록·저장소·네트워크를 쓰지 않는다. 숫자는 데이터에서 그때그때 계산한다(하드코딩 없음).
+// 운영 DB·학생 기록·저장소·네트워크를 쓰지 않는다. 숫자는 데이터에서 그때그때 계산한다(267차: 녹음 수·뜻 승인 수도 실제 파일·승인 목록에서 계산).
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BOOKS, DIALECT_NOTES, GAME_NAME, STATUS_LABEL_KO, objectiveKo, prereqKo, recordableTargets, unitLabel } from '../../data/phonics/curriculum.js'
-import { PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
+import { APPROVED_KO, PHONICS_ITEMS } from '../../data/phonics/phonicsWords.js'
 import { PHONEME_CLIPS, RECORDING_LIST, recordingStatus } from '../../data/phonics/phonemeClips.js'
 import { RECORDINGS, recordingStatuses } from '../../data/phonics/recordings.js'
+import { CLIP_URLS } from '../../data/phonics/clipFiles.js'
 import { CANDIDATE_NOTE_KO, IMAGE_CANDIDATES } from '../../data/phonics/imageCandidates.js'
 import { validateUpload } from '../../utils/phonics/recordingUpload.js'
 import { learnedPairs, pairOf, reusedIpas, unitWords, wordDifficulty } from '../../utils/phonics/curriculum.js'
@@ -71,7 +72,7 @@ function UnitRow({ b, u }) {
         </div>
       </td>
       <td className={TD}>{u.games.split('').map((g) => GAME_NAME[g]).join(' · ')}</td>
-      <td className={TDN}>{rec.length ? `승인 0 / 필요 ${rec.length}` : '녹음 불필요'}</td>
+      <td className={TDN}>{rec.length ? `승인 ${rec.filter((ipa) => recordingStatus(ipa) === 'approved').length} / 필요 ${rec.length}` : '녹음 불필요'}</td>
       <td className={TDN}>{ready} / {words.length}</td>
       <td className={TDN}>{u.difficulty}</td>
       <td className={TD}>{prereqKo(b.id, u.id)}</td>
@@ -141,7 +142,9 @@ function WordTable({ stats }) {
   )
 }
 
-const recs = recordingStatuses([])
+// 실제 상태 = 번들된 녹음 파일 이름(CLIP_URLS) AND 승인 기록. 미리보기에서 고른 파일은 여기에 들어오지 않는다.
+const recs = recordingStatuses(Object.keys(CLIP_URLS))
+const recN = (ok) => recs.filter(ok).length
 // Preview only: a chosen file lives in memory as an object URL (revoked on replace/unmount). Nothing is saved, uploaded or played for students.
 const VERDICT = { pending: '검수 대기', approved: '승인(미리보기)', rejected: '반려(미리보기)' }
 function RecordingPreview() {
@@ -161,7 +164,7 @@ function RecordingPreview() {
   return (
     <div data-testid="phr-rec-preview" className="mt-2">
       <p data-testid="phr-rec-notice" className="rounded-xl bg-rose-50 p-2 text-xs font-black text-rose-800">Preview 전용 — 선택한 파일은 이 브라우저 메모리에만 있고 저장·업로드되지 않습니다. 새로고침하면 사라지며 학생 화면에는 적용되지 않습니다.</p>
-      <p className="mt-2 text-xs font-bold text-gray-700"><span data-testid="phr-rec-real">실제 등록 0 / 42 · 승인 0 / 42</span> · <span data-testid="phr-rec-preview-summary">선택 {chosen.length} · 검증 통과 {chosen.filter((x) => x.v.ok).length} · 승인(미리보기) {chosen.filter((x) => x.v.ok && f[x.r.id].verdict === 'approved').length}</span></p>
+      <p className="mt-2 text-xs font-bold text-gray-700"><span data-testid="phr-rec-real">{`실제 등록 ${recN((x) => x.file)} / ${recs.length} · 승인 ${recN((x) => x.status === 'approved')} / ${recs.length}`}</span> · <span data-testid="phr-rec-preview-summary">선택 {chosen.length} · 검증 통과 {chosen.filter((x) => x.v.ok).length} · 승인(미리보기) {chosen.filter((x) => x.v.ok && f[x.r.id].verdict === 'approved').length}</span></p>
       <div className={SCROLL}>
         <table data-testid="phr-recordings" className="min-w-[56rem] border-collapse">
           <thead><tr>{['no', 'id', '소리', '대표 철자', '예시 단어', '파일 이름 규칙', '상태', '미리보기'].map((h) => <th key={h} className={TH}>{h}</th>)}</tr></thead>
@@ -209,11 +212,11 @@ function Book1() {
   return (
     <section data-testid="phr-book1" className={SEC}>
       <p className={H}>Book 1 수업 준비</p>
-      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 준비 ${n('ready')} · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length} · 뜻 승인 ${prop.filter((x) => x.ko).length} / ${prop.length}`}</p>
+      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 준비 ${n('ready')} · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length} · 뜻 승인 ${prop.filter((x) => APPROVED_KO.has(x.word)).length} / ${prop.length}`}</p>
       {us.map(({ u, w }) => (
         <div key={u.id} data-testid="phr-b1-unit" className="mt-2 text-xs text-gray-700">
           <b className="text-gray-900">Unit {u.id.slice(1)} · {unitLabel(u)} /{u.targets[0].ipa}/</b> <span className={AMBER}>{STATUS_LABEL_KO[u.status]}</span>
-          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <><small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>{x.koProposed && <small data-testid="phr-b1-ko" className={`ml-1 ${ROSE}`}>{x.koProposed}{x.ko ? ' 승인' : ' 뜻 검토 필요'}</small>}</>))}</div>
+          <div className="flex flex-wrap gap-x-3">{w.map((x) => chip(x, 'phr-b1-word', <><small className="ml-1 text-gray-500">{MARK_TITLE[x.image]}</small>{x.koProposed && <small data-testid="phr-b1-ko" className={`ml-1 ${ROSE}`}>{x.koProposed}{APPROVED_KO.has(x.word) ? ' 승인' : ' 뜻 검토 필요'}</small>}</>))}</div>
           {u.intro.tipKo} <span className={ROSE}>검토 필요</span>
         </div>
       ))}

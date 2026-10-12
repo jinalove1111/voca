@@ -557,6 +557,12 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
   const stu = ['src/components/phonics', 'src/components/pictureWords'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).map((f) => `${d}/${f}`)).filter((f) => /\.jsx?$/.test(f))
   ok(stu.length > 10 && stu.every((f) => !/koProposed|PROPOSED_KO/.test(read(f))), 'ko: student code never reads koProposed / PROPOSED_KO')
   ok(/koProposed/.test(read('src/components/admin/PhonicsReviewPanel.jsx')) && /phr-b1-ko/.test(read('src/components/admin/PhonicsReviewPanel.jsx')), 'ko: only the admin review panel shows the proposals')
+  // 267차 관리자 집계 기준: 승인 수는 승인 목록·실제 파일에서만 계산한다(제안·미리보기·고정 숫자 금지).
+  const phr = read('src/components/admin/PhonicsReviewPanel.jsx'), ppp = read('src/components/admin/PhonicsProgressPanel.jsx')
+  ok(/prop\.filter\(\(x\) => APPROVED_KO\.has\(x\.word\)\)\.length/.test(phr) && /APPROVED_KO\.has\(x\.word\) \? ' 승인' : ' 뜻 검토 필요'/.test(phr) && !/x\.ko \? ' 승인'/.test(phr), 'admin counts: "뜻 승인" counts APPROVED_KO membership, not any truthy ko (a picture ko must not read as an approved proposal)')
+  ok(/const recs = recordingStatuses\(Object\.keys\(CLIP_URLS\)\)/.test(phr) && !/recordingStatuses\(\[\]\)/.test(phr), 'admin counts: recording rows read the real bundled file names, not an empty list')
+  ok(!/\d+ \/ 42|승인 0 \/ 필요/.test(phr) && /rec\.filter\(\(ipa\) => recordingStatus\(ipa\) === 'approved'\)\.length/.test(phr) && /recN\(\(x\) => x\.status === 'approved'\)/.test(phr), 'admin counts: no literal recording totals — unit rows and the real-status line are computed')
+  ok(/\{o\.completed\}\/\{TOTAL_UNITS\}/.test(ppp) && !/\/43\)/.test(ppp) && /SAMPLE_NOTICE_KO/.test(ppp) && !/supabase|fetch\(/.test(ppp), 'admin counts: the progress panel is sample-only (banner, no network) and its unit total is computed')
   ok(C.BOOKS[0].units.map((u) => u.words.map((w) => D.itemOfSlot(w).word).join(' ')).join(' | ') === 'bag jam cat hat map | pen desk egg bed red | milk ink pig six lip | sock dog box hot pot | cup sun bus mug nut', 'ko: Book 1 word list unchanged (25 words)')
   const wt = read('src/components/phonics/WordTrain.jsx'), sbp = read('src/components/phonics/SoundBubblePop.jsx'), pwp = read('src/components/pictureWords/PictureWordPractice.jsx')
   ok(/item\.ko && \(item\.asset \|\| st\.done\) && <p data-testid="pwt-ko"/.test(wt), 'ko: Word Train shows a picture-less word\'s meaning only after the answer')
