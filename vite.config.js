@@ -40,6 +40,9 @@ export default defineConfig(({ mode, command }) => {
     plugins: [react(), ...(command === 'serve' ? [adminPinDevMiddleware(env)] : [])],
     base: '/',
     build: {
+      // 2026-10-12(267차) 작은 이미지를 JS 안에 base64로 넣지 않는다 — 기본값(4KB 미만 인라인)에서는 마을 그림 5개(cat/owl/puppy/
+      // shop-lamp/stone-fountain)가 JS 청크에 약 22KB로 실려 있었다. 파일로 내보내면 JS가 그만큼 줄고 그림은 따로 캐시된다(화면·동작 불변).
+      assetsInlineLimit: 0,
       rollupOptions: {
         output: {
           // Vendor 청크 분리(2026-08-02, 학생 경험 폴리시 Wave 5) — react/

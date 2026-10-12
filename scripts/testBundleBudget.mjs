@@ -275,6 +275,9 @@ const EXPECTED_BATCH1_IMAGE_BASENAMES = [
   'my-house', 'british-cottage', 'book-shop', 'cafe', 'bridge', 'english-school', 'town-sign', 'clock-tower', 'tree',
   'garden-stage-0', 'garden-stage-1', 'garden-stage-2', 'garden-stage-3', 'garden-stage-4',
   'flower-garden', 'bench', 'red-post-box', 'street-lamp',
+  // 2026-10-12(267차) vite.config의 assetsInlineLimit: 0 — 4KB 미만이라 JS에 base64로 인라인되던 5개도 이제 물리 파일(18 → 23개).
+  // 전제 갱신 이유: 인라인 5개가 JS 합계에 약 22KB를 더하고 있었다(실측 2,199,895 → 2,177,828 B). 크기 예산 숫자는 그대로다.
+  'cat', 'owl', 'puppy', 'shop-lamp', 'stone-fountain',
 ]
 // Vite는 해시를 붙여 `<basename>-<hash>.<ext>`로 내보낸다(예:
 // my-house-BbqH3Nte.webp) — 해시는 빌드마다 바뀌므로 접두사로만 매칭한다.
@@ -382,41 +385,19 @@ check(
   EXPECTED_BATCH1_IMAGE_BASENAMES.every((base) => foundBatch1Bases.has(base)),
   `found=${[...foundBatch1Bases].join(',')}`,
 )
+// 2026-10-12(267차) 전제 갱신 — assetsInlineLimit: 0. 아래 5개는 예전에 "물리 파일 없음 + JS에 base64 인라인 정확히 5건"이었고,
+// 이제는 "물리 파일 있음 + 어떤 JS 청크에도 base64 이미지 0건"이 옳은 값이다(자산이 조용히 누락되지 않는지는 물리 파일 존재로 지킨다).
+for (const base of ['cat', 'owl', 'puppy', 'shop-lamp', 'stone-fountain']) {
+  check(
+    `${base}은(는) 물리 파일로 dist/assets에 존재(4KB 미만이지만 인라인하지 않음 — assetsInlineLimit: 0)`,
+    assetFiles.some((f) => f.startsWith(`${base}-`) && f.endsWith('.webp')),
+  )
+}
+const inlinedImageJsFiles = jsFiles.filter((f) => /data:image\/(webp|png|jpe?g|gif);base64,/.test(readAsset(f)))
 check(
-  'cat은 물리 파일로 dist/assets에 존재하지 않음(2.5KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('cat-') || f === 'cat.webp'),
-)
-check(
-  'owl은 물리 파일로 dist/assets에 존재하지 않음(3.8KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  // 마을 키트에도 animals/owl이 있어(1x+@2x 별도 파일) 그 쌍이 있으면 'owl-' 1x 파일은 키트 것이다 — 카탈로그 owl의 인라인 여부는 아래 data:image 계약(5건)이 따로 지킨다.
-  assetFiles.some((f) => f.startsWith('owl@2x-')) || !assetFiles.some((f) => f.startsWith('owl-') || f === 'owl.webp'),
-)
-check(
-  'puppy는 물리 파일로 dist/assets에 존재하지 않음(2.7KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('puppy-') || f === 'puppy.webp'),
-)
-check(
-  'shop-lamp는 물리 파일로 dist/assets에 존재하지 않음(3.8KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('shop-lamp-') || f === 'shop-lamp.webp'),
-)
-check(
-  'stone-fountain은 물리 파일로 dist/assets에 존재하지 않음(3.7KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('stone-fountain-') || f === 'stone-fountain.webp'),
-)
-const inlinedWebpJsFiles = jsFiles.filter((f) => readAsset(f).includes('data:image/webp;base64,'))
-check(
-  '11번째 자산(cat)·12번째 자산(owl)·13번째 자산(puppy)·19번째 자산(shop-lamp)·21번째 자산(stone-fountain)이 최소 1개 JS 청크에 data:image/webp;base64 URL로 실제 인라인됨(자산이 조용히 누락되지 않음)',
-  inlinedWebpJsFiles.length >= 1,
-  `matched=${inlinedWebpJsFiles.join(',') || '(none)'}`,
-)
-const totalInlinedWebpOccurrences = jsFiles.reduce(
-  (sum, f) => sum + (readAsset(f).match(/data:image\/webp;base64,/g) || []).length,
-  0,
-)
-check(
-  '인라인된 data:image/webp;base64 URL 발생 횟수가 정확히 5건(cat 1 + owl 1 + puppy 1 + shop-lamp 1 + stone-fountain 1, 중복/누락 없음 — red-post-box/street-lamp는 2026-09-17 최종 아트로 4KB를 넘어 물리 파일로 승격)',
-  totalInlinedWebpOccurrences === 5,
-  `count=${totalInlinedWebpOccurrences}`,
+  '어떤 JS 청크에도 base64로 인라인된 이미지(data:image/webp·png·jpeg·gif) 0건 — 이미지는 JS 합계에 실리지 않는다',
+  inlinedImageJsFiles.length === 0,
+  `matched=${inlinedImageJsFiles.join(',') || '(none)'}`,
 )
 
 // ── 4b. V2 환경(environment) 아트 — 35개 키 인벤토리 + 메인/V1 청크 누출 가드 ──
