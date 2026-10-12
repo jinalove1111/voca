@@ -93,6 +93,7 @@ export async function run(browser, baseURL) {
     r.check('학습 순서 미확정 안내', (await txt(page, 'pwr-phonics-order-notice')).includes('학습 순서 미확정'))
     r.check('샵 그룹 8개', (await page.locator('[data-testid^="pwr-shop-"]').count()) === 8)
     r.check('재사용 18 / 신규 후보 101', (await txt(page, 'pwr-reuse-count')) === '18' && (await txt(page, 'pwr-new-count')) === '101')
+    r.check('네 상태 분리 표시: 그림 151 · 자동 연결 119 · 교사 승인 0 · 학생 사용 119 · 검토 필요 119', (await txt(page, 'pwr-state-counts')).startsWith('그림 있음 151 · 단어 자동 연결 119 · 교사 승인 0 · 학생 화면 사용 119 · 검토 필요 119'), await txt(page, 'pwr-state-counts'))
     r.check('설계 — 미구현 표기', (await page.locator('body').innerText()).includes('설계 — 미구현'))
 
     await page.setViewportSize({ width: 360, height: 640 })

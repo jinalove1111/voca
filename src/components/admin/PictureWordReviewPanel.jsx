@@ -1,7 +1,7 @@
 // 관리자 전용 — 그림 단어 승인 검토(248차). 운영 DB·단어 데이터·학생 기록을 읽거나 쓰지 않는다.
 // 결정은 이 브라우저의 localStorage에만 저장된다. 네트워크 0, 보상 호출 0.
 import React, { useMemo, useState } from 'react'
-import { PICTURE_WORDS, COUNTS, SHOP_LABEL_KO, byStatus, phonicsGroups, shopGroups, reuseSummary, applyDecisions } from '../../data/pictureWords/index.js'
+import { PICTURE_WORDS, COUNTS, SHOP_LABEL_KO, byStatus, phonicsGroups, shopGroups, reuseSummary, applyDecisions, pictureStateCounts } from '../../data/pictureWords/index.js'
 import NOTES from '../../data/pictureWords/pictureWordsNotes.json'
 
 const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, query: '?url', import: 'default' })
@@ -127,12 +127,14 @@ function Thumb({ e }) {
 
 function ResultTab() {
   const reuse = reuseSummary()
+  const SC = pictureStateCounts()
   const groups = phonicsGroups()
   return (
     <div className="space-y-5 text-sm">
       <section className="bg-white rounded-2xl p-3 border-2 border-gray-200">
         <h3 className="font-black text-gray-800 mb-1">요약</h3>
         <p>전체 {COUNTS.total}장 · 일치 {COUNTS.byStatus.MATCH} · 불일치 {COUNTS.byStatus.MISMATCH} · 불확실 {COUNTS.byStatus.UNCERTAIN} · 여러 개 {COUNTS.byStatus.MULTIPLE} · 사용 불가 {COUNTS.byStatus.UNUSABLE}</p>
+        <p data-testid="pwr-state-counts">그림 있음 {SC.hasImage} · 단어 자동 연결 {SC.autoLinked} · 교사 승인 {SC.teacherApproved} · 학생 화면 사용 {SC.studentVisible} · 검토 필요 {SC.needsReview} <span className="text-xs text-gray-600">검토 필요 = 교사 승인 기록 없이 학생 화면에 쓰이는 그림(기존 자동 공개분). 새 그림은 교사 승인 전 학생에게 공개되지 않습니다.</span></p>
         <p className="text-xs text-gray-600 mt-1"><b>직접 확인</b> = 그림을 직접 열어 본 것(그림 내용). <b>추론</b> = 뜻·카테고리·미국식·파닉스 그룹처럼 그림과 철자에서 추정한 값. 기존 단어 대조는 문자열 비교.</p>
       </section>
       <section>

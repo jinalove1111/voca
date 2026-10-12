@@ -40,7 +40,7 @@ export async function run(browser, baseURL) {
     r.check('헤더 문구: 구조만 승인, 모든 Unit 임시', ((await T(page, 'phr-root').innerText()) || '').includes('PAUL PHONICS 관리자 검토 자료 — 구조만 승인, 모든 Unit 임시'))
     const chip = async (k) => txt(page, `phr-chip-${k}`)
     r.check('요약: Unit 43 · 승인 0 · 단어 210', (await chip('unit')) === 'Unit 43' && (await chip('approved')) === '승인 0' && (await chip('words')) === '단어 210', sum)
-    r.check('요약: 이미지 제작 대기 105 · 그림 없이 학습 73 · 그림 있음 32 (105 + 73 + 32 = 210) · 자동 일치 32 · 교사 승인 0', (await chip('needed')) === '이미지 제작 대기 105' && (await chip('free')) === '그림 없이 학습 73' && (await chip('ready')) === '그림 있음 32' && (await chip('picauto')) === '자동 일치 · 승인 기록 없음 32' && (await chip('picok')) === '그림 교사 승인 0', sum)
+    r.check('요약: 이미지 제작 대기 105 · 그림 없이 학습 73 · 그림 있음 32 (105 + 73 + 32 = 210) · 자동 연결 · 검토 필요 32 · 교사 승인 0', (await chip('needed')) === '이미지 제작 대기 105' && (await chip('free')) === '그림 없이 학습 73' && (await chip('ready')) === '그림 있음 32' && (await chip('picauto')) === '자동 연결 · 검토 필요 32' && (await chip('picok')) === '그림 교사 승인 0', sum)
     r.check('요약: 녹음 필요 42 · 녹음 승인 0 · 배우지 않은 소리가 필요한 단어 0', (await chip('rec')) === '녹음 필요 42' && (await chip('recok')) === '녹음 승인 0' && (await chip('unlearned')) === '배우지 않은 소리가 필요한 단어 0', sum)
 
     const counts = []
@@ -98,7 +98,7 @@ export async function run(browser, baseURL) {
     const b1w = await T(page, 'phr-b1-word').evaluateAll((els) => els.map((e) => e.dataset.image))
     const b1y = async (id) => (await T(page, id).first().boundingBox()).y
     r.check('Book 1 수업 준비: 맨 위 섹션(Book 1 표보다 위), Unit 5개 · 단어 25개 · 각 Unit 단어 5개 · 임시 · 검토 필요 · 입 모양 문장', (await T(page, 'phr-book1').count()) === 1 && (await b1y('phr-book1')) < (await b1y('phr-book-b1')) && b1.length === 5 && b1w.length === 25 && (await T(page, 'phr-b1-unit').evaluateAll((els) => els.map((e) => e.querySelectorAll('[data-testid="phr-b1-word"]').length))).every((n) => n === 5) && b1.every((t) => t.includes('임시') && t.includes('검토 필요')) && b1[0].includes('/æ/') && b1[0].includes('입을 크게 벌리고'), JSON.stringify(b1.map((t) => t.slice(0, 40))))
-    r.check('Book 1 요약: 단어 25 · 그림 있음 9 (자동 일치 9 · 교사 승인 0) · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5 = 단어 칩 상태 수와 같음', (await txt(page, 'phr-b1-summary')) === '단어 25 · 그림 있음 9 (자동 일치 9 · 교사 승인 0) · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5 · 뜻 승인 16 / 16' && ['ready', 'needed', 'not-needed'].map((k) => b1w.filter((x) => x === k).length).join() === '9,13,3', await txt(page, 'phr-b1-summary'))
+    r.check('Book 1 요약: 단어 25 · 그림 있음 9 (검토 필요 9 · 교사 승인 0) · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5 = 단어 칩 상태 수와 같음', (await txt(page, 'phr-b1-summary')) === '단어 25 · 그림 있음 9 (검토 필요 9 · 교사 승인 0) · 제작 대기 13 · 그림 없이 3 · 녹음 등록 0 / 5 · 뜻 승인 16 / 16' && ['ready', 'needed', 'not-needed'].map((k) => b1w.filter((x) => x === k).length).join() === '9,13,3', await txt(page, 'phr-b1-summary'))
     const kos = await T(page, 'phr-b1-ko').allInnerTexts()
     r.check('Book 1 뜻 검토(264차): 그림 없는 16단어마다 뜻 + "승인" 표시(phr-b1-ko ×16), 요약 "뜻 승인 16 / 16"은 데이터에서 계산', kos.length === 16 && kos.every((t) => t.endsWith(' 승인') && !t.includes('검토')) && new Set(kos.map((t) => t.replace(' 승인', ''))).size === 16 && (await T(page, 'phr-b1-ko').evaluateAll((els) => els.every((e) => e.closest('[data-testid="phr-b1-word"]') && e.closest('[data-testid="phr-b1-word"]').dataset.image !== 'ready'))), JSON.stringify(kos))
     const b1r = await T(page, 'phr-b1-rec').evaluateAll((els) => els.map((e) => [e.dataset.status, e.innerText]))

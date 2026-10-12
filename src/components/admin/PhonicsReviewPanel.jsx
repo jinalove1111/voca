@@ -131,7 +131,7 @@ function WordTable({ stats }) {
                 <td className={TD}>{i.graphemes.join(' · ')}</td>
                 <td className={TD}>{i.phonemes.map((p) => `/${p}/`).join(' ')}</td>
                 <td className={TD}>{wordDifficulty(i)}</td>
-                <td className={TDN}>{MARK[i.image]} {MARK_TITLE[i.image]}{i.image === 'ready' ? (i.pictureApproval === 'approved' ? ' · 교사 승인' : ' · 자동 일치') : ''}{CAND_WORDS.has(i.word) && i.image === 'needed' ? ' (기존 후보)' : ''}</td>
+                <td className={TDN}>{MARK[i.image]} {MARK_TITLE[i.image]}{i.image === 'ready' ? (i.pictureApproval === 'approved' ? ' · 교사 승인' : ' · 자동 연결 · 검토 필요') : ''}{CAND_WORDS.has(i.word) && i.image === 'needed' ? ' (기존 후보)' : ''}</td>
                 <td className={TD}>{i.needsReview ? <span data-testid="phr-word-review" className={ROSE}>검토 필요 · {REVIEW_REASON[i.word] || REVIEW_DEFAULT}</span> : ''}</td>
               </tr>
             ))}
@@ -213,7 +213,7 @@ function Book1() {
   return (
     <section data-testid="phr-book1" className={SEC}>
       <p className={H}>Book 1 수업 준비</p>
-      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 있음 ${n('ready')} (자동 일치 ${n('ready') - okB} · 교사 승인 ${okB}) · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length} · 뜻 승인 ${prop.filter((x) => APPROVED_KO.has(x.word)).length} / ${prop.length}`}</p>
+      <p data-testid="phr-b1-summary" className="text-xs font-black text-gray-700">{`단어 ${all.length} · 그림 있음 ${n('ready')} (검토 필요 ${n('ready') - okB} · 교사 승인 ${okB}) · 제작 대기 ${n('needed')} · 그림 없이 ${n('not-needed')} · 녹음 등록 ${recs.slice(0, five.length).filter((x) => x.status === 'approved').length} / ${five.length} · 뜻 승인 ${prop.filter((x) => APPROVED_KO.has(x.word)).length} / ${prop.length}`}</p>
       {us.map(({ u, w }) => (
         <div key={u.id} data-testid="phr-b1-unit" className="mt-2 text-xs text-gray-700">
           <b className="text-gray-900">Unit {u.id.slice(1)} · {unitLabel(u)} /{u.targets[0].ipa}/</b> <span className={AMBER}>{STATUS_LABEL_KO[u.status]}</span>
@@ -237,7 +237,7 @@ export default function PhonicsReviewPanel() {
   const picOk = s.ready.filter((i) => i.pictureApproval === 'approved').length
   const chips = [
     ['unit', `Unit ${s.units.length}`], ['approved', `승인 ${s.units.filter(({ u }) => u.status === 'approved').length}`], ['words', `단어 ${PHONICS_ITEMS.length}`],
-    ['ready', `그림 있음 ${s.ready.length}`], ['picauto', `자동 일치 · 승인 기록 없음 ${s.ready.length - picOk}`], ['picok', `그림 교사 승인 ${picOk}`], ['newimg', `새 이미지 제작 ${s.newImages}`], ['cand', `기존 에셋 후보 ${s.candidates.length}`], ['review', `검토 필요 단어 ${s.review.length}`], ['needed', `이미지 제작 대기 ${s.needed.length}`], ['free', `그림 없이 학습 ${s.free.length}`],
+    ['ready', `그림 있음 ${s.ready.length}`], ['picauto', `자동 연결 · 검토 필요 ${s.ready.length - picOk}`], ['picok', `그림 교사 승인 ${picOk}`], ['newimg', `새 이미지 제작 ${s.newImages}`], ['cand', `기존 에셋 후보 ${s.candidates.length}`], ['review', `검토 필요 단어 ${s.review.length}`], ['needed', `이미지 제작 대기 ${s.needed.length}`], ['free', `그림 없이 학습 ${s.free.length}`],
     ['rec', `녹음 필요 ${RECORDING_LIST.length}`], ['recok', `녹음 승인 ${s.approved}`], ['unlearned', `배우지 않은 소리가 필요한 단어 ${s.unlearned}`],
   ]
   return (
