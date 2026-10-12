@@ -1,0 +1,45 @@
+{
+  "agent_name": "orchestrator",
+  "role": "그림 검토 기록 Git 정적 파일 + 꺼진 승인·반려 버튼 + 이미지 없는 105개 목록 (271차)",
+  "task_id": "paul-phonics-review-file-2026-10-13",
+  "task": "legacyReviews.json 기록 파일·검증기·절차 문서, 관리자 화면 비활성 버튼과 이유 안내, 반려 숨김 설계(미구현), 이미지 제작 대기 105개 정리와 우선순위 제안",
+  "status": "completed_with_open_verification",
+  "progress": 90,
+  "updated_at": "2026-10-13",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "commits": ["590591db", "4ca2bae4", "fd3cd41f"],
+  "files_owned": [
+    "src/data/pictureWords/legacyReviews.json",
+    "scripts/pictureWords/validateLegacyReviews.mjs",
+    "src/components/admin/PictureWordReviewPanel.jsx",
+    "scripts/testPictureWords.mjs",
+    "tests/e2e/pictureWordReview.spec.mjs",
+    "docs/operations/PICTURE_REVIEW_FILE_PROCEDURE_2026-10-13.md",
+    "scripts/phonics/listImageBacklog.mjs",
+    "docs/design/PHONICS_IMAGE_BACKLOG_2026-10-13.md",
+    "scripts/testPhonicsGames.mjs",
+    "handoff.md"
+  ],
+  "facts": {
+    "legacy_reviews": "approved 0, rejected 0, pending 119, errors 0 (no record invented)",
+    "image_backlog": "105 = 98 new + 7 reuse candidates; 10 need teacher confirmation; by book 13/14/13/29/36"
+  },
+  "verification": {
+    "passed": {
+      "build": "OK (dummy env, 0 warnings)",
+      "static": "testPictureWords 782/782, testPictureWordGames 142/142, testPhonicsGames 428/428, testPhonicsProgress 111/111, testTownV2Static 157/157, testTownUiStatic 126/126, testBundleBudget 32/32 (2.179 MB), testLazyChunkGuards 116/116, testRegistryCoverage 8/8, testQaGate 17/17, testStudentPathContracts 61/61",
+      "browser": "pictureWordReview 39/0 — one run at 3.6 GB free"
+    },
+    "failed_preexisting": "testTownShop 85/1 — SSR block has no png loader for hats (unrelated, not fixed)",
+    "not_run": "townProto25d S37 (needs >= 4.5 GB free), student-side browser specs, all other browser specs, verify:all, real device, Preview"
+  },
+  "blocked_on_operator": [
+    "교사의 119개 검토 결과 → 개발자가 legacyReviews.json에 반영",
+    "반려 그림을 학생 화면에서 숨기는 구현(학생 화면 변경) 승인",
+    "재사용 후보 7개 승인 여부, ⚠ 10개 단어 확정, 그림 없이 갈 후보 10개 결정",
+    "그림 98개 제작",
+    "Supabase 저장은 추후 별도 승인 (supabase_v3_52_picture_review_DRAFT.sql 미실행)",
+    "pw-preview 갱신 여부, townProto25d S37 재실행(여유 4.5 GB 이상), testTownShop png 로더"
+  ],
+  "not_done": "DB/SQL 실행/Production/main/pw-preview 갱신 0, 학생 화면·학생 데이터 변경 0, 자동 승인 0"
+}
