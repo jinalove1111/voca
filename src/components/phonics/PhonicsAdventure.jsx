@@ -49,6 +49,7 @@ export default function PhonicsAdventure({ game, items: pool, ctx, studentId, on
         <p className={T2}>{test ? '소리 확인을 마쳤어요' : '게임을 마쳤어요'}</p>
         <p className="text-lg text-gray-700">한 번에 {game === 'train' ? '만든' : '맞힌'} {noun} <span data-testid="pha-first-try" data-score={`${firstTry} / ${items.length}`} className="font-black text-purple-700">{firstTry}개</span></p>
         {test && <p data-testid="pha-pass-line" className={`text-lg font-black ${passed ? 'text-green-700' : 'text-amber-800'}`}>{passed ? `통과! ${items.length}문제 중 ${mark}개 이상 맞혔어요` : `조금만 더! ${mark}개를 맞히면 통과예요`}</p>}
+        {test && <p data-testid="pha-not-saved" className="text-xs font-black text-amber-800">이 점수는 저장되지 않아요</p>}
         {nxt && <button type="button" data-testid="pha-next-step" onClick={() => onNext(nxt.run)} className={PUR}>{nxt.label}</button>}
         {!passed && review}
         {ctx?.retest && <button type="button" data-testid="pha-retest" onClick={() => onStart('bubble', [], ctx.retest)} className={PUR}>소리 확인 다시 하기</button>}

@@ -1060,6 +1060,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 소리 확인 요약: data-score 4/5, "한 번에 맞힌 소리 4개", "다시 만나기" 있음, 다음 단계 버튼 없음`, (await T(page, 'pha-summary').getAttribute('data-score')) === '4/5' && ((await T(page, 'pha-summary').innerText()) || '').includes('한 번에 맞힌 소리 4개') && (await T(page, 'pha-review').count()) === 1 && (await T(page, 'pha-next-step').count()) === 0)
     const sm1 = await T(page, 'pha-summary').innerText()
     r.check(`${name} 4/5 = 통과: data-passed=true, data-pass-mark=4, "통과! 5문제 중 4개 이상 맞혔어요", 다시 만나기는 보조 버튼(보라색 아님)`, (await T(page, 'pha-summary').getAttribute('data-passed')) === 'true' && (await T(page, 'pha-summary').getAttribute('data-pass-mark')) === '4' && sm1.includes('통과! 5문제 중 4개 이상 맞혔어요') && !((await T(page, 'pha-review').getAttribute('class')) || '').includes('bg-purple-600') && (await T(page, 'pha-retest').count()) === 0, sm1)
+    r.check(`${name} 소리 확인 결과 화면에 "이 점수는 저장되지 않아요" 안내가 정확히 1줄`, (await T(page, 'pha-not-saved').count()) === 1 && ((await T(page, 'pha-not-saved').innerText()) || '').includes('저장되지 않아요'))
     await T(page, 'pha-exit').click()
     await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     r.check(`${name} 허브 9단계: 이번에 한 결과 "통과"`, ((await T(page, 'pph-step-9').innerText()) || '').includes('통과') && !((await T(page, 'pph-step-9').innerText()) || '').includes('다시 도전'))
@@ -1185,6 +1186,94 @@ export async function run(browser, baseURL) {
       await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
     }
   }, { studentId: TESTER_ONLY })
+
+  // ---- (s) 266차: Book 1의 5개 Unit · 25단어를 학생 화면(390×844 터치)에서 처음부터 끝까지 — 듣기·뜻·녹음·내 목소리 듣기·게임 2종·소리 확인
+  await scenario('(s) Book 1 전 Unit 완주', { width: 390, height: 844 }, async ({ page, name }) => {
+    await page.evaluate(() => {
+      navigator.mediaDevices.getUserMedia = async () => {
+        const ctx = new AudioContext(); await ctx.resume().catch(() => {})
+        const osc = ctx.createOscillator(), dest = ctx.createMediaStreamDestination()
+        osc.connect(dest); osc.start()
+        return dest.stream
+      }
+      window.__plays = 0
+      const play = HTMLMediaElement.prototype.play
+      HTMLMediaElement.prototype.play = function (...a) { window.__plays++; return play.apply(this, a) }
+    })
+    await openScreen(page)
+    await openPhonics(page, true)
+    const allSeen = []
+    for (const u of ['u1', 'u2', 'u3', 'u4', 'u5']) {
+      if (u !== 'u1') { await click(page, T(page, 'pph-back'), true); await T(page, 'pph-book').waitFor({ state: 'visible' }) } else await click(page, T(page, 'pph-book-b1'), true)
+      await click(page, T(page, `pph-unit-${u}`), true)
+      await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+      const words = unitWords('b1', u)
+      const h = await hub1(page)
+      const st = (n) => h.rows.find((x) => x.n === n)?.st
+      r.check(`${name} ${u} 허브: 2단계(선생님 소리)는 잠김 — 녹음 미등록, 1·3·6·7·8·9단계는 열림`, st(2) === 'locked' && [1, 3, 6, 7, 8, 9].every((n) => st(n) && st(n) !== 'locked'), JSON.stringify(h.rows.map((x) => [x.n, x.st])))
+
+      // 3–5단계: 카드 5장 — 단어, 한국어 뜻, 듣기, 첫 카드에서 녹음 → 멈춤 → 내 목소리 듣기
+      await click(page, T(page, 'pph-step-3-go'), true)
+      await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
+      const seen = []
+      let listenOk = true, recOk = false
+      for (let k = 0; k < 5; k++) {
+        const shown = (await T(page, 'pwp-word').textContent()) || ''
+        const ko = (await T(page, 'pwp-ko').count()) === 1 ? await T(page, 'pwp-ko').textContent() : null
+        seen.push({ shown, ko })
+        const before = await speakLen(page)
+        await click(page, T(page, 'pwp-listen'), true)
+        await page.waitForFunction((m) => window.__speak.length > m, before, { timeout: 4000 })
+        if (!(await page.evaluate((m) => window.__speak.slice(m), before)).every((x) => x === shown)) listenOk = false
+        if (k === 0) {
+          const p0 = await page.evaluate(() => window.__plays)
+          await click(page, T(page, 'pwp-rec-record'), true)
+          await T(page, 'pwp-rec-stop').waitFor({ state: 'visible', timeout: 10000 })
+          await sleep(1100)
+          await click(page, T(page, 'pwp-rec-stop'), true)
+          await T(page, 'pwp-rec-play').waitFor({ state: 'visible', timeout: 8000 })
+          await click(page, T(page, 'pwp-rec-play'), true)
+          recOk = await page.waitForFunction((m) => window.__plays > m, p0, { timeout: 4000 }).then(() => true).catch(() => false)
+        }
+        await click(page, T(page, 'pwp-next'), true)
+        await page.waitForFunction(() => !!document.querySelector('[data-testid="pwp-card"], [data-testid="pwp-end"]'), null, { timeout: 5000 })
+      }
+      allSeen.push(...seen)
+      r.check(`${name} ${u} 듣고 따라 말하기: 카드 5장 = Unit 단어 5개, 듣기는 보이는 단어만 읽음`, seen.map((x) => x.shown).sort().join() === names(words) && listenOk, JSON.stringify(seen))
+      r.check(`${name} ${u} 한국어 뜻: 5장 모두 그 단어의 뜻 그대로`, seen.every((x) => x.ko && x.ko === words.find((w) => w.word === x.shown)?.ko), JSON.stringify(seen))
+      r.check(`${name} ${u} 녹음 → 멈춤 → 내 목소리 듣기(재생 호출 확인)`, recOk)
+      await T(page, 'pwp-end').waitFor({ state: 'visible', timeout: 5000 })
+      await click(page, T(page, 'pwp-skip'), true)
+      await click(page, T(page, 'pwp-exit'), true)
+      await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+
+      // 6단계: 그림과 단어 — 5개 모두, 듣기 버튼 5개
+      await click(page, T(page, 'pph-step-6-go'), true)
+      await T(page, 'pph-gallery').waitFor({ state: 'visible', timeout: 3000 })
+      const g0 = await speakLen(page)
+      await click(page, T(page, 'pph-gallery-play').first(), true)
+      const galSpoke = await page.waitForFunction((m) => window.__speak.length > m, g0, { timeout: 4000 }).then(() => true).catch(() => false)
+      r.check(`${name} ${u} 그림과 단어: 5개, 듣기 버튼 5개, 누르면 단어를 읽음`, (await T(page, 'pph-gallery-word').count()) === 5 && (await T(page, 'pph-gallery-play').count()) === 5 && galSpoke)
+
+      // 7단계 풍선 → 8단계 Word Train → 9단계 소리 확인 (전부 정답으로 완주)
+      await click(page, T(page, 'pph-step-7-go'), true)
+      await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
+      const bub = u === 'u1' ? await detectSession(page, 8, { touch: true }) : await bubbleSession(page, bubbleWords('b1', u), null, { vowelOnly: true, touch: true })
+      r.check(`${name} ${u} 풍선 게임 완주: 전 문제 정답, 요약의 다음 단계 = Word Train`, bub.length >= 5 && (u === 'u1' ? bub.every((x) => x.right) : bub.every((x) => x.card)) && ((await T(page, 'pha-next-step').textContent()) || '') === '다음: Word Train', JSON.stringify(bub.map((x) => [x.item.word, !!(x.right ?? x.card)])))
+      await click(page, T(page, 'pha-next-step'), true)
+      await T(page, 'pwt-root').waitFor({ state: 'visible', timeout: 20000 })
+      const vt = await vowelTrainSession(page, 5, { touch: true })
+      r.check(`${name} ${u} Word Train 완주: 5단어 = Unit 단어 전체, 완성하면 단어를 읽음, 요약 5/5`, names(vt.map((x) => x.item)) === names(words) && allOk(vt, 'cars') && allOk(vt, 'word') && allOk(vt, 'speak') && allOk(vt, 'result') && (await T(page, 'pha-summary').getAttribute('data-score')) === '5/5', JSON.stringify(vt.map((x) => [x.item.word, x.cars, x.word, x.speak, x.result])))
+      await click(page, T(page, 'pha-next-step'), true)
+      await T(page, 'pbp-root').waitFor({ state: 'visible', timeout: 20000 })
+      const t = await testSessionRun(page, bubbleWords('b1', u), { detect: u === 'u1', touch: true })
+      r.check(`${name} ${u} 소리 확인: 5문제 모두 한 번에, 5/5 통과, "저장되지 않아요" 안내 1줄`, t.length === 5 && allOk(t, 'once') && (await T(page, 'pha-summary').getAttribute('data-score')) === '5/5' && (await T(page, 'pha-summary').getAttribute('data-passed')) === 'true' && (await T(page, 'pha-not-saved').count()) === 1, JSON.stringify(t.map((x) => [x.item.word, x.once])))
+      await click(page, T(page, 'pha-exit'), true)
+      await T(page, 'pph-unit').waitFor({ state: 'visible', timeout: 5000 })
+      r.check(`${name} ${u} 허브로 돌아옴: 같은 Unit, 9단계 "통과", 가로 넘침 0`, (await T(page, 'pph-unit').getAttribute('data-unit')) === u && ((await T(page, 'pph-step-9').innerText()) || '').includes('통과') && (await overflow(page)) <= 0)
+    }
+    r.check(`${name} Book 1 전체: 서로 다른 단어 25개, 뜻 없는 카드 0`, new Set(allSeen.map((x) => x.shown)).size === 25 && allSeen.every((x) => x.ko), JSON.stringify(allSeen.filter((x) => !x.ko)))
+  }, { studentId: TESTER_ONLY, hasTouch: true })
 
   // ---- (q) 264차: 글자 카드 = 그림 카드와 같은 크기·디자인, 단어를 누르면 전체 단어 소리, 안 승인된 뜻은 보이지 않음 (360 / 768 / 1280)
   const B1_ITEMS = BOOKS[0].units.flatMap((u) => unitWords('b1', u.id))
