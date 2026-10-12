@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import { BOOKS } from '../../data/phonics/curriculum.js'
 import { SAMPLE_CLASS_NAME, SAMPLE_NOTICE_KO, SAMPLE_STUDENTS } from '../../data/phonics/sampleProgress.js'
-import { classOverview, emptyState, parentSummary, phonemeErrorTable, recommendations, studentWeakAreas, unitName, unitTestResults } from '../../utils/phonics/progress.js'
+import { TOTAL_UNITS, classOverview, emptyState, parentSummary, phonemeErrorTable, recommendations, studentWeakAreas, unitName, unitTestResults } from '../../utils/phonics/progress.js'
 import ProgressViews, { Bar, Empty, slash } from '../phonics/ProgressViews.jsx'
 
 const BOX = 'min-w-0 rounded-2xl border-2 border-gray-200 bg-white p-3'
@@ -38,7 +38,7 @@ export default function PhonicsProgressPanel() {
               {d.overview.map((o, n) => (
                 <tr key={o.id} data-testid="ppa-class-row" data-id={o.id} data-selected={selected === o.id ? 'true' : 'false'} onClick={() => setSelected(o.id)} className={`cursor-pointer ${selected === o.id ? 'bg-purple-50' : ''}`}>
                   <td className={`${TD} whitespace-nowrap font-black text-gray-900`}>{o.name}</td>
-                  <td className={`${TD} min-w-[7rem]`}>{emptyState(SAMPLE_STUDENTS[n].records).empty ? '기록 없음' : <>{o.percent}% ({o.completed}/43)<Bar percent={o.percent} color="bg-pink-400" /></>}</td>
+                  <td className={`${TD} min-w-[7rem]`}>{emptyState(SAMPLE_STUDENTS[n].records).empty ? '기록 없음' : <>{o.percent}% ({o.completed}/{TOTAL_UNITS})<Bar percent={o.percent} color="bg-pink-400" /></>}</td>
                   <td className={`${TD} whitespace-nowrap`}>{testText(o.latestTest)}</td>
                   <td className={TD}>{o.weakest.length ? o.weakest.map(slash).join(' ') : '—'}</td>
                 </tr>

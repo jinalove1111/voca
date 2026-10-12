@@ -1,0 +1,32 @@
+{
+  "agent_name": "orchestrator",
+  "role": "번들 여유 확보 + 관리자 집계 기준 교정 + 브라우저 회귀 (267차)",
+  "task_id": "paul-phonics-bundle-admin-counts-2026-10-12",
+  "task": "인라인 이미지 분리로 JS 합계 축소, 관리자 고정 숫자·뜻 승인 판정 교정, 브라우저 29종 1종씩 실행",
+  "status": "completed_with_open_verification",
+  "progress": 95,
+  "updated_at": "2026-10-12",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "files_owned": [
+    "vite.config.js",
+    "scripts/testBundleBudget.mjs",
+    "scripts/testPhonicsGames.mjs",
+    "src/components/admin/PhonicsReviewPanel.jsx",
+    "src/components/admin/PhonicsProgressPanel.jsx",
+    "handoff.md"
+  ],
+  "verification": {
+    "build": "OK (dummy env)",
+    "static": "testPhonicsGames 423/423, testBundleBudget 32/32 + 12 other suites PASS; testTownUiStatic/testTownV2Static 1 FAIL each (unchanged from 266차, unrelated)",
+    "browser": "29 specs run one at a time: 28 PASS (hats passed on its second run), 1 with failures",
+    "open": "townProto25d S37 modal-churn: run 1 = 7 FAIL (S27 x2, S37 x5), run 2 = 3 FAIL (S37 only). Cause not established: known memory-sensitive scenario, but assetsInlineLimit change not ruled out. No third run (memory)."
+  },
+  "bundle": "2,199,895 -> 2,178,039 B (headroom 105 -> 21,961 B); budget number unchanged; main chunk gzip 122.2 KB / 135 KB",
+  "blocked_on_operator": [
+    "townProto25d 재실행은 여유 메모리 4.5 GB 이상에서 (실패하면 assetsInlineLimit 줄만 빼고 비교)",
+    "\"그림 준비\" = 자동 일치 119개 기준 — 승인으로 볼지 결정",
+    "교사 음소 녹음 5개, Book 1 그림 13개",
+    "C:\\voca VS Code 미저장 탭 15개 처리"
+  ],
+  "not_done": "DB/SQL/Production/main 0, verify:all 재실행 0, 새 학생 화면 0"
+}
