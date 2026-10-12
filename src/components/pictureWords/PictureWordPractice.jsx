@@ -7,7 +7,7 @@ import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise 
 import { stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
 import { RecorderControls } from '../SpeakingPracticeItem'
-import { BTN, GamePicture, GameStyle, MUTED, PwProgress, T2, T3, W, playEn } from './pictureImg.jsx'
+import { BTN, GamePicture, GameStyle, MUTED, MenuPic, PwProgress, ROLE, T2, T3, W, playEn } from './pictureImg.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
 import { PICTURE_REC_LABELS } from './recLabels.js'
@@ -17,12 +17,24 @@ const PictureGames = React.lazy(() => import('./PictureGames'))
 // PAUL PHONICS(폴 파닉스, 253차 시제품 → 254차 5권 구조)도 별도 lazy 청크 — 테스터가 해당 버튼을 눌러야만 받는다
 const PaulPhonics = React.lazy(() => import('../phonics/PaulPhonics'))
 
-const PRIMARY = `${BTN} bg-purple-600 text-white`
-const SOFT = `${BTN} bg-sky-100 text-sky-700`
+const GO = `${BTN} ${ROLE.go.strong}`
+const GO_SOFT = `${BTN} ${ROLE.go.soft}`
+const LISTEN = `${BTN} ${ROLE.listen.soft}`
+const PLAY = `${BTN} ${ROLE.play.soft}`
+const SETBTN = 'min-h-[44px] rounded-xl text-base font-black btn-press disabled:opacity-40'
 const SESSION_SIZE = 6
 const POOL = learnableWords()
 
 const newSeed = () => Date.now() % 2147483647
+const short = (t) => t.split(' — ').pop() // "Phonics — 짧고 쉬운 단어" → "짧고 쉬운 단어"
+
+// 첫 화면/하위 화면의 큰 메뉴 타일: 그림 왼쪽, 글 오른쪽
+const Tile = ({ id, role, asset, title, sub, badge, onClick }) => (
+  <button type="button" data-testid={id} onClick={onClick} className={`pw-tile-menu pw-tm-${role}`}>
+    <span className="relative flex-none"><MenuPic asset={asset} />{badge && <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white text-base shadow">🎤</span>}</span>
+    <span className="min-w-0"><span className="block text-2xl font-black text-gray-900">{title}</span><span className="block text-base text-gray-700">{sub}</span></span>
+  </button>
+)
 
 // 단어를 누르면 "발음 듣기"와 같은 함수로 전체 단어 소리가 난다. hide = 글자 카드(단어가 카드 안에 이미 있음)
 const WordBtn = ({ word, className }) => <button type="button" data-testid="pwp-word" onClick={() => playEn(word.en)} className={className}>{word.en}</button>
@@ -38,7 +50,7 @@ function WordText({ word, hide }) {
 }
 
 const ListenBtn = ({ word }) => (
-  <button type="button" data-testid="pwp-listen" onClick={() => playEn(word.en)} className={`${SOFT} w-full`}>🔊 발음 듣기</button>
+  <button type="button" data-testid="pwp-listen" onClick={() => playEn(word.en)} className={`${LISTEN} w-full`}>🔊 발음 듣기</button>
 )
 
 // 연습 카드: 단어마다 한 장에 그림·단어·뜻·듣기·녹음(따라 말하기/내 목소리 듣기/다시 말하기)·다음.
@@ -77,7 +89,7 @@ export function PracticeCards({ words, onDone, single = false, nextLabel = '➡�
       </div>
       <div className="flex gap-2">
         {!single && <button type="button" data-testid="pwp-prev" onClick={() => leave(() => setI(i - 1))} disabled={i === 0} className={`${BTN} flex-1 bg-gray-200 text-gray-700`}>이전</button>}
-        <button type="button" data-testid="pwp-next" onClick={() => (lastOne ? (stopSpeaking(), onDone()) : leave(() => setI(i + 1)))} className={`${PRIMARY} flex-1`}>{single ? nextLabel : '➡️ 다음 단어'}</button>
+        <button type="button" data-testid="pwp-next" onClick={() => (lastOne ? (stopSpeaking(), onDone()) : leave(() => setI(i + 1)))} className={`${GO} flex-1`}>{single ? nextLabel : '➡️ 다음 단어'}</button>
       </div>
     </div>
   )
@@ -109,7 +121,7 @@ function QuizCard({ word, q, onAnswered, onNext, n, total, label = '시험' }) {
           <ListenBtn word={word} />
         </div>
       )}
-      {answered && <button type="button" data-testid="pwp-next" onClick={() => onNext(right)} className={`${PRIMARY} w-full`}>다음</button>}
+      {answered && <button type="button" data-testid="pwp-next" onClick={() => onNext(right)} className={`${GO} w-full`}>다음</button>}
     </div>
   )
 }
@@ -139,8 +151,8 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
   })
   const gameBtns = (a, b) => (
     <>
-      <button type="button" data-testid="pwp-game-hammer" onClick={() => onGame('hammer', words)} className={`${SOFT} w-full`}>{a}</button>
-      <button type="button" data-testid="pwp-game-hidden" onClick={() => onGame('hidden', words)} className={`${SOFT} w-full`}>{b}</button>
+      <button type="button" data-testid="pwp-game-hammer" onClick={() => onGame('hammer', words)} className={`${PLAY} w-full`}>{a}</button>
+      <button type="button" data-testid="pwp-game-hidden" onClick={() => onGame('hidden', words)} className={`${PLAY} w-full`}>{b}</button>
     </>
   )
 
@@ -153,7 +165,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
         <p className={T2}>다음은 게임!</p>
         <p className="text-base text-gray-600">같은 단어로 게임을 하거나 시험을 볼 수 있어요</p>
         {gameBtns('알파벳 망치로', '숨은 글자로')}
-        <button type="button" data-testid="pwp-go-test" onClick={startTest} className={`${PRIMARY} w-full`}>시험 보기</button>
+        <button type="button" data-testid="pwp-go-test" onClick={startTest} className={`${BTN} ${ROLE.review.strong} w-full`}>시험 보기</button>
         <button type="button" data-testid="pwp-skip" onClick={() => setStage('summary')} className={`${BTN} ${W.gray}`}>건너뛰고 끝내기</button>
       </div>
     )
@@ -166,7 +178,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
         <div data-testid="pwp-review-card" data-kind="clear" className="space-y-3 text-center">
           <p className="text-2xl font-black text-green-700">모두 맞혔어요</p>
           <p className="text-gray-600">다시 볼 단어가 없어요</p>
-          <button type="button" data-testid="pwp-next" onClick={() => setStage('summary')} className={`${PRIMARY} w-full`}>결과 보기</button>
+          <button type="button" data-testid="pwp-next" onClick={() => setStage('summary')} className={`${GO} w-full`}>결과 보기</button>
         </div>
       )
     } else {
@@ -193,8 +205,8 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
           </div>
         )}
         {gameBtns('이 단어로 알파벳 망치', '이 단어로 숨은 글자')}
-        <button type="button" data-testid="pwp-again" onClick={onAgain} className={`${PRIMARY} w-full`}>다시 하기</button>
-        <button type="button" data-testid="pwp-other-set" onClick={onOther} className={`${SOFT} w-full`}>다른 묶음</button>
+        <button type="button" data-testid="pwp-again" onClick={onAgain} className={`${GO} w-full`}>다시 하기</button>
+        <button type="button" data-testid="pwp-other-set" onClick={onOther} className={`${GO_SOFT} w-full`}>다른 묶음</button>
         <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
       </div>
     )
@@ -210,6 +222,7 @@ function Session({ words: pool, seed, mode, onAgain, onOther, onExit, onGame }) 
 export default function PictureWordPractice({ onExit, studentId }) {
   const [sel, setSel] = useState(null) // { id, words?, seed, mode } — words가 있으면 그 단어(게임/선반에서 온 것), 없으면 id의 묶음
   const [view, setView] = useState(null) // 게임/선반: { kind:'game', mode, from? } | { kind:'shelf' }
+  const [home, setHome] = useState('main') // 첫 화면 | speak | play — 연습/게임이 끝나면 온 하위 화면으로 돌아온다
   const [level, setLevel] = useState('phonics')
   const [phx, setPhx] = useState(false) // PAUL PHONICS 열림 — 열려 있는 동안 허브는 계속 마운트(기록·위치 유지), 연습/시험/게임 중에는 숨긴다
   const [fromPhx, setFromPhx] = useState(false) // 지금 연습/시험/게임이 허브에서 시작됐다 → 끝나면 허브로 돌아온다
@@ -238,43 +251,62 @@ export default function PictureWordPractice({ onExit, studentId }) {
   } else if (words) {
     body = <Session key={`${sel.seed}-${sel.mode}`} words={words} seed={sel.seed} mode={sel.mode} onAgain={() => setSel({ ...sel, seed: newSeed() })} onOther={fromPhx ? backToHub : () => setSel(null)} onExit={leave} onGame={game} />
   } else {
-    body = (
-      <div data-testid="pwp-root" data-step="pick" data-index={0} className="space-y-2">
-        <SfxControl />
-        <div className="flex flex-wrap justify-center gap-2">
-          {LEVELS.map((l) => (
-            <button key={l.id} type="button" data-testid={`pwg-level-${l.id}`} data-active={level === l.id ? 'true' : 'false'} disabled={!l.enabled} onClick={() => setLevel(l.id)}
-              className={`min-h-[44px] rounded-full px-3 text-xs font-black btn-press disabled:opacity-40 ${level === l.id ? 'bg-purple-600 text-white' : 'border-2 border-purple-200 bg-white text-purple-700'}`}>{l.labelKo}</button>
-          ))}
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <button type="button" data-testid="pwg-mode-practice" className={`${SOFT} px-1 text-sm`}>단어 연습</button>
-          <button type="button" data-testid="pwg-mode-hammer" onClick={() => game('hammer')} className={`${SOFT} px-1 text-sm`}>알파벳 망치</button>
-          <button type="button" data-testid="pwg-mode-hidden" onClick={() => game('hidden')} className={`${SOFT} px-1 text-sm`}>숨은 글자</button>
-        </div>
-        <button type="button" data-testid="pwg-open-phonics" onClick={() => { setSel(null); setView(null); setPhx(true) }} className={`${SOFT} w-full`}>PAUL PHONICS (폴 파닉스)</button>
-        <button type="button" data-testid="pwg-mode-shelf" onClick={() => setView({ kind: 'shelf' })} className={`${SOFT} w-full`}>가게 구경</button>
-        <p className="text-center text-sm text-gray-600">연습하거나 시험 볼 묶음을 골라요</p>
-        <div className="space-y-2">
-          {sets.map((s) => (
-            <div key={s.id} data-testid={`pwp-set-${s.id}`} data-ready={s.ready ? 'true' : 'false'} className="rounded-2xl border-2 border-purple-200 bg-white p-2">
-              <p className="break-words text-center text-base font-black text-purple-700">{s.labelKo}<span className={`ml-2 ${MUTED}`}>{s.ready ? `${s.words.length}개` : '준비 중'}</span></p>
-              <div className="mt-1 grid grid-cols-2 gap-2">
-                <button type="button" data-testid={`pwp-start-practice-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'practice')} className={`${PRIMARY} text-base`}>연습하기</button>
-                <button type="button" data-testid={`pwp-start-test-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'test')} className={`${SOFT} text-base`}>시험 보기</button>
+    const root = (h, kids) => <div data-testid="pwp-root" data-step="pick" data-index={0} data-home={h} className="space-y-3">{kids}</div>
+    const head = (t, sub, tid) => <div className="text-center"><h2 data-testid={tid} className="text-2xl font-black text-gray-900">{t}</h2><p className="text-base text-gray-600">{sub}</p></div>
+    const back = <button type="button" data-testid="pwh-back" onClick={() => setHome('main')} className={`${BTN} ${W.gray}`}>뒤로</button>
+    if (home === 'speak') {
+      body = root('speak', (
+        <>
+          {head('말하기', '묶음을 골라요', 'pwg-mode-practice')}
+          <div className="grid grid-cols-2 gap-2">
+            {[...sets].sort((a, b) => b.id.startsWith('level-') - a.id.startsWith('level-') || b.ready - a.ready).map((s) => (
+              <div key={s.id} data-testid={`pwp-set-${s.id}`} data-ready={s.ready ? 'true' : 'false'} className="min-w-0 rounded-2xl border-2 border-rose-200 bg-white p-2 text-center">
+                {s.id.startsWith('level-') ? <span className="block text-4xl">{s.id === 'level-phonics' ? '🔤' : '💬'}</span> : s.words[0]?.asset && <MenuPic asset={s.words[0].asset} className="mx-auto h-16 w-16 object-contain" />}
+                <p className="break-words text-base font-black leading-tight text-gray-800">{short(s.labelKo)}</p>
+                <p className={MUTED}>{s.ready ? `${s.words.length}개` : '준비 중'}</p>
+                <div className="mt-1 grid grid-cols-2 gap-1">
+                  <button type="button" data-testid={`pwp-start-practice-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'practice')} className={`${SETBTN} ${ROLE.go.soft}`}>연습</button>
+                  <button type="button" data-testid={`pwp-start-test-${s.id}`} disabled={!s.ready} onClick={() => start(s.id, 'test')} className={`${SETBTN} ${ROLE.review.soft}`}>시험</button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-        <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
-      </div>
-    )
+            ))}
+          </div>
+          {back}
+        </>
+      ))
+    } else if (home === 'play') {
+      body = root('play', (
+        <>
+          {head('게임 놀이터', '하고 싶은 게임을 골라요')}
+          <div className="flex flex-wrap justify-center gap-2">
+            {LEVELS.map((l) => (
+              <button key={l.id} type="button" data-testid={`pwg-level-${l.id}`} data-active={level === l.id ? 'true' : 'false'} disabled={!l.enabled} onClick={() => setLevel(l.id)}
+                className={`min-h-[44px] rounded-full px-3 py-1 text-center text-sm font-black leading-tight btn-press disabled:opacity-40 ${level === l.id ? ROLE.play.strong : 'border-2 border-amber-300 bg-white text-amber-900'}`}>{short(l.labelKo)}</button>
+            ))}
+          </div>
+          <Tile id="pwg-mode-hammer" role="play" asset="pencil" title="알파벳 망치" sub="글자를 순서대로 눌러요" onClick={() => game('hammer')} />
+          <Tile id="pwg-mode-hidden" role="play" asset="key" title="숨은 글자" sub="빠진 글자를 찾아요" onClick={() => game('hidden')} />
+          <Tile id="pwg-mode-shelf" role="play" asset="basket" title="가게 구경" sub="그림을 구경해요" onClick={() => setView({ kind: 'shelf' })} />
+          {back}
+        </>
+      ))
+    } else {
+      body = root('main', (
+        <>
+          <SfxControl />
+          <Tile id="pwg-open-phonics" role="go" asset="book" title="파닉스 모험" sub="소리를 배워요" onClick={() => { setSel(null); setView(null); setPhx(true) }} />
+          <Tile id="pwh-open-speak" role="say" asset="apple1" badge title="말하기" sub="듣고 따라 말해요" onClick={() => setHome('speak')} />
+          <Tile id="pwh-open-play" role="play" asset="robot" title="게임 놀이터" sub="놀면서 익혀요" onClick={() => setHome('play')} />
+          <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
+        </>
+      ))
+    }
   }
   return (
-    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-purple-50 to-sky-50 px-4 py-4 pb-8">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 to-emerald-50 px-4 py-4 pb-8">
       <div className="mx-auto max-w-lg min-w-0 space-y-3">
         <GameStyle />
-        <h1 className="text-center text-xl font-black text-gray-800">그림 단어 연습 <span className="text-xs text-red-600">(테스트)</span></h1>
+        <h1 className="text-center text-xl font-black text-gray-800">PAUL PHONICS <span className="text-xs text-red-600">(테스트)</span></h1>
         {body}
         {phx && (
           <div hidden={fromPhx}>

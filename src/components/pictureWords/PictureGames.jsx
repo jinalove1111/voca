@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { gameWords } from '../../utils/pictureWords/games.js'
 import { stopSpeaking } from '../../utils/speech'
-import { BTN, GameStyle, T2, W } from './pictureImg.jsx'
+import { BTN, GameStyle, ROLE, T2, W } from './pictureImg.jsx'
 import AlphabetHammer from './AlphabetHammer.jsx'
 import HiddenLetters from './HiddenLetters.jsx'
 import ShopShelf from './ShopShelf.jsx'
@@ -37,10 +37,10 @@ function GameSession({ mode: first, level, from, onPractice, onTest, onMenu, onE
       <div data-testid="pwg-summary" className="space-y-3 text-center">
         <p className={T2}>게임을 마쳤어요</p>
         <p className="text-lg text-gray-700">처음에 맞힌 단어 <span data-testid="pwg-first-try" className="font-black text-purple-700">{first} / {words.length}</span></p>
-        <button type="button" data-testid="pwg-again" onClick={() => restart(mode)} className={`${BTN} ${W.purple}`}>다시 하기</button>
-        <button type="button" data-testid="pwg-other" onClick={() => restart(mode === 'hammer' ? 'hidden' : 'hammer')} className={`${BTN} ${W.sky}`}>다른 게임</button>
-        <button type="button" data-testid="pwg-to-test" onClick={() => onTest(from || words)} className={`${BTN} ${W.purple}`}>시험 보기</button>
-        <button type="button" data-testid="pwg-to-practice" onClick={() => onPractice(words)} className={`${BTN} ${W.sky}`}>단어 연습으로</button>
+        <button type="button" data-testid="pwg-again" onClick={() => restart(mode)} className={`${BTN} w-full ${ROLE.go.strong}`}>다시 하기</button>
+        <button type="button" data-testid="pwg-other" onClick={() => restart(mode === 'hammer' ? 'hidden' : 'hammer')} className={`${BTN} w-full ${ROLE.play.soft}`}>다른 게임</button>
+        <button type="button" data-testid="pwg-to-test" onClick={() => onTest(from || words)} className={`${BTN} w-full ${ROLE.review.soft}`}>시험 보기</button>
+        <button type="button" data-testid="pwg-to-practice" onClick={() => onPractice(words)} className={`${BTN} w-full ${ROLE.go.soft}`}>단어 연습으로</button>
         <button type="button" data-testid="pwg-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
       </div>
     )

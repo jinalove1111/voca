@@ -46,7 +46,11 @@ async function shownWord(page, picId) {
   if (!w) throw new Error(`cannot map picture src ${src}`)
   return w
 }
+// 첫 화면 → 게임 놀이터(레벨 칩 + 게임 고르기). 이미 하위 화면에 있으면 뒤로 먼저.
+async function toMain(page) { if (await T(page, 'pwh-back').count()) await T(page, 'pwh-back').click() }
 async function startGame(page, level, mode) {
+  await toMain(page)
+  await T(page, 'pwh-open-play').click()
   await T(page, `pwg-level-${level}`).click()
   await T(page, `pwg-mode-${mode}`).click()
   await T(page, mode === 'hammer' ? 'pwh-root' : 'pwl-root').waitFor({ state: 'visible', timeout: 20000 })
@@ -191,8 +195,11 @@ export async function run(browser, baseURL) {
   await scenario('(a) 알파벳 망치 phonics', { width: 1280, height: 800 }, async ({ page, name, reqUrls }) => {
     await openScreen(page)
     r.check(`${name} 게임을 열기 전에는 게임 청크 요청 0건`, !reqUrls.some((u) => /PictureGames/.test(u)))
+    await T(page, 'pwh-open-play').click()
     const lv = await Promise.all(['phonics', 'conversation', 'advanced'].map(async (l) => [l, await T(page, `pwg-level-${l}`).isDisabled()]))
-    r.check(`${name} 레벨 칩: phonics/conversation 활성, advanced 비활성`, lv.map((x) => x[1]).join() === 'false,false,true', JSON.stringify(lv))
+    r.check(`${name} 레벨 칩(게임 놀이터): phonics/conversation 활성, advanced 비활성`, lv.map((x) => x[1]).join() === 'false,false,true', JSON.stringify(lv))
+    const chips = await page.evaluate(() => { const t = (id) => document.querySelector(`[data-testid="${id}"]`); return { txt: ['phonics', 'conversation', 'advanced'].map((l) => t(`pwg-level-${l}`).textContent), act: t('pwg-level-phonics').dataset.active, above: t('pwg-level-conversation').getBoundingClientRect().bottom <= t('pwg-mode-hammer').getBoundingClientRect().top } })
+    r.check(`${name} 레벨 칩은 게임 타일 위에 있고 짧은 이름(짧고 쉬운 단어 / 생활 단어와 가게 물건 / 높은 단계 (준비 중)), 처음엔 phonics가 선택됨`, chips.txt.join('|') === '짧고 쉬운 단어|생활 단어와 가게 물건|높은 단계 (준비 중)' && chips.act === 'true' && chips.above, JSON.stringify(chips))
     await startGame(page, 'phonics', 'hammer')
     r.check(`${name} 게임을 열면 게임 청크 요청`, reqUrls.some((u) => /PictureGames/.test(u)))
     const seen = []
@@ -285,6 +292,7 @@ export async function run(browser, baseURL) {
   // ---- (c) 연결 진입: 연습 세션 → 이 단어로 알파벳 망치 ----
   await scenario('(c) 연결 진입', { width: 1280, height: 800 }, async ({ page, name }) => {
     await openScreen(page)
+    await T(page, 'pwh-open-speak').click()
     await T(page, 'pwp-start-practice-food').click()
     await T(page, 'pwp-root').waitFor({ state: 'visible' })
     const seed = Number(await T(page, 'pwp-root').getAttribute('data-seed'))
@@ -307,6 +315,7 @@ export async function run(browser, baseURL) {
   // ---- (d) 가게 선반 ----
   await scenario('(d) 가게 선반', { width: 1280, height: 800 }, async ({ page, name }) => {
     await openScreen(page)
+    await T(page, 'pwh-open-play').click()
     await T(page, 'pwg-mode-shelf').click()
     await T(page, 'pws-root').waitFor({ state: 'visible', timeout: 20000 })
     const shopIds = await page.locator('[data-testid^="pws-shop-"]').evaluateAll((l) => l.map((e) => e.getAttribute('data-testid').slice(9)))
@@ -580,6 +589,8 @@ export async function run(browser, baseURL) {
       await check('숨은 글자', 'pwl-picture', 'pwl-progress', '1 / 6', '[data-testid^="pwl-opt-"]', ['pwl-listen', 'pwl-opt-0', 'pwl-opt-3', 'pwg-quit'])
       await T(page, 'pwg-quit').click()
       await T(page, 'pwp-root').waitFor({ state: 'visible' })
+      await toMain(page)
+      await T(page, 'pwh-open-speak').click()
       await T(page, 'pwp-start-practice-food').click()
       await T(page, 'pwp-card').waitFor({ state: 'visible', timeout: 10000 })
       await check('연습 카드', 'pwp-picture', 'pwp-progress', '1 / 6', null, ['pwp-listen', 'pwp-rec-record', 'pwp-next'])
