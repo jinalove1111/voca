@@ -84,7 +84,8 @@ export default function UnitHub({ bookId, unitId, records, seen = [], onSeen = (
   }
 
   let rows = []
-  const sess = (game, step, items, extra) => () => onSession(game, items, { bookId, unitId, step, learned: ctx.learned, optionPairs: ctx.optionPairs, skill: book.skill, next: after(step), ...extra })
+  // where: 위치 표시 문구 — Unit 이름은 허브가 정한다(게임 화면은 ctx.where를 그대로 보여 줄 뿐 Unit 라벨을 만들지 않는다, testPhonicsGames 규칙)
+  const sess = (game, step, items, extra) => () => onSession(game, items, { bookId, unitId, step, learned: ctx.learned, optionPairs: ctx.optionPairs, skill: book.skill, next: after(step), where: `Book ${bookId.slice(1)} · ${unit.review ? 'Book 전체 연습' : `Unit ${unit.id.slice(1)}`}`, ...extra })
   const after = (step) => { const r = rows.slice(rows.findIndex((x) => x.key === step) + 1).find((x) => x.chain && x.state !== 'locked'); return r ? { label: `다음: ${r.title}`, run: r.run } : null }
   const played = attempts.length > 0
   const reviewWhy = missed.length ? `다시 볼 단어 ${missed.length}개` : played ? '틀린 소리가 없어요' : '게임을 하면 열려요'

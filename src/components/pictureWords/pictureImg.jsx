@@ -73,6 +73,7 @@ export const useWide = () => useMedia('(min-width: 768px)')
 // First-screen art: 1:1 crops of the operator-approved picture (assets/phonics/home/NOTICE.md)
 const HOME = import.meta.glob('../../assets/phonics/home/*.webp', { eager: true, query: '?url', import: 'default' })
 const HD = { full: [1672, 941], sign: [945, 297], teacher: [708, 941], 'card-phonics': [286, 340], 'card-speak': [302, 351], 'card-play': [324, 360] }
+export const homeUrl = (k) => HOME[`../../assets/phonics/home/phonics-home-${k}.webp`]
 export const HomeImg = ({ k, ...p }) => <img src={HOME[`../../assets/phonics/home/phonics-home-${k}.webp`]} width={HD[k][0]} height={HD[k][1]} alt="" decoding="async" draggable={false} {...p} />
 
 // full-width button colours shared by the phonics and picture-word screens (used as `${BTN} ${W.gray}`)
@@ -132,6 +133,33 @@ const CSS = `
 .pbp-bubble{width:7rem;height:7rem;border-radius:9999px;font-size:3rem;font-weight:900;line-height:1;border:3px solid var(--pw-edge);background:radial-gradient(circle at 30% 28%,#fff 0,var(--pw-bg) 62%);color:#1F2937;box-shadow:0 4px 0 var(--pw-edge);transition:transform .28s ease-out,opacity .28s ease-out}
 .pbp-bubble[data-tried=true]{opacity:.35}
 .pbp-bubble.pbp-pop{transform:scale(1.5);opacity:0;pointer-events:none}
+.pw-page:has(.pbp-room){background:#FBF3E1}
+.pbp-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;color:#1F2A44}
+.pbp-quit{justify-self:start;min-height:44px;padding:0 14px;border:2px solid #C9A66B;border-radius:12px;background:#FFF8E7;color:#6B4423;font-size:.95rem;font-weight:900}
+.pbp-where{text-align:center;font-size:1rem;font-weight:900}
+.pbp-top .pw-progress{justify-self:end;flex-direction:column;align-items:flex-end;gap:4px;font-size:.8rem;color:#1F2A44}
+.pbp-top .pw-bar{flex:none;width:6rem;height:10px;background:#EFE3C8}.pbp-top .pw-bar-fill{background:#3CCB5A}
+.pbp-board{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;padding:10px 12px;border:3px solid #B78B4A;border-radius:18px;background:#2E6B4A;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.pbp-teacher{display:block;width:96px;aspect-ratio:708/612;border-radius:12px;background-size:100% auto;background-position:top;background-repeat:no-repeat}
+.pbp-chalk{display:grid;gap:4px;color:#FFF8E7;word-break:keep-all}
+.pbp-title{font-size:1.5rem;font-weight:900;line-height:1.25}.pbp-y{color:#F6D55C}.pbp-sub{font-size:.95rem;font-weight:700;opacity:.9}
+.pbp-listen{width:100%;min-height:68px;border:2px solid #4A90E2;border-radius:16px;background:#EAF6FF;color:#1F2A44;font-size:1.5rem;font-weight:900;box-shadow:0 2px 4px rgba(74,144,226,.2)}
+.pbp-opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pbp-room .pbp-bubble{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:auto;min-height:160px;border-radius:18px;border:2px solid var(--pw-edge);background:var(--pw-bg);color:#1F2A44;box-shadow:0 2px 6px rgba(0,0,0,.08);font-size:3.75rem;transition:transform .15s ease,opacity .28s ease-out}
+.pbp-room .pw-c0{--pw-bg:#FFFEF8;--pw-edge:#1F2A44}.pbp-room .pw-c1{--pw-bg:#E6F7EC;--pw-edge:#1E7B4F}.pbp-room .pw-c2{--pw-bg:#EAF6FF;--pw-edge:#4A90E2}.pbp-room .pw-c3{--pw-bg:#FFF1E6;--pw-edge:#E08A4F}
+.pbp-room [data-testid=pbp-bubble-other]::after{content:"🎧";font-size:2.2rem;line-height:1}
+.pbp-opts:has(:nth-child(3)) .pbp-bubble{min-height:112px}
+.pbp-room .pbp-bubble:active:not(:disabled){transform:scale(.97)}
+.pbp-room .pbp-bubble:disabled{box-shadow:none;border-color:#1F2A4433}
+.pbp-room .pbp-bubble.pbp-pop{transform:scale(1.04);opacity:1;border-width:3px}
+.pbp-fb{padding:8px;border-radius:12px;text-align:center;font-size:1.1rem;font-weight:900}
+.pbp-ok{color:#1E7B4F}.pbp-navy{background:#1F2A44;color:#FFF8E7}.pbp-soft{background:#FCE4EC;color:#B23A63}.pbp-hl{color:#E0532F}
+@keyframes pbp-cheer{from{transform:translateY(6px);opacity:0}}
+.pbp-cheer{animation:pbp-cheer .35s ease-out}
+.pbp-hint{display:block;min-height:44px;margin-inline:auto;padding:0 14px;color:#6B4423;font-size:.95rem;font-weight:800;text-decoration:underline;text-underline-offset:4px}
+.pbp-room .pw-card--text{background:#FCE4EC;box-shadow:0 2px 6px rgba(244,114,182,.18)}.pbp-room .pw-card .text-gray-700{color:#1F2A44;font-size:1rem;margin-top:-4px}
+.pha-b .pwsfx-root,.pha-b [data-testid=pwsfx-root]{background:#fff;border-radius:999px;padding:4px 8px}.pha-b .bg-pink-100{background:#EAF6FF}.pha-b input{accent-color:#1F2A44}
+@media(min-width:768px){.pw-wrap:has(.pbp-room){max-width:44rem}.pbp-board{padding:14px 20px;gap:18px}.pbp-teacher{width:140px}.pbp-title{font-size:2rem}.pbp-sub{font-size:1.15rem}.pbp-listen{min-height:76px;font-size:1.6rem}.pbp-room .pbp-bubble{min-height:190px;font-size:4.5rem}.pbp-opts:has(:nth-child(3)) .pbp-bubble{min-height:130px}}
 @keyframes pwt-go{from{transform:none}to{transform:translateX(130%);visibility:hidden}}
 @keyframes pwt-in{from{opacity:0}}
 .pwt-track{display:grid;overflow:hidden;padding:6px 4px}
