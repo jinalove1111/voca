@@ -63,13 +63,13 @@ export default function PhonicsAdventure({ game, items: pool, ctx, studentId, on
   const item = items[i]
   const common = { item, index: i, total: items.length, studentId, onRecord: record, onNext: next, ctx }
   return (
-    <div data-testid="pha-root" data-game={game} data-step={ctx?.step} data-skill={ctx?.skill} className="space-y-3">
+    <div data-testid="pha-root" data-game={game} data-step={ctx?.step} data-skill={ctx?.skill} className={`space-y-3${game === 'bubble' ? ' pha-b' : ''}`}>
       <GameStyle />
-      <SfxControl />
+      {game !== 'bubble' && <SfxControl />}
       {game === 'bubble'
-        ? <SoundBubblePop key={`${item.id}-${i}-${seed}`} {...common} seed={seed + 101 * i} autoplay={heard.current} onHeard={() => { heard.current = true }} />
+        ? <SoundBubblePop key={`${item.id}-${i}-${seed}`} {...common} seed={seed + 101 * i} autoplay={heard.current} onHeard={() => { heard.current = true }} onQuit={onBack} />
         : <WordTrain key={`${item.id}-${i}-${seed}`} {...common} seed={seed + 101 * i} />}
-      <button type="button" data-testid="pha-quit" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-sm text-gray-700`}>그만하기</button>
+      {game === 'bubble' ? <SfxControl /> : <button type="button" data-testid="pha-quit" onClick={onBack} className={`${BTN} w-full bg-gray-200 text-sm text-gray-700`}>그만하기</button>}
     </div>
   )
 }
