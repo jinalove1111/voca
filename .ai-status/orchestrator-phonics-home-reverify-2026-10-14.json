@@ -1,0 +1,35 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PAUL PHONICS 디자인 A 최종 확정 뒤 275차 첫 화면 재검증 (276차)",
+  "task_id": "paul-phonics-home-reverify-2026-10-14",
+  "task": "승인 그림과 기존 구현 조사, 반응형·버튼 연결·Book 1 학습·녹음/재생·게임 진입 재검증, 필요한 부분만 수정",
+  "status": "completed_no_code_change",
+  "progress": 100,
+  "updated_at": "2026-10-14",
+  "branch": "verify/phonics-home-2026-10-14",
+  "base": "feat/paul-town-hybrid-world-2026-10-10 @ e4e0b246",
+  "files_owned": [
+    "handoff.md",
+    ".ai-status/orchestrator-phonics-home-reverify-2026-10-14.json"
+  ],
+  "approved_image": {
+    "path": "c:\\Users\\jinal\\Dropbox\\PC (4)\\pic3\\a25b0d9d-4f13-4dd0-ac71-82f35f8b3d1f.png",
+    "sha256_matches_notice": true,
+    "note": "read only"
+  },
+  "verification": {
+    "build": "OK (dummy env)",
+    "static": "testBundleBudget 34, testPictureWords 785, testPictureWordGames 142, testPhonicsGames 428, testPhonicsProgress 111, testLazyChunkGuards 116, testPaulSpriteAssets 125, testQaGate 17, testStudentPathContracts 61, testKeySentenceFlow, testRegistryCoverage",
+    "browser": "pictureWordPractice 168/0, phonicsGames 304/0, pictureWordGames 151/0, phonicsProgress 62/0, phonicsReview 50/0, pictureWordReview 39/0 — one at a time, unmocked 0",
+    "not_run": "real devices / iOS, logged-in check of the deployed Preview, townProto25d S37, verify:all, Speaking / Writing / Voca / Town browser specs"
+  },
+  "bundle": "unchanged, 2.195 of 2.2 MB, about 5 KB headroom",
+  "preview": "pw-preview e0fcadf7 has the same tree as e4e0b246 and Vercel status success; not updated because there is nothing new to deploy",
+  "held_for_operator": [
+    "teacher outfit differs between home (vest, bow tie) and lesson screen (sportswear)",
+    "pointing pose, classroom background and wooden sign art not supplied",
+    "bundle budget headroom before the next UI change",
+    "third-party brand marks on the costume"
+  ],
+  "not_touched": "source, assets, tests, DB, SQL, .env, Production, main, pw-preview, C:\\voca"
+}

@@ -1,4 +1,17 @@
 # Paul Easy Voca — Handoff
+## 276차 (2026-10-14): PAUL PHONICS 디자인 A 최종 확정 — 275차 첫 화면 재검증(코드 변경 0)
+- **상태 한 줄**: 운영자가 디자인 A(275차 승인 그림)를 최종으로 확정했다. 이미 구현된 첫 화면을 다시 만들지 않고 조사·재검증만 했다. 고칠 곳이 나오지 않아 **소스 코드 변경은 0건**이고, 이 기록과 `.ai-status` 파일만 추가했다.
+- **작업 위치**: `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `verify/phonics-home-2026-10-14`(`feat/paul-town-hybrid-world-2026-10-10` @ `e4e0b246`에서 분기).
+- **승인 그림 확인**: `c:\Users\jinal\Dropbox\PC (4)\pic3\a25b0d9d-4f13-4dd0-ac71-82f35f8b3d1f.png`의 sha256이 `NOTICE.md` 기록(`9556d23b…9221`)과 일치한다. 파생 6종(`src/assets/phonics/home/`)이 그대로 쓰이고 있다. 원본은 읽기만 했다.
+- **폴 선생님 이미지**: 저장소에 있는 것은 ① 승인 그림에서 자른 `phonics-home-teacher.webp`(조끼·나비넥타이), ② 마을 캐릭터 원본 해상도 `phonics-teacher-stand.webp`·`-sit.webp`(운동복) 두 종류다. `pic3` 폴더에 2026-10-13 12:53 이후 새로 들어온 파일은 없다. **가리키는 자세·교실 배경·나무 간판 그림은 여전히 없다 — 임의로 대체하지 않고 보류.**
+- **검증 — 통과(정적, dummy-env build)**: build OK. `testBundleBudget` 34, `testPictureWords` 785, `testPictureWordGames` 142, `testPhonicsGames` 428, `testPhonicsProgress` 111, `testLazyChunkGuards` 116, `testPaulSpriteAssets` 125, `testQaGate` 17, `testStudentPathContracts` 61, `testKeySentenceFlow`·`testRegistryCoverage` PASS.
+- **검증 — 통과(브라우저 6종, 1종씩, 여유 2.7~3.0 GB)**: `pictureWordPractice` 168/0(390px·1280px 첫 화면, 버튼 위치, 그림 실패 시 글자 버튼, 말하기 녹음), `phonicsGames` 304/0(`(s)` Book 1 5개 Unit·25단어 완주 — 듣기·뜻·녹음·내 목소리 듣기·게임 2종), `pictureWordGames` 151/0(게임 놀이터 진입), `phonicsProgress` 62/0, `phonicsReview` 50/0, `pictureWordReview` 39/0. 미mock 요청 0. 275차에 다시 돌리지 않았던 `phonicsProgress`·`phonicsReview`를 이번에 돌렸다.
+- **번들**: 변화 없음(예산 대상 JS 합계 2.195 / 2.2 MB, 여유 약 5 KB). 다음 화면 작업 전에 여유를 먼저 만들어야 하는 상태는 그대로다.
+- **Preview**: `pw-preview`(`e0fcadf7`)의 트리가 `e4e0b246`과 같고(`33714b67`) Vercel 상태 success라 **갱신하지 않았다**(코드가 같아 갱신할 내용이 없음). 주소 `https://voca-git-pw-preview-jina4926952s-projects.vercel.app`(Vercel 로그인 필요, 302).
+- **검증 — 미완료**: 실기기·iOS, 배포된 Preview의 로그인 뒤 화면 직접 확인, `townProto25d` S37, `verify:all`, Speaking·Writing·Voca·Town 브라우저 검사(해당 파일 변경 0).
+- **운영자 결정 대기(그대로)**: ① 첫 화면(조끼)과 학습 화면(운동복)의 선생님 옷 차이, ② 가리키는 자세·교실 배경·간판 그림 공급, ③ 번들 예산 여유 확보 방법, ④ 의상의 제3자 브랜드 표식.
+- **하지 않은 것**: 소스·에셋·테스트 변경 0. 새 시안 0. DB·SQL·`.env`·Production·main·`pw-preview`·`C:\voca` 0.
+
 ## 275차 (2026-10-13): PAUL PHONICS 첫 화면을 운영자 승인 이미지로 교체 — 그림 속 메뉴 3개가 실제 버튼
 - **상태 한 줄**: 테스터 전용 첫 화면(`data-home="main"`)의 파스텔 타일 3개를 없애고 승인 이미지로 만든 화면으로 바꿨다. 세 메뉴는 실제 `<button>`이고 기존과 같은 화면으로 이동한다. 정적 검증과 관련 브라우저 검사 3종 통과, 390px·820px·1280px 캡처 확인.
 - **승인 이미지**: 운영자 제공 `c:\Users\jinal\Dropbox\PC (4)\pic3\a25b0d9d-4f13-4dd0-ac71-82f35f8b3d1f.png`(1672×941, 24비트, sha256 `9556d23b…9221`). 명령서의 이름 `a_bright_colorful_cartoon_3d_styled_education_ap.png`인 파일은 찾지 못했고, 같이 전달된 위 경로의 파일을 승인 이미지로 썼다(두 이름 모두 `src/assets/phonics/home/NOTICE.md`에 기록). **원본은 저장소 밖에 그대로 있고 수정하지 않았다.**
