@@ -236,7 +236,7 @@ const scr = fs.readFileSync(path.join(ROOT, 'src/components/pictureWords/Picture
 ok(!/fetch\(|supabase|\/api\/|localStorage|sessionStorage|grantReward|markPronunciationOk|addStars|XMLHttpRequest|sendBeacon|trackEvent|productEvents/.test(scr), 'screen: no network/storage/reward/analytics')
 ok(!/data-correct|data-answer|data-right/.test(scr), 'screen: no data-correct/data-answer attributes')
 const shared = fs.readFileSync(path.join(ROOT, 'src/components/pictureWords/pictureImg.jsx'), 'utf8')
-ok(/alt="그림"/.test(shared) && !/alt=\{/.test(shared + scr) && !/<img/.test(scr) && scr.includes('testid="pwp-picture"'), 'screen: img alt is the literal "그림" (264차: the shared GamePicture renders it)')
+ok(/alt="그림"/.test(shared) && !/alt=\{(?!t\})/.test(shared + scr) && !/<img/.test(scr) && scr.includes('testid="pwp-picture"'), 'screen: img alt is the literal "그림" (264차: the shared GamePicture renders it; the only dynamic alt allowed is the first-screen menu label `alt={t}`, 2026-10-13)')
 ok(/useEffect\(\(\) => stopSpeaking, \[\]\)/.test(scr), 'screen: stopSpeaking on unmount')
 ok(/\{answered && \(\s*<div data-testid="pwp-feedback"[\s\S]*?<WordText word=\{word\} \/>[\s\S]*?<ListenBtn word=\{word\} \/>/.test(scr), 'quiz: feedback (word, meaning, listen) is conditionally mounted after answering')
 const quizCard = scr.slice(scr.indexOf('function QuizCard'), scr.indexOf('function Session'))

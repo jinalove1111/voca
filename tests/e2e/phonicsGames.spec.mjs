@@ -499,7 +499,7 @@ export async function run(browser, baseURL) {
   // ---- (a) 책장 → Book 1 → Unit 2 허브(10단계·3묶음) → 소개·갤러리·연습 → Sound Bubble Pop → 틀린 소리 복습
   await scenario('(a) Book 1 Unit 2', { width: 1280, height: 800 }, async ({ page, name, reqs }) => {
     await openScreen(page)
-    r.check(`${name} 진입 전에는 파닉스 청크 요청 0건, 진입 버튼 1개(옛 버튼 없음)`, !reqs.some((q) => /PaulPhonics/.test(q.url)) && (await T(page, 'pwg-open-phonics').isVisible()) && ((await T(page, 'pwg-open-phonics').textContent()) || '').includes('파닉스 모험') && (await T(page, 'pwg-mode-bubble').count()) === 0 && (await T(page, 'pwg-mode-train').count()) === 0 && (await T(page, 'pha-entry').count()) === 0)
+    r.check(`${name} 진입 전에는 파닉스 청크 요청 0건, 진입 버튼 1개(옛 버튼 없음)`, !reqs.some((q) => /PaulPhonics/.test(q.url)) && (await T(page, 'pwg-open-phonics').isVisible()) && ((await T(page, 'pwg-open-phonics').getAttribute('aria-label')) || '') === '파닉스 모험' && (await T(page, 'pwg-mode-bubble').count()) === 0 && (await T(page, 'pwg-mode-train').count()) === 0 && (await T(page, 'pha-entry').count()) === 0)
     await openPhonics(page)
     r.check(`${name} 진입하면 파닉스 청크 요청`, reqs.some((q) => /PaulPhonics/.test(q.url)))
     const main = (await T(page, 'pph-main').innerText()) || ''

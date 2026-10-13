@@ -6,7 +6,7 @@ import { LEVELS, learnableWords, shopSets, wordsForLevel } from '../../data/pict
 import { buildSession, buildQuiz, reviewQueue, reviewNext, startStep, summarise } from '../../utils/pictureWords/practice.js'
 import { stopSpeaking } from '../../utils/speech'
 import useLocalRecorder from '../../hooks/useLocalRecorder'
-import { BTN, ClassScene, GamePicture, GameStyle, MUTED, MenuPic, PwProgress, ROLE, T2, T3, W, WordStrip, playEn } from './pictureImg.jsx'
+import { BTN, ClassScene, GamePicture, GameStyle, HomeImg, MUTED, MenuPic, PwProgress, ROLE, T2, T3, W, WordStrip, playEn, useWide } from './pictureImg.jsx'
 import LessonRecorder from './LessonRecorder.jsx'
 import SfxControl from './SfxControl.jsx'
 import { playSfx } from '../../utils/pictureWords/sfx.js'
@@ -26,13 +26,41 @@ const POOL = learnableWords()
 const newSeed = () => Date.now() % 2147483647
 const short = (t) => t.split(' — ').pop() // "Phonics — 짧고 쉬운 단어" → "짧고 쉬운 단어"
 
-// 첫 화면/하위 화면의 큰 메뉴 타일: 그림 왼쪽, 글 오른쪽
-const Tile = ({ id, role, asset, title, sub, badge, onClick }) => (
+// 게임 놀이터 하위 화면의 큰 메뉴 타일: 그림 왼쪽, 글 오른쪽
+const Tile = ({ id, role, asset, title, sub, onClick }) => (
   <button type="button" data-testid={id} onClick={onClick} className={`pw-tile-menu pw-tm-${role}`}>
-    <span className="relative flex-none"><MenuPic asset={asset} />{badge && <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white text-base shadow">🎤</span>}</span>
+    <span className="flex-none"><MenuPic asset={asset} /></span>
     <span className="min-w-0"><span className="block text-2xl font-black text-gray-900">{title}</span><span className="block text-base text-gray-700">{sub}</span></span>
   </button>
 )
+
+// 첫 화면: 승인 그림 속 카드 3장이 진짜 버튼(넓은 화면=전체 그림+투명 버튼, 좁은 화면=조각 재배치). 그림 실패 시 글자 버튼.
+const MENU = [['pwg-open-phonics', '파닉스 모험', '소리를 배워요', 'go', 'card-phonics'], ['pwh-open-speak', '말하기', '듣고 따라 말해요', 'say', 'card-speak'], ['pwh-open-play', '게임 놀이터', '놀면서 익혀요', 'play', 'card-play']]
+function PhonicsHome({ fns, onExit }) {
+  const wide = useWide()
+  const [bad, setBad] = useState('') // 실패한 배치('w'|'n') — 배치가 바뀌면 다시 그림을 시도한다
+  const L = wide ? 'w' : 'n'
+  const fail = bad === L
+  const err = () => setBad(L)
+  const btn = ([id, t, sub, role, k], i) => (
+    <button key={id} type="button" data-testid={id} aria-label={t} onClick={fns[i]} className={fail ? `${BTN} ${ROLE[role].soft} w-full` : undefined}>
+      {fail ? <><span className="block text-2xl">{t}</span><span className="block text-base">{sub}</span></> : wide ? <span className="sr-only">{t}</span> : <HomeImg k={k} alt={t} onError={err} />}
+    </button>
+  )
+  return (
+    <div className={`space-y-3${wide ? '' : ' pph-n'}`}>
+      {fail ? MENU.map(btn) : wide ? <div className="pph-w"><HomeImg k="full" onError={err} />{MENU.map(btn)}</div> : (
+        <>
+          <HomeImg k="sign" className="pph-s" onError={err} />
+          <HomeImg k="teacher" className="pph-t" onError={err} />
+          <div className="pph-row">{MENU.map(btn)}</div>
+        </>
+      )}
+      <div className="mx-auto flex max-w-md items-center gap-2"><div className="min-w-0 flex-1"><SfxControl /></div><button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} bg-gray-200 text-gray-700`}>나가기</button></div>
+      <span aria-hidden="true" className="pph-chip">(테스트)</span>
+    </div>
+  )
+}
 
 // 단어를 누르면 "발음 듣기"와 같은 함수로 전체 단어 소리가 난다. hide = 글자 카드(단어가 카드 안에 이미 있음)
 const WordBtn = ({ word, className, onPlay }) => <button type="button" data-testid="pwp-word" onClick={() => { onPlay?.(); playEn(word.en) }} className={className}>{word.en}</button>
@@ -253,7 +281,7 @@ export default function PictureWordPractice({ onExit, studentId }) {
   const fromHub = (fn) => (list) => { setFromPhx(true); fn(list) }
   const leave = fromPhx ? backToHub : onExit
   const menu = fromPhx ? backToHub : () => setView(null)
-  let body
+  let body, isMain = false
   if (phx && !fromPhx) {
     body = null // 허브가 보인다
   } else if (view) {
@@ -305,22 +333,15 @@ export default function PictureWordPractice({ onExit, studentId }) {
         </>
       ))
     } else {
-      body = root('main', (
-        <>
-          <SfxControl />
-          <Tile id="pwg-open-phonics" role="go" asset="book" title="파닉스 모험" sub="소리를 배워요" onClick={() => { setSel(null); setView(null); setPhx(true) }} />
-          <Tile id="pwh-open-speak" role="say" asset="apple1" badge title="말하기" sub="듣고 따라 말해요" onClick={() => setHome('speak')} />
-          <Tile id="pwh-open-play" role="play" asset="robot" title="게임 놀이터" sub="놀면서 익혀요" onClick={() => setHome('play')} />
-          <button type="button" data-testid="pwp-exit" onClick={onExit} className={`${BTN} ${W.gray}`}>나가기</button>
-        </>
-      ))
+      isMain = true
+      body = root('main', <PhonicsHome onExit={onExit} fns={[() => { setSel(null); setView(null); setPhx(true) }, () => setHome('speak'), () => setHome('play')]} />)
     }
   }
   return (
-    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 to-emerald-50 px-4 py-4 pb-8">
+    <div className="pw-page min-h-screen overflow-x-hidden bg-gradient-to-br from-amber-50 to-emerald-50 px-4 py-4 pb-8">
       <div className="pw-wrap mx-auto max-w-lg min-w-0 space-y-3">
         <GameStyle />
-        <h1 className="pw-sign">PAUL PHONICS <span>(테스트)</span></h1>
+        <h1 className={isMain ? 'sr-only' : 'pw-sign'}>PAUL PHONICS <span>(테스트)</span></h1>
         {body}
         {phx && (
           <div hidden={fromPhx}>

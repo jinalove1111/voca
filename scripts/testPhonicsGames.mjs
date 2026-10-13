@@ -583,7 +583,7 @@ for (const u of C.BOOKS[0].units.filter((x) => !x.review)) {
   const TMP = path.join(ROOT, 'scripts/.tmp/pwp-ssr'); fs.mkdirSync(TMP, { recursive: true })
   const STUBS = [
     [/pictureImg\.jsx$/, `import React from 'react'
-export const BTN = '', W = {}, T2 = '', T3 = '', MUTED = '', ROLE = { go: {}, say: {}, play: {}, review: {}, listen: {} }, GameStyle = () => null, ClassScene = ({ children }) => children, WordStrip = () => null, MenuPic = () => null, PwProgress = () => null, playEn = () => {}
+export const BTN = '', W = {}, T2 = '', T3 = '', MUTED = '', ROLE = { go: {}, say: {}, play: {}, review: {}, listen: {} }, GameStyle = () => null, ClassScene = ({ children }) => children, WordStrip = () => null, MenuPic = () => null, HomeImg = () => null, useWide = () => false, PwProgress = () => null, playEn = () => {}
 export const GamePicture = ({ testid }) => React.createElement('div', { 'data-testid': testid + '-card', className: 'pw-card' })`],
     [/SpeakingPracticeItem$/, 'export const RecorderControls = () => null'],
     [/LessonRecorder\.jsx$/, 'export default () => null'],
