@@ -92,6 +92,25 @@ async function startSet(page, id, mode, firstStep) {
   const words = buildSession(SET_WORDS[id], { size: 6, seed })
   return { seed, words, quiz: buildQuiz(words, POOL, seed) }
 }
+// 첫 화면 그림 카드 3장(deriveHomeArt.py의 사각형, 원본 1672x941 픽셀) — 데스크톱 클릭 영역과 같은 값
+const HOME_RECT = { 'pwg-open-phonics': [704, 352, 990, 692], 'pwh-open-speak': [996, 345, 1298, 696], 'pwh-open-play': [1306, 340, 1630, 700] }
+const HOME_LABEL = { 'pwg-open-phonics': '파닉스 모험', 'pwh-open-speak': '말하기', 'pwh-open-play': '게임 놀이터' }
+const homeIs = (page, h) => waitUntil(async () => (await attr(page, 'data-home')) === h, { timeout: 5000 })
+// 세 버튼을 차례로 눌러 각 화면에 닿고 첫 화면으로 돌아오는지(파닉스는 pph-main, 말하기/게임 놀이터는 data-home)
+async function menuRoundTrip(page) {
+  const ok = []
+  await T(page, 'pwg-open-phonics').click()
+  ok.push(await T(page, 'pph-main').waitFor({ state: 'visible', timeout: 20000 }).then(() => true, () => false))
+  await T(page, 'pph-exit').click()
+  await T(page, 'pwp-root').waitFor({ state: 'visible', timeout: 10000 })
+  ok.push(await homeIs(page, 'main'))
+  await T(page, 'pwh-open-speak').click(); ok.push(await homeIs(page, 'speak'))
+  await T(page, 'pwh-back').click(); ok.push(await homeIs(page, 'main'))
+  await T(page, 'pwh-open-play').click(); ok.push(await homeIs(page, 'play'))
+  await T(page, 'pwh-back').click(); ok.push(await homeIs(page, 'main'))
+  return ok.every(Boolean)
+}
+const imagesDone = (page) => page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 15000 }).then(() => true, () => false)
 const correctIdx = (q) => q.options.findIndex((o) => o.id === q.correctId)
 const wrongIdx = (q) => (correctIdx(q) + 1) % 4
 async function answer(page, idx) {
@@ -147,7 +166,7 @@ export async function run(browser, baseURL) {
   const mockErrors = []
   const ttsAll = []
 
-  async function scenario(label, vp, body, { studentId = null, defaultFlags = true, login = loginToDashboard, mic = 'synth', hasTouch = false } = {}) {
+  async function scenario(label, vp, body, { studentId = null, defaultFlags = true, login = loginToDashboard, mic = 'synth', hasTouch = false, setup = null } = {}) {
     const context = await browser.newContext({ viewport: vp, hasTouch })
     const page = await context.newPage()
     const errors = []
@@ -161,6 +180,7 @@ export async function run(browser, baseURL) {
     }
     const { unmockedRequests: u, apiCallLog, ttsFallbackRequests } = await installMocks(page, studentId ? { studentId } : {})
     await installMic(page, mic)
+    if (setup) await setup(page) // 이동 전에 등록(예: 그림 요청 차단) — installMocks 뒤라 먼저 적용된다
     // mockRoutes의 speechSynthesis 스텁 "뒤"에 등록해야 speak 호출을 센다(speaking.spec.mjs와 같은 방식)
     await page.addInitScript(() => {
       window.__speak = []
@@ -233,22 +253,25 @@ export async function run(browser, baseURL) {
     r.check(`${name} (s1) 연습만 하고 "건너뛰고 끝내기" → 요약(연습을 마쳤어요, 점수 없음)`, true)
   }, { studentId: TESTER_ONLY })
 
-  // ---- (m1) 첫 화면(390x844): 큰 타일 3개, 스크롤 없음, 하위 화면 왕복 ----
-  await scenario('(m1) 첫 화면 3타일', { width: 390, height: 844 }, async ({ page, name }) => {
+  // ---- (m1) 첫 화면(390x844): 승인 그림 조각 + 그림이 곧 버튼인 카드 3장, 스크롤 없음, 하위 화면 왕복 ----
+  await scenario('(m1) 첫 화면 그림 카드 3장', { width: 390, height: 844 }, async ({ page, name, reqUrls }) => {
     await openScreen(page)
-    const tiles = page.locator('.pw-tile-menu')
+    await imagesDone(page)
     const nBtn = await T(page, 'pwp-root').locator('button:not([data-testid^="pwsfx"])').count()
-    r.check(`${name} (m1) 첫 화면: data-home=main, 타일 3개(파닉스 모험/말하기/게임 놀이터) + 소리 조절 + 나가기, 그 밖의 버튼 없음`, (await attr(page, 'data-home')) === 'main' && (await tiles.count()) === 3 && (await T(page, 'pwg-open-phonics').count()) === 1 && (await T(page, 'pwh-open-speak').count()) === 1 && (await T(page, 'pwh-open-play').count()) === 1 && (await T(page, 'pwsfx-root').count()) === 1 && (await T(page, 'pwp-exit').count()) === 1 && nBtn === 4, String(nBtn))
-    r.check(`${name} (m1) 제목 PAUL PHONICS`, ((await page.locator('h1').first().textContent()) || '').includes('PAUL PHONICS'))
+    r.check(`${name} (m1) 첫 화면: data-home=main, 메뉴 버튼 3개(파닉스 모험/말하기/게임 놀이터) + 소리 조절 + 나가기, 그 밖의 버튼 없음`, (await attr(page, 'data-home')) === 'main' && (await T(page, 'pwg-open-phonics').count()) === 1 && (await T(page, 'pwh-open-speak').count()) === 1 && (await T(page, 'pwh-open-play').count()) === 1 && (await T(page, 'pwsfx-root').count()) === 1 && (await T(page, 'pwp-exit').count()) === 1 && nBtn === 4, String(nBtn))
+    const btns = await page.evaluate((ids) => ids.map((id) => { const b = document.querySelector(`[data-testid="${id}"]`), im = b.querySelectorAll('img'), r2 = b.getBoundingClientRect(); return { n: im.length, ok: im.length === 1 && im[0].complete && im[0].naturalWidth > 0, alt: im[0] && im[0].alt, text: b.textContent.trim(), w: r2.width, h: r2.height } }), Object.keys(HOME_LABEL))
+    r.check(`${name} (m1) 메뉴 버튼마다 그림 정확히 1장(로드됨, alt=이름) + 그림 밖의 글자 없음 + 44x44 이상`, btns.every((x, i) => x.n === 1 && x.ok && x.alt === Object.values(HOME_LABEL)[i] && x.text === '' && x.w >= 43.9 && x.h >= 43.9), JSON.stringify(btns))
+    const parts = await page.evaluate(() => ['sign', 'teacher'].map((k) => { const i = document.querySelector(`img[src*="phonics-home-${k}"]`); return !!i && i.complete && i.naturalWidth > 0 }))
+    r.check(`${name} (m1) 간판·선생님 그림 로드됨 + 전체 그림(phonics-home-full) 요청 0건 + 조각 요청 있음`, parts.every(Boolean) && !reqUrls.some((u) => /phonics-home-full/.test(u)) && reqUrls.some((u) => /phonics-home-card-/.test(u)), JSON.stringify(parts))
+    r.check(`${name} (m1) 제목 PAUL PHONICS는 DOM에 있되 눈에는 안 보임(sr-only), 옛 파스텔 타일 0`, await page.evaluate(() => { const h = document.querySelector('h1'), b = h.getBoundingClientRect(); return h.textContent.includes('PAUL PHONICS') && b.width <= 1 && b.height <= 1 && document.querySelectorAll('.pw-tile-menu').length === 0 }))
     r.check(`${name} (m1) 스크롤 없이 한 화면(scrollHeight<=innerHeight), 가로 넘침 0`, (await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)) && (await overflow(page)) <= 0, await page.evaluate(() => document.documentElement.scrollHeight + '/' + window.innerHeight))
-    const sizes = await tiles.evaluateAll((l) => l.map((e) => { const i = e.querySelector('img'); return { h: e.getBoundingClientRect().height, ok: !!i && i.complete && i.naturalWidth > 0 } }))
-    r.check(`${name} (m1) 타일마다 높이 168px 이상 + 그림 로드됨`, sizes.length === 3 && sizes.every((x) => x.h >= 167.9 && x.ok), JSON.stringify(sizes))
+    r.check(`${name} (m1) 메뉴 버튼 3개를 눌러 파닉스 모험/말하기/게임 놀이터에 닿고 첫 화면으로 돌아옴`, await menuRoundTrip(page))
     await T(page, 'pwh-open-speak').click()
     const order = await page.locator('[data-testid^="pwp-set-"]').evaluateAll((l) => l.map((e) => e.getAttribute('data-testid').slice(8)))
     r.check(`${name} (m1) 말하기 하위 화면: data-home=speak, 묶음 10개(레벨 2개가 맨 앞, 준비 중은 맨 뒤), 레벨 칩은 여기 없음(게임 놀이터로 이동), 뒤로, 가로 넘침 0`, (await attr(page, 'data-home')) === 'speak' && (await page.locator('[data-testid^="pwp-set-"]').count()) === 10 && (await T(page, 'pwg-level-phonics').count()) === 0 && order.slice(0, 2).join() === 'level-phonics,level-conversation' && order.slice(-2).sort().join() === 'garden,pet' && (await T(page, 'pwh-back').count()) === 1 && (await overflow(page)) <= 0, String(await overflow(page)))
     await T(page, 'pwh-back').click()
-    r.check(`${name} (m1) 뒤로 → 첫 화면`, (await attr(page, 'data-home')) === 'main' && (await tiles.count()) === 3)
-    r.check(`${name} (m1) 첫 화면 높이: 제목·소리 조절·타일 3개·나가기가 스크롤 없이 들어가고 마지막 요소 아래에도 여유가 있음`, await page.evaluate(() => { const b = document.querySelector('[data-testid="pwp-exit"]').getBoundingClientRect().bottom; return b <= window.innerHeight - 16 }))
+    r.check(`${name} (m1) 뒤로 → 첫 화면`, (await attr(page, 'data-home')) === 'main' && (await T(page, 'pwg-open-phonics').count()) === 1)
+    r.check(`${name} (m1) 첫 화면 높이: 그림·카드 3장·소리 조절·나가기가 스크롤 없이 들어가고 마지막 요소 아래에도 여유가 있음`, await page.evaluate(() => { const b = document.querySelector('[data-testid="pwp-exit"]').getBoundingClientRect().bottom; return b <= window.innerHeight - 16 }))
     await T(page, 'pwh-open-play').click()
     r.check(`${name} (m1) 게임 놀이터: data-home=play, 게임 타일 3개(망치/숨은 글자/가게 구경), 레벨 칩 3개, 가로 넘침 0`, (await attr(page, 'data-home')) === 'play' && (await T(page, 'pwg-mode-hammer').count()) === 1 && (await T(page, 'pwg-mode-hidden').count()) === 1 && (await T(page, 'pwg-mode-shelf').count()) === 1 && (await T(page, 'pwg-level-phonics').count()) === 1 && (await overflow(page)) <= 0)
     await T(page, 'pwg-mode-hidden').click()
@@ -257,6 +280,36 @@ export async function run(browser, baseURL) {
     await T(page, 'pwp-root').waitFor({ state: 'visible', timeout: 10000 })
     r.check(`${name} (m1) 게임 그만하기 → 게임 놀이터로 돌아옴`, (await attr(page, 'data-home')) === 'play')
   }, { studentId: TESTER_ONLY })
+
+  // ---- (m2) 첫 화면(1280x800): 전체 그림을 자르지 않고 보여 주고, 그림 속 카드 위에 진짜 버튼 3개 ----
+  await scenario('(m2) 첫 화면 전체 그림 + 투명 버튼', { width: 1280, height: 800 }, async ({ page, name, reqUrls }) => {
+    await openScreen(page)
+    await imagesDone(page)
+    const m = await page.evaluate(() => { const i = document.querySelector('img[src*="phonics-home-full"]'); if (!i) return null; const b = i.getBoundingClientRect(); return { nat: i.naturalWidth, ok: i.complete, l: b.left, t: b.top, w: b.width, h: b.height, vw: window.innerWidth, vh: window.innerHeight } })
+    r.check(`${name} (m2) 전체 그림: 로드됨, naturalWidth 1672, 화면 안에 통째로(잘림 0), 가로세로 비율이 1672/941의 1% 이내`, !!m && m.ok && m.nat === 1672 && m.l >= 0 && m.t >= 0 && m.l + m.w <= m.vw + 0.5 && m.t + m.h <= m.vh + 0.5 && Math.abs(m.w / m.h / (1672 / 941) - 1) <= 0.01, JSON.stringify(m))
+    r.check(`${name} (m2) 이 너비에서는 조각 그림(sign/teacher/card) 요청 0건, 전체 그림 요청 있음`, !reqUrls.some((u) => /phonics-home-(sign|teacher|card-)/.test(u)) && reqUrls.some((u) => /phonics-home-full/.test(u)))
+    const bx = await page.evaluate((rects) => {
+      const i = document.querySelector('img[src*="phonics-home-full"]').getBoundingClientRect()
+      return Object.entries(rects).map(([id, [x0, y0, x1, y1]]) => {
+        const e = document.querySelector(`[data-testid="${id}"]`), b = e.getBoundingClientRect(), c = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2), d = (a, z) => Math.abs(a - z)
+        return { id, label: e.getAttribute('aria-label'), text: e.textContent.trim(), hit: !!c && c.closest('button') === e, dx: d((b.left - i.left) / i.width, x0 / 1672), dy: d((b.top - i.top) / i.height, y0 / 941), dw: d(b.width / i.width, (x1 - x0) / 1672), dh: d(b.height / i.height, (y1 - y0) / 941) }
+      })
+    }, HOME_RECT)
+    r.check(`${name} (m2) 버튼 3개: aria-label=이름, 보이는 글자 없음(숨은 이름뿐), 중심점이 그 버튼으로 해석됨, 그림 대비 위치·크기가 사각형과 0.5% 이내`, bx.length === 3 && bx.every((x) => x.label === HOME_LABEL[x.id] && x.text === x.label && x.hit && x.dx <= 0.005 && x.dy <= 0.005 && x.dw <= 0.005 && x.dh <= 0.005), JSON.stringify(bx))
+    r.check(`${name} (m2) 스크롤 없이 한 화면 + 가로 넘침 0 + 옛 타일 0`, (await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight && document.querySelectorAll('.pw-tile-menu').length === 0)) && (await overflow(page)) <= 0)
+    r.check(`${name} (m2) 투명 버튼 3개를 눌러 파닉스 모험/말하기/게임 놀이터에 닿고 첫 화면으로 돌아옴`, await menuRoundTrip(page))
+  }, { studentId: TESTER_ONLY })
+
+  // ---- (m3) 첫 화면(390x844): 그림 요청이 모두 실패해도 글자 버튼 3개로 계속 쓸 수 있다 ----
+  await scenario('(m3) 그림 실패 → 글자 버튼', { width: 390, height: 844 }, async ({ page, name }) => {
+    await openScreen(page)
+    const ids = Object.keys(HOME_LABEL)
+    const subs = ['소리를 배워요', '듣고 따라 말해요', '놀면서 익혀요']
+    const ready = await waitUntil(async () => (await Promise.all(ids.map((id, i) => T(page, id).textContent().then((t) => (t || '').includes(HOME_LABEL[id]) && (t || '').includes(subs[i]))))).every(Boolean), { timeout: 8000 })
+    r.check(`${name} (m3) 그림 요청 차단: 글자 버튼 3개가 이름 + 한 줄 설명과 함께 보이고 그림 0장`, ready && (await Promise.all(ids.map((id) => T(page, id).isVisible()))).every(Boolean) && (await T(page, 'pwp-root').locator('img').count()) === 0 && (await T(page, 'pwp-exit').isVisible()) && (await T(page, 'pwsfx-root').count()) === 1)
+    r.check(`${name} (m3) 글자 버튼도 44px 이상 + 가로 넘침 0`, (await page.evaluate((l) => l.every((id) => document.querySelector(`[data-testid="${id}"]`).getBoundingClientRect().height >= 43.9), ids)) && (await overflow(page)) <= 0)
+    r.check(`${name} (m3) 글자 버튼 3개를 눌러 각 화면에 닿고 첫 화면으로 돌아옴`, await menuRoundTrip(page))
+  }, { studentId: TESTER_ONLY, setup: (page) => page.route('**/*phonics-home-*', (route) => route.abort()) })
 
   // ---- (r1)(r2) PC: 카드 한 장에서 듣기 → 말하기 → 내 목소리 → 다시 말하기 → 다음 ----
   await scenario('(r1)(r2) 카드 한 장 녹음', { width: 1280, height: 800 }, async ({ page, name }) => {

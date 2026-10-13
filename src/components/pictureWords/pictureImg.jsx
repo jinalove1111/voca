@@ -56,18 +56,24 @@ export function WordStrip({ words, i, said, onPick }) {
 
 export const playEn = (en) => playWordAudio(null, en, { source: 'pictureWords' })
 
-const QUERY = '(prefers-reduced-motion: reduce)'
-export function useReducedMotion() {
-  const [r, setR] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(QUERY).matches)
+function useMedia(q) {
+  const [r, setR] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(q).matches)
   useEffect(() => {
     if (!window.matchMedia) return undefined
-    const m = window.matchMedia(QUERY)
+    const m = window.matchMedia(q)
     const on = () => setR(m.matches)
     m.addEventListener?.('change', on)
     return () => m.removeEventListener?.('change', on)
-  }, [])
+  }, [q])
   return r
 }
+export const useReducedMotion = () => useMedia('(prefers-reduced-motion: reduce)')
+export const useWide = () => useMedia('(min-width: 768px)')
+
+// First-screen art: 1:1 crops of the operator-approved picture (assets/phonics/home/NOTICE.md)
+const HOME = import.meta.glob('../../assets/phonics/home/*.webp', { eager: true, query: '?url', import: 'default' })
+const HD = { full: [1672, 941], sign: [945, 297], teacher: [708, 941], 'card-phonics': [286, 340], 'card-speak': [302, 351], 'card-play': [324, 360] }
+export const HomeImg = ({ k, ...p }) => <img src={HOME[`../../assets/phonics/home/phonics-home-${k}.webp`]} width={HD[k][0]} height={HD[k][1]} alt="" decoding="async" draggable={false} {...p} />
 
 // full-width button colours shared by the phonics and picture-word screens (used as `${BTN} ${W.gray}`)
 export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
@@ -160,7 +166,20 @@ const CSS = `
 .pw-st img,.pw-st b{display:flex;align-items:center;justify-content:center;width:48px;height:48px;margin:0 auto 2px;object-fit:contain;border-radius:10px;background:#FFF4DE}
 .pw-st img{background:none}.pw-st[aria-current=true]{outline:3px solid #3B82F6}
 .pw-st i{position:absolute;top:2px;right:4px;font-style:normal;color:#059669}
+.pw-wrap:has(.pph-w){max-width:1100px}
+.pw-page:has(.pph-n){background:#1B3A24;box-shadow:inset 0 0 0 4px #B75A28}
+.pph-chip{position:fixed;top:4px;right:8px;z-index:5;padding:0 6px;border-radius:99px;background:#FFF3D6;color:#B91C1C;font-size:.65rem;font-weight:900;line-height:16px}
+.pph-w{position:relative;width:min(100%,1100px,calc((100vh - 130px)*1672/941));aspect-ratio:1672/941;margin-inline:auto;overflow:hidden;border-radius:24px}
+.pph-w img{width:100%}.pph-w button{position:absolute;border-radius:6%}
+.pph-w button:nth-of-type(1){left:42.105%;top:37.407%;width:17.105%;height:36.132%}
+.pph-w button:nth-of-type(2){left:59.569%;top:36.663%;width:18.062%;height:37.301%}
+.pph-w button:nth-of-type(3){left:78.110%;top:36.132%;width:19.378%;height:38.257%}
+.pph-w button:hover,.pph-w button:active{background:#fff4;box-shadow:inset 0 0 0 3px #fff}
+.pph-s{width:100%;max-width:358px;margin-inline:auto}.pph-t{width:260px;max-width:100%;margin-inline:auto;border-radius:20px}
+.pph-row{display:grid;grid-template-columns:repeat(3,minmax(0,109px));justify-content:center;gap:8px;align-items:center}
+.pph-row button{min-width:44px;min-height:44px;border-radius:14px}.pph-row button:active{transform:scale(.97);filter:brightness(1.1)}
+.pph-w button:focus-visible,.pph-row button:focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #2563EB}
 @media(min-width:768px){.pw-wrap:has(.pw-cls-card){max-width:45rem}.pw-cls{min-height:420px}.pw-cls-teacher{height:380px}}
-@media (prefers-reduced-motion: reduce){[class*=pw-],[class*=pbp-],[class*=pwt-]{animation:none!important;transition:none!important}.pwt-train.pwt-depart{visibility:hidden}.pw-spark-star{display:none}}
+@media (prefers-reduced-motion: reduce){[class*=pw-],[class*=pbp-],[class*=pwt-],[class*=pph-]{animation:none!important;transition:none!important}.pwt-train.pwt-depart{visibility:hidden}.pw-spark-star{display:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>

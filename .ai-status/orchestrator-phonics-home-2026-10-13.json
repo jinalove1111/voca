@@ -1,0 +1,53 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PAUL PHONICS 첫 화면을 운영자 승인 이미지로 교체 (275차)",
+  "task_id": "paul-phonics-home-approved-image-2026-10-13",
+  "task": "승인 이미지로 첫 화면 구성, 그림 속 메뉴 3개를 실제 버튼으로 연결, 390px/PC 반응형, 이미지 실패 시 글자 메뉴 대체",
+  "status": "completed_awaiting_operator_review",
+  "progress": 90,
+  "updated_at": "2026-10-13",
+  "branch": "feat/paul-town-hybrid-world-2026-10-10",
+  "files_owned": [
+    "scripts/phonics/deriveHomeArt.py",
+    "src/assets/phonics/home/",
+    "src/components/pictureWords/PictureWordPractice.jsx",
+    "src/components/pictureWords/pictureImg.jsx",
+    "scripts/testBundleBudget.mjs",
+    "scripts/testPhonicsGames.mjs",
+    "scripts/testPictureWords.mjs",
+    "tests/e2e/pictureWordPractice.spec.mjs",
+    "tests/e2e/phonicsGames.spec.mjs",
+    "handoff.md"
+  ],
+  "approved_image": {
+    "path": "c:\\Users\\jinal\\Dropbox\\PC (4)\\pic3\\a25b0d9d-4f13-4dd0-ac71-82f35f8b3d1f.png",
+    "size": "1672x941",
+    "sha256": "9556d23b1b04dc937770a6fd07dd9072982421dee6cde39f1ab165a9423d9221",
+    "note": "the file name given in the order (a_bright_colorful_cartoon_3d_styled_education_ap.png) was not found; this supplied path was used. Original kept outside the repo, not modified."
+  },
+  "derived": "1:1 crops + WebP only: full 1672x941, sign 945x297, teacher 708x941, cards 286x340 / 302x351 / 324x360",
+  "layouts": {
+    "wide_768_up": "whole picture, transparent real buttons over the painted cards (percent positions from the script)",
+    "narrow": "sign, teacher scene, three card crops as buttons in one row; fits 390x844 without scrolling; enlargement at 3x density <= 1.15",
+    "image_failure": "three text buttons with the same testids"
+  },
+  "bundle": "2.191 -> 2.195 MB of 2.2 MB; about 5 KB headroom left; budget number unchanged",
+  "verification": {
+    "passed": {
+      "build": "OK (dummy env)",
+      "static": "testBundleBudget 34, testPictureWords 785, testPictureWordGames 142, testPhonicsGames 428, testPhonicsProgress 111, testLazyChunkGuards 116, testPaulSpriteAssets 125, testQaGate 17, testStudentPathContracts, testKeySentenceFlow, testRegistryCoverage",
+      "browser": "pictureWordPractice 168/0, phonicsGames 304/0, pictureWordGames 151/0 — one at a time",
+      "visual": "390 / 820 / 1280 screenshots viewed, hit areas outlined; copies in C:\\Users\\jinal\\voca-review\\2026-10-13-phonics-home"
+    },
+    "failed_preexisting": "testTownShop 85/1 (unrelated, not fixed)",
+    "not_run": "real device, iOS, deployed Preview behind login, townProto25d S37, Speaking/Writing/Voca/Town browser specs, verify:all, phonicsProgress and phonicsReview specs this round"
+  },
+  "blocked_on_operator": [
+    "디자인 확인 (Preview에서만 적용, Production 금지)",
+    "번들 여유 약 5 KB — 다음 화면 작업 전 축소 또는 예산 기준 재정의 필요",
+    "첫 화면(조끼·나비넥타이)과 학습 화면(운동복)의 선생님 차림 통일 여부",
+    "더 큰 원본 이미지(1672px 초과)가 있는지",
+    "학습 화면의 임시 대체 3종(가리키는 자세, 교실 배경, 간판) 그림 파일"
+  ],
+  "not_done": "승인 이미지 수정·재생성·확대 0, DB/SQL/Production/main/다른 워크트리 0"
+}
