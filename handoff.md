@@ -1,4 +1,30 @@
 # Paul Easy Voca — Handoff
+## 278차 (2026-10-14): PAUL PHONICS 소리 풍선(Sound Bubble Pop) 화면을 운영자 승인 디자인(v3)으로 재설계 — 기능·테스트 불변
+- **상태 한 줄**: 운영자가 승인한 디자인 그림 `c:\Users\jinal\Dropbox\PC (4)\pic3\c0083e70-5018-42e5-ad08-0cf5da90137c.png`(1586×992, sha256 `fb3228ee…5181`, 2026-10-14)을 기준으로 소리 풍선 화면의 **UI만** 바꿨다(그림은 참조만, 자르거나 번들에 넣지 않음). 정답 판정·오디오·힌트·기록(`phonicsAttempt`)·진행률 로직 변경 0. 승인된 첫 화면(275차) 변경 0. 브랜치 `design/phonics-bubble-redesign-2026-10-14`.
+- **화면**: 상단 `✕ 나가기`(`pha-quit`, 풍선 게임에서만 위로 이동) / `Book n · Unit n`(`pbp-where`) / 진행률(초록 막대) → 우드 테두리 초록 칠판(`.pbp-board`): 승인된 첫 화면 선생님 조각(`phonics-home-teacher.webp`, 비율 유지, 상반신 영역 표시) + "잘 듣고 **소리**를 골라봐!" + 기존 안내 문장 → 하늘색 큰 `🔊 다시 듣기` → 선택 카드(흰/민트/하늘/살구, `pw-c0..3`, 2개 160px·4개 2×2 112px, "다른 소리"에 🎧 pseudo) → 밑줄 "힌트 보기" → 정답 뒤 기존 분홍 `듣기 단어` 카드(뜻을 카드 안으로) + 초록 칭찬 문구 + 네이비 `다음`. 소리 조절(`SfxControl`)은 풍선 게임에서만 맨 아래. 오답: "괜찮아요. 다시 들어 볼까요?".
+- **테스트 규칙과의 접점(테스트 수정 0)**: ① `testPhonicsGames` "게임 컴포넌트에 Unit 라벨 문자열 없음"(253차) — Unit 이름은 허브가 만든다는 규칙이라 `UnitHub`가 `ctx.where`를 넘기고 화면은 표시만 한다. ② 브라우저 스펙 "정답 전 그림 0개"는 `<img>` 개수를 세므로 장식용 선생님은 `background-image`(`homeUrl('teacher')`)로 넣었다. ③ 257차 "듣기 단어 카드 분홍 테두리" 고정 — 승인 그림도 분홍 카드라 그대로. ④ `testPictureWordGames` "object-fit:cover 금지" — 선생님 상자는 `aspect-ratio`+`background-size`로 비율 유지.
+- **파일**: `src/components/phonics/SoundBubblePop.jsx`, `src/components/phonics/PhonicsAdventure.jsx`(나가기 위/소리 조절 아래, `pha-b`), `src/components/phonics/UnitHub.jsx`(`where` 1줄), `src/components/pictureWords/pictureImg.jsx`(`homeUrl` + `.pbp-*` CSS 블록).
+- **검증 — 통과(정적, dummy-env build)**: build OK. `testPhonicsGames` 428, `testPictureWords` 785, `testPictureWordGames` 142, `testPhonicsProgress` 111, `testLazyChunkGuards` 116, `testBundleBudget` 34, `testStudentPathContracts` 61, `testQaGate` 17.
+- **검증 — 통과(브라우저, 최종 빌드, 1종씩)**: `phonicsGames` 304/0(정답·오답·힌트·다음·Book 1 완주·터치 포함), `pictureWordGames` 151/0, `pictureWordPractice` 168/0. 미mock 요청 0.
+- **캡처**: `C:\Users\jinal\voca-review\2026-10-14-bubble-v3\` — `m390-1-start`…`6-four-options`, `pc1280-1`…`6`. 390×844 전 상태 스크롤 없음, 가로 넘침·44px 미만 버튼·깨진 그림·페이지 오류 0. 이전 시안 캡처는 `2026-10-14-bubble-redesign\`(v1)·`2026-10-14-bubble-v2\`.
+- **번들**: 2,198,844 / 2,200,000 B(**여유 1,156 B**). 새 라이브러리·base64·새 이미지 0. 다음 UI 작업 전 여유 확보(277차 ①~③) 결정이 필요하다.
+- **미완료/보류**: 실기기·iOS, 배포 Preview의 로그인 뒤 화면 직접 확인(Vercel SSO), 승인 그림 속 선생님 상반신 전용 이미지(없어서 승인 조각을 그대로 씀), `verify:all`.
+- **하지 않은 것**: 테스트·데이터·오디오·기록 로직 변경 0. 첫 화면·승인 이미지 변경 0. DB·SQL·`.env`·Production·main·`C:\voca` 0.
+
+## 277차 (2026-10-14): 디자인 A — 390px 실제 브라우저 확인 + Preview 확인 시도 + 번들 여유 확보 방법 검토(코드 변경 0)
+- **상태 한 줄**: 로컬 빌드를 390×844 터치 브라우저로 직접 눌러 첫 화면·Book 1 학습·녹음/재생·게임 진입을 캡처로 확인했다. 배포된 Preview 화면은 Vercel 로그인이 없어 **직접 보지 못했다**. 번들은 측정만 했고 아무것도 바꾸지 않았다.
+- **실제 브라우저 확인(로컬 dummy-env 빌드, mock 네트워크, 390×844 터치, 2배 밀도)**: 11개 화면 캡처 — 첫 화면(`data-home="main"`), 파닉스 책장, Book 1, Unit 1 허브, 학습 카드(`bag`), 녹음 중, 녹음 완료, 내 목소리 듣기(재생 호출 확인), 말하기 메뉴, 게임 놀이터, 알파벳 망치. 전 화면 가로 넘침 0, 44px 미만 버튼 0, 깨진 그림 0, 페이지 오류 0. 폰 폭에서는 조각 5장만 받고 전체 그림(`phonics-home-full`)은 받지 않았다. 학습 카드에서 화면 오른쪽 밖 버튼 1개는 가로로 미는 단어 줄의 다섯 번째 칩(`jam`)이다(의도된 스크롤).
+- **캡처 위치**: `C:\Users\jinal\voca-review\2026-10-14-phonics-390\` (`01-home.png` … `11-game-hammer.png`).
+- **Preview 확인 — 한 것**: `pw-preview`(`e0fcadf7`)와 `verify/phonics-home-2026-10-14`(`f85efb90`) 둘 다 GitHub의 Vercel 배포 상태가 success. `pw-preview`의 트리는 `e4e0b246`과 같고, 검증 브랜치는 거기에 문서 2개만 더한 것이라 **앱 코드는 세 곳이 같다**.
+- **Preview 확인 — 못 한 것**: 두 주소 모두 Vercel SSO로 302. 이 PC의 Chrome은 Vercel에 로그인돼 있지 않고 Vercel CLI도 없다. 로그인은 에이전트가 하지 않는다. 따라서 **배포본에서 디자인 A가 실제로 그려지는 것은 운영자가 직접 열어 봐야 확정된다**(로그인 뒤 화면은 실제 학생 DB에 닿으므로 에이전트가 로그인하지 않는 것이 맞다).
+- **번들 검토(측정만, 미적용)**: 예산은 "pdf·xlsx·그림 검토 패널을 뺀 모든 JS의 압축 전 합계"(2,194,504 / 2,200,000 B)다. 그림은 이미 JS 밖이고(`assetsInlineLimit: 0`), **청크를 더 나눠도 합계는 줄지 않는다**(나눌수록 조금 늘어난다). 실제로 줄이는 방법:
+  - ① 빌드 대상 `es2022`: 스크래치 빌드 실측 2,174,276 B(**−20,228 B**), 코드 변경은 `vite.config.js` 한 줄. 단 오래된 Safari(15 이하 일부)에서 동작하지 않을 수 있어 **학생 기기 iOS 버전 확인이 먼저**다.
+  - ② 관리자 전용 청크를 예산에서 제외: `AdminScreen` 346 KB + `PhonicsReviewPanel` 17 KB + `PhonicsProgressPanel` 6 KB. 학생이 받지 않는 코드라 예산 취지에 맞지만 **기준을 바꾸는 일이라 운영자 결정**(266차부터 대기).
+  - ③ `supabase/functions/grade-writing-answers/pipeline.js`(35 KB 원본)를 `src/utils/spellingReview*.js` 두 곳이 가져다 쓴다 — 쓰는 함수만 남도록 정리하면 수 KB(266차 추정 8.8 KB). 관리자 철자 검토 경로라 해당 verify 필요.
+  - ④ 큰 정적 데이터(`grammarUnits` 245 KB 등)를 JSON 파일로 빼 런타임에 받기: 효과가 가장 크지만 로딩이 비동기로 바뀌어 위험이 크다 — 지금은 권하지 않는다.
+- **권장 순서**: ②(결정만 필요, 코드 위험 0) → ③(작은 정리) → ①(기기 확인 뒤). 기능 삭제 없음.
+- **하지 않은 것**: 소스·에셋·테스트·설정 변경 0. 승인된 선생님 이미지 그대로. `pw-preview` 갱신 0. DB·SQL·`.env`·Production·main·`C:\voca` 0. 스크래치의 임시 빌드 폴더 2개(`dist-esnext`, `dist-es2022`)는 삭제 명령이 안전 게이트에 막혀 세션 스크래치에 남아 있다(저장소 밖).
+
 ## 276차 (2026-10-14): PAUL PHONICS 디자인 A 최종 확정 — 275차 첫 화면 재검증(코드 변경 0)
 - **상태 한 줄**: 운영자가 디자인 A(275차 승인 그림)를 최종으로 확정했다. 이미 구현된 첫 화면을 다시 만들지 않고 조사·재검증만 했다. 고칠 곳이 나오지 않아 **소스 코드 변경은 0건**이고, 이 기록과 `.ai-status` 파일만 추가했다.
 - **작업 위치**: `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `verify/phonics-home-2026-10-14`(`feat/paul-town-hybrid-world-2026-10-10` @ `e4e0b246`에서 분기).
