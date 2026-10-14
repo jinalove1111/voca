@@ -24,10 +24,9 @@ export const PwProgress = ({ n, total, label, testid = 'pw-progress' }) => (
   </div>
 )
 
-// Lesson scene. Wall/shelf/window/rug/sign are CSS-only TEMPORARY STAND-INS until the operator supplies art. Teacher: STANDING image, a temporary substitute for the missing pointing pose (assets/phonics/teacher/NOTICE.md).
+// Lesson scene. Chalkboard wall is CSS-only. Teacher: STANDING image, a temporary substitute for the missing pointing pose (assets/phonics/teacher/NOTICE.md).
 export const ClassScene = ({ line, bubble, children }) => (
   <div data-testid="pw-cls" className="pw-cls">
-    <span className="pw-cls-win" /><span className="pw-cls-shelf">{[30, 24, 34, 26, 32, 22].map((h, k) => <i key={k} style={{ height: h }} />)}</span>
     <img src={teacherStand} width={120} height={290} alt="" draggable={false} className="pw-cls-teacher" />
     <div className="pw-cls-main">
       <p data-testid="pw-cls-line" className="pw-cls-line">{line}{bubble}</p>
@@ -174,18 +173,13 @@ const CSS = `
 .pw-sign span{margin-left:4px;padding:0 6px;border-radius:99px;background:#FFF3D6;color:#B91C1C;font-size:.7rem;vertical-align:middle}
 .pw-back{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;background:#fff;font-size:1.5rem;font-weight:900}
 .pw-chip{padding:6px 12px;border-radius:99px;background:#fff}.pw-chip .pw-bar{flex:none;width:2.5rem}
-.pw-cls{position:relative;display:grid;grid-template-columns:34% minmax(0,1fr);gap:6px;align-items:end;min-height:330px;padding:8px 8px 6px;overflow:hidden;border-radius:24px;background:linear-gradient(#FFF7E8 72%,#EBD9BC 72%)}
-.pw-cls::after{content:"";position:absolute;left:30%;right:-8%;bottom:-20px;height:100px;border-radius:50%;background:#D5E5F1}
-.pw-cls-win{position:absolute;right:10px;top:10px;box-sizing:border-box;width:104px;height:120px;border:5px solid #fff;border-radius:99px 99px 0 0;background:radial-gradient(ellipse at 25% 125%,#CFE6C8 48%,#0000 49%),radial-gradient(ellipse at 95% 130%,#BFDDB9 52%,#0000 53%),linear-gradient(#DCEEFB,#F1F8FC)}
-.pw-cls-win::after{content:"";position:absolute;left:58%;bottom:22px;width:16px;height:26px;background:#E4CFC6;clip-path:polygon(0 100%,0 38%,50% 0,100% 38%,100% 100%)}
-.pw-cls-shelf{position:absolute;left:8px;top:24px;display:flex;align-items:flex-end;gap:3px;width:36%;height:64px;border-bottom:4px solid #DCC8A6}
-.pw-cls-shelf i{flex:1;max-width:14px;background:#B9D8C6}.pw-cls-shelf i:nth-child(3n+2){background:#EBC0C6}.pw-cls-shelf i:nth-child(3n){background:#B4D0E6}
+.pw-cls{position:relative;display:grid;grid-template-columns:34% minmax(0,1fr);gap:6px;align-items:end;min-height:330px;padding:8px 8px 6px;overflow:hidden;border:3px solid #B78B4A;border-radius:24px;background:#2E6B4A}
 .pw-cls-teacher{position:relative;z-index:1;width:100%;height:290px;object-fit:contain;object-position:center bottom}
 .pw-cls-main{position:relative;z-index:1;align-self:start;min-width:0}
 .pw-cls-line{position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 10px;padding:4px 6px 4px 12px;border-radius:18px;background:#fff;font-size:.95rem;font-weight:900;line-height:1.25;word-break:keep-all}
 .pw-cls-line::before{content:"";position:absolute;left:-6px;bottom:16px;width:12px;height:12px;background:#fff;transform:rotate(45deg)}
 .pw-spk{flex:none;display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;font-size:1.4rem}
-.pw-bub{width:44px;height:44px}.pw-bub::before{content:"🔊"}
+.pw-bub{width:44px;height:44px;background:#2563EB}.pw-bub::before{content:"🔊"}
 .pw-cls-box{max-width:25rem;padding:8px;border:3px solid #BFDBFE;border-radius:22px;background:#fff}
 .pw-cls-box .pw-card{width:100%;padding:0;border:0;background:none;box-shadow:none}.pw-cls-box .pw-pic{padding:4px;box-shadow:none}
 .pw-big{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:76px;padding:8px;border-radius:20px;font-weight:900;line-height:1.2;word-break:keep-all}
@@ -207,7 +201,9 @@ const CSS = `
 .pph-row{display:grid;grid-template-columns:repeat(3,minmax(0,109px));justify-content:center;gap:8px;align-items:center}
 .pph-row button{min-width:44px;min-height:44px;border-radius:14px}.pph-row button:active{transform:scale(.97);filter:brightness(1.1)}
 .pph-w button:focus-visible,.pph-row button:focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #2563EB}
-@media(min-width:768px){.pw-wrap:has(.pw-cls-card){max-width:45rem}.pw-cls{min-height:420px}.pw-cls-teacher{height:380px}}
+.pw-page:has(.pw-cls-card){background:#FFF8E7}.pw-wrap:has(.pw-cls-card) .pw-sign{display:none}
+.pw-cls-card [data-testid=pwp-rec-record]{background:#3DBF9F;color:#064E3B}.pw-cls-card [data-testid=pwp-rec-play]{background:#F49AB6;color:#fff}
+@media(min-width:768px){.pw-wrap:has(.pw-cls-card){max-width:52rem}.pw-cls{min-height:420px}.pw-cls-teacher{height:380px}}
 @media (prefers-reduced-motion: reduce){[class*=pw-],[class*=pbp-],[class*=pwt-],[class*=pph-]{animation:none!important;transition:none!important}.pwt-train.pwt-depart{visibility:hidden}.pw-spark-star{display:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>
