@@ -1,0 +1,24 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PAUL PHONICS 학습 화면을 승인 그림 123.png와 시각적으로 일치하게 재구성(교실 배경·가리키는 폴 선생님 1:1 잘라내기) — 기능 불변",
+  "task_id": "paul-phonics-lesson-123-2026-10-14",
+  "status": "committed_5148cc55_d5ccd1b0_dfe10be8_deploying_preview_operator_visual_check_pending",
+  "progress": 95,
+  "updated_at": "2026-10-14",
+  "branch": "design/phonics-lesson-123-2026-10-14",
+  "base": "fba8090e (design/phonics-lesson-redesign-2026-10-14 tip)",
+  "approved_design": { "path": "c:\\Users\\jinal\\Dropbox\\PC (4)\\pic3\\123.png", "size": "1586x992", "sha256": "f4c5e2f13585450b60093b30002a824894e6c6f356849c13e4bddf0e620dfcd4" },
+  "assets": "src/assets/phonics/lesson/phonics-lesson-scene.webp (75,100,708,806 → 633x706, 61,088 B) + phonics-lesson-wall.webp (1486,100,1494,806 → 8x706, 412 B); scripts/phonics/deriveLessonArt.py (sha256 검증, 1:1 crop, WebP q90); NOTICE.md/LICENSE.txt. 리페인트·리샘플 0. 구 phonics-teacher-*.webp 는 미참조 상태로 보존",
+  "files_changed": ["src/components/pictureWords/pictureImg.jsx", "scripts/testBundleBudget.mjs (PHONICS_LESSON_FILE_RE + main-chunk 0건 검사)", "tests/e2e/pictureWordPractice.spec.mjs ((c1) naturalWidth 514→633, h 280~420, 로드 대기 1줄)"],
+  "implementer": "Sonnet sub-agent lesson-123, 3 passes",
+  "verification": {
+    "build": "dummy-env OK, 0 warnings",
+    "static": "testPictureWords 785, testPictureWordGames 142, testPhonicsGames 428, testPhonicsProgress 111, testLazyChunkGuards PASS, testBundleBudget PASS, testPaulSpriteAssets PASS",
+    "browser": "pictureWordPractice 168/0 (final build), phonicsGames 304/0, pictureWordGames 151/0 (2nd-pass build, CSS-only diff since), unmocked 0",
+    "screenshots": "C:\\Users\\jinal\\voca-review\\2026-10-14-lesson-123 (m390-1..4, pc1280-1..4, compare-390-vs-123.png, compare-1280-vs-123.png, metrics.json)"
+  },
+  "bundle": "2,198,698 of 2,200,000 B (1,302 B left)",
+  "known_differences": "시안의 칠판 낙서(별·책)는 카드 뒤 영역이라 잘라낼 수 없어 없음; 손끝 x709~720 은 카드 경계에서 잘림; 이전/다음·단어 줄·안내 문구는 기능/테스트 계약으로 유지; 모바일은 선생님 왼쪽(엄지손·창문) 일부가 cover 로 잘림",
+  "not_touched": "LessonRecorder.jsx, PictureWordPractice.jsx, 녹음/오디오/판정 로직, 첫 화면, DB, SQL, .env, Production, main, pw-preview, C:\\voca",
+  "next": "운영자 승인 → 소커밋(assets/script → 코드 → 테스트 → 문서) → push → pw-preview merge → Vercel"
+}
