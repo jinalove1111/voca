@@ -1,7 +1,8 @@
 // Shared by the practice screen and the games chunk: picture lookup, neutral picture, reduced-motion hook, game CSS.
 import React, { useEffect, useRef, useState } from 'react'
 import { playWordAudio } from '../../utils/speech'
-import teacherStand from '../../assets/phonics/teacher/phonics-teacher-stand.webp'
+import lessonScene from '../../assets/phonics/lesson/phonics-lesson-scene.webp'
+import lessonWall from '../../assets/phonics/lesson/phonics-lesson-wall.webp'
 
 const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, query: '?url', import: 'default' })
 export const imgUrl = (asset) => IMG[`../../assets/pictureWords/${asset}.webp`]
@@ -24,10 +25,10 @@ export const PwProgress = ({ n, total, label, testid = 'pw-progress' }) => (
   </div>
 )
 
-// Lesson scene. Chalkboard wall is CSS-only. Teacher: STANDING image, a temporary substitute for the missing pointing pose (assets/phonics/teacher/NOTICE.md).
+// Lesson scene: left = 1:1 crop of the approved picture (assets/phonics/lesson/NOTICE.md), right = 1px wall strip repeated so the chalkboard continues.
 export const ClassScene = ({ line, bubble, children }) => (
-  <div data-testid="pw-cls" className="pw-cls">
-    <img src={teacherStand} width={120} height={290} alt="" draggable={false} className="pw-cls-teacher" />
+  <div data-testid="pw-cls" className="pw-cls" style={{ backgroundImage: `url(${lessonWall})` }}>
+    <img src={lessonScene} width={633} height={706} alt="" decoding="async" draggable={false} className="pw-cls-teacher" />
     <div className="pw-cls-main">
       <p data-testid="pw-cls-line" className="pw-cls-line">{line}{bubble}</p>
       {children}
@@ -90,6 +91,8 @@ export const ROLE = {
   listen: { strong: 'bg-sky-500 text-white', soft: 'bg-sky-100 text-sky-800' },
 }
 
+// .pw-cls-card .max-w-md targets the recorder's button grid wrapper in LessonRecorder.jsx (mx-auto grid max-w-md grid-cols-2)
+// lesson card: stack word/meaning above the speaker on phones (.pw-cls-box>.mt-1), row again at >=768px
 const CSS = `
 .pw-tile-menu{display:flex;align-items:center;gap:12px;width:100%;min-height:176px;padding:12px;text-align:left;border:3px solid var(--tm-edge);border-radius:24px;background:var(--tm-bg);box-shadow:0 5px 0 var(--tm-edge);transition:transform .1s ease,box-shadow .1s ease}
 .pw-tile-menu:active{transform:translateY(3px);box-shadow:0 2px 0 var(--tm-edge)}
@@ -171,16 +174,17 @@ const CSS = `
 .pw-sign::before{content:"👑";position:absolute;left:50%;top:-24px;translate:-50%;line-height:1}
 .pw-sign::after{content:"";position:absolute;left:16%;right:16%;top:-14px;height:11px;border:solid #6B4423;border-width:0 3px}
 .pw-sign span{margin-left:4px;padding:0 6px;border-radius:99px;background:#FFF3D6;color:#B91C1C;font-size:.7rem;vertical-align:middle}
-.pw-back{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;background:#fff;font-size:1.5rem;font-weight:900}
+.pw-back{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;background:#fff;font-size:1.5rem;font-weight:900;color:#8D4F27}
 .pw-chip{padding:6px 12px;border-radius:99px;background:#fff}.pw-chip .pw-bar{flex:none;width:2.5rem}
-.pw-cls{position:relative;display:grid;grid-template-columns:34% minmax(0,1fr);gap:6px;align-items:end;min-height:330px;padding:8px 8px 6px;overflow:hidden;border:3px solid #B78B4A;border-radius:24px;background:#2E6B4A}
-.pw-cls-teacher{position:relative;z-index:1;width:100%;height:290px;object-fit:contain;object-position:center bottom}
-.pw-cls-main{position:relative;z-index:1;align-self:start;min-width:0}
-.pw-cls-line{position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 10px;padding:4px 6px 4px 12px;border-radius:18px;background:#fff;font-size:.95rem;font-weight:900;line-height:1.25;word-break:keep-all}
+.pw-cls{position:relative;display:grid;grid-template-columns:46% minmax(0,1fr);gap:0;align-items:stretch;min-height:330px;overflow:hidden;border-radius:24px;background-repeat:repeat-x;background-size:auto 100%}
+.pw-cls-teacher{display:block;width:100%;height:100%;min-height:330px;object-fit:cover;object-position:100% 100%}
+.pw-cls-main{position:relative;z-index:1;display:flex;flex-direction:column;min-width:0;padding:4.4% 4% 3% 0}
+.pw-cls-line{position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 3% -11%;padding:4px 6px 4px 12px;border-radius:18px;background:#fff;font-size:.95rem;font-weight:900;line-height:1.25;word-break:keep-all}
 .pw-cls-line::before{content:"";position:absolute;left:-6px;bottom:16px;width:12px;height:12px;background:#fff;transform:rotate(45deg)}
 .pw-spk{flex:none;display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;font-size:1.4rem}
-.pw-bub{width:44px;height:44px;background:#2563EB}.pw-bub::before{content:"🔊"}
-.pw-cls-box{max-width:25rem;padding:8px;border:3px solid #BFDBFE;border-radius:22px;background:#fff}
+.pw-bub{width:44px;height:44px;background:#047CF1}.pw-bub::before{content:"🔊"}
+.pw-cls-box{align-self:flex-start;width:100%;max-width:25rem;padding:8px;border:3px solid #BFDBFE;border-radius:22px;background:#fff}
+.pw-cls-box>.mt-1{flex-direction:column;gap:2px}.pw-cls-box [data-testid=pwp-word]{font-size:clamp(1.25rem,6.5vw,1.875rem)}
 .pw-cls-box .pw-card{width:100%;padding:0;border:0;background:none;box-shadow:none}.pw-cls-box .pw-pic{padding:4px;box-shadow:none}
 .pw-big{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:76px;padding:8px;border-radius:20px;font-weight:900;line-height:1.2;word-break:keep-all}
 .pw-strip{display:flex;gap:8px;width:fit-content;max-width:100%;margin-inline:auto;padding:6px 4px 8px;overflow-x:auto;scroll-snap-type:x proximity}
@@ -201,9 +205,9 @@ const CSS = `
 .pph-row{display:grid;grid-template-columns:repeat(3,minmax(0,109px));justify-content:center;gap:8px;align-items:center}
 .pph-row button{min-width:44px;min-height:44px;border-radius:14px}.pph-row button:active{transform:scale(.97);filter:brightness(1.1)}
 .pph-w button:focus-visible,.pph-row button:focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #2563EB}
-.pw-page:has(.pw-cls-card){background:#FFF8E7}.pw-wrap:has(.pw-cls-card) .pw-sign{display:none}
-.pw-cls-card [data-testid=pwp-rec-record]{background:#3DBF9F;color:#064E3B}.pw-cls-card [data-testid=pwp-rec-play]{background:#F49AB6;color:#fff}
-@media(min-width:768px){.pw-wrap:has(.pw-cls-card){max-width:52rem}.pw-cls{min-height:420px}.pw-cls-teacher{height:380px}}
+.pw-page:has(.pw-cls-card){background:#FDFAED}.pw-wrap:has(.pw-cls-card) .pw-sign{display:none}
+.pw-cls-card [data-testid=pwp-rec-record]{background:#2EBDA2;color:#fff}.pw-cls-card [data-testid=pwp-rec-play]{background:#FEA4B9;color:#fff}
+@media(min-width:768px){.pw-wrap:has(.pw-cls-card){max-width:64rem}.pw-cls{grid-template-columns:44.1% minmax(0,1fr);min-height:0}.pw-cls-box{max-width:80%}.pw-cls-box .pw-pic{width:min(100%,20rem);margin-inline:auto}.pw-cls-box>.mt-1{flex-direction:row;gap:8px}.pw-cls-line{font-size:1.35rem;padding:10px 10px 10px 22px}.pw-cls-box [data-testid=pwp-word]{font-size:2.25rem}.pw-cls-card .pw-big{min-height:96px;font-size:1.4rem}.pw-cls-card .max-w-md{max-width:40rem}}
 @media (prefers-reduced-motion: reduce){[class*=pw-],[class*=pbp-],[class*=pwt-],[class*=pph-]{animation:none!important;transition:none!important}.pwt-train.pwt-depart{visibility:hidden}.pw-spark-star{display:none}}
 `
 export const GameStyle = () => <style>{CSS}</style>

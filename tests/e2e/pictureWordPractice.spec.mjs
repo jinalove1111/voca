@@ -468,8 +468,9 @@ export async function run(browser, baseURL) {
     const cls = (id) => T(page, id).evaluate((e) => e.className)
     const stepNow = () => T(page, 'pwp-card').getAttribute('data-step')
     const line = async () => ((await T(page, 'pw-cls-line').textContent()) || '').trim()
+    await T(page, 'pw-cls').locator('img.pw-cls-teacher').evaluate((i) => (i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r })))
     const t = await T(page, 'pw-cls').locator('img.pw-cls-teacher').evaluate((i) => { const b = i.getBoundingClientRect(); return { nat: i.naturalWidth, w: Math.round(b.width), h: Math.round(b.height), ok: i.complete, alt: i.getAttribute('alt') } })
-    r.check(`${name} (c1) 선생님 이미지 로드(naturalWidth 514 = 원본 해상도) + 폰에서 세로 280~300px로 표시 + 장식(alt 빈 값)`, (await T(page, 'pw-cls').isVisible()) && t.ok && t.nat === 514 && t.h >= 280 && t.h <= 300 && t.alt === '', JSON.stringify(t))
+    r.check(`${name} (c1) 선생님·교실 장면 그림(승인 그림 1:1 잘라내기, naturalWidth 633) 로드 + 폰에서 세로 280px 이상 + 장식(alt 빈 값)`, (await T(page, 'pw-cls').isVisible()) && t.ok && t.nat === 633 && t.h >= 280 && t.h <= 420 && t.alt === '', JSON.stringify(t))
     const bx = (id) => T(page, id).boundingBox()
     const [tb, pc, rec, ply, sc] = [await T(page, 'pw-cls').locator('img.pw-cls-teacher').boundingBox(), await bx('pwp-picture-card'), await bx('pwp-rec-record'), await bx('pwp-rec-play'), await bx('pw-cls')]
     const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
