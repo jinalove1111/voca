@@ -1,0 +1,33 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PAUL PHONICS 그림 단어 듣기·따라 말하기 화면을 운영자 승인 디자인(123.png)으로 재설계 — UI만",
+  "task_id": "paul-phonics-lesson-redesign-2026-10-14",
+  "status": "approved_by_operator_committed_code_0bc0f55e_deploying_preview",
+  "progress": 95,
+  "updated_at": "2026-10-14",
+  "branch": "design/phonics-lesson-redesign-2026-10-14",
+  "base": "8296ab28 (design/phonics-bubble-redesign-2026-10-14 tip)",
+  "approved_design": {
+    "path": "c:\\Users\\jinal\\Dropbox\\PC (4)\\pic3\\123.png",
+    "size": "1586x992",
+    "sha256": "f4c5e2f13585450b60093b30002a824894e6c6f356849c13e4bddf0e620dfcd4",
+    "note": "reference only; not cropped, not bundled. 명령서의 wide_bright_cartoon_illustration_style_education.png 는 pic3 에 없음 — 운영자가 같이 전달한 123.png 를 시안으로 사용"
+  },
+  "teacher": "기존 승인 원본 phonics-teacher-stand.webp 재사용(얼굴·모자·로고 불변). 시안의 가리키는 자세 에셋은 없어 서 있는 자세 유지. 의상 타사 브랜드 표식은 274/276차 미결 그대로",
+  "files_owned": [
+    "src/components/pictureWords/pictureImg.jsx",
+    ".ai-status/orchestrator-phonics-lesson-redesign-2026-10-14.json"
+  ],
+  "implementer": "Sonnet sub-agent (lesson-redesign) — 1 file, +6/-10",
+  "verification": {
+    "build": "dummy-env build OK, 0 warnings",
+    "static": "testPictureWords 785, testPictureWordGames 142, testPhonicsGames 428, testPhonicsProgress 111, testLazyChunkGuards 116, testBundleBudget 34",
+    "browser": "pictureWordPractice 168/0 (unmocked 0, mock errors 0); phonicsGames / pictureWordGames: see handoff",
+    "screenshots": "C:\\Users\\jinal\\voca-review\\2026-10-14-lesson-v3 (m390-1..4, pc1280-1..4, metrics.json); before = C:\\Users\\jinal\\voca-review\\2026-10-13-lesson-screen-v2"
+  },
+  "bundle": "2,198,053 of 2,200,000 B (1,947 B left; was 2,198,844 → -791 B)",
+  "tests_changed": 0,
+  "first_screen_changed": false,
+  "not_touched": "tests, data, audio, record logic, LessonRecorder.jsx, DB, SQL, .env, Production, main, pw-preview, C:\\voca",
+  "next": "운영자 승인 → commit → push → pw-preview 갱신 → Vercel Preview 확인(SSO 로그인은 운영자)"
+}

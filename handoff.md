@@ -1,4 +1,18 @@
 # Paul Easy Voca — Handoff
+## 279차 (2026-10-14): PAUL PHONICS 그림 단어 듣기·따라 말하기 화면을 운영자 승인 디자인(123.png)으로 재설계 — UI만, 기능·테스트 불변
+- **상태 한 줄**: 운영자 승인 그림 `c:\Users\jinal\Dropbox\PC (4)\pic3\123.png`(1586×992, sha256 `f4c5e2f1…dfcd4`, 2026-10-14 12:45)을 기준으로 학습 카드 화면(`PracticeCards`/`ClassScene`)의 **UI만** 바꿨다(그림은 참조만, 자르거나 번들에 넣지 않음). 명령서에 적힌 `wide_bright_cartoon_illustration_style_education.png`는 pic3에 없어 운영자가 함께 전달한 123.png를 썼다(운영자가 "wide_bright는 필요 없다"고 확정). 브랜치 `design/phonics-lesson-redesign-2026-10-14`(`8296ab28`에서 분기).
+- **화면**: 크림 배경(`#FFF8E7`) → 우드 테두리(`#B78B4A`) 초록 칠판(`#2E6B4A`) 장면 안에 왼쪽 선생님(기존 `phonics-teacher-stand.webp` 그대로, 390px에서 높이 290px) + 오른쪽 흰 말풍선(`잘 들어 봐요!`, 파란 `#2563EB` 스피커) + 파란 테두리 흰 단어 카드(그림·영어·뜻·둥근 스피커) → 큰 버튼 2개: 민트 `따라 말하기`(`#3DBF9F`), 분홍 `내 목소리 듣기`(`#F49AB6`, 흰 글자) → 이전/다음 단어 → 단어 줄. 상단 뒤로(44×44)·진행률 칩은 그대로.
+- **제거**: CSS 책장·창문·러그 임시 장식(`.pw-cls::after`, `.pw-cls-win`, `.pw-cls-shelf`)과 `ClassScene`의 장식 `<span>` 2개. 나무 간판(`h1.pw-sign`)은 학습 카드 화면에서만 `display:none`(`.pw-wrap:has(.pw-cls-card) .pw-sign`) — 첫 화면·다른 하위 화면은 변경 0.
+- **범위 한정**: 버튼 색은 `.pw-cls-card [data-testid=pwp-rec-record|pwp-rec-play]`로 한정해 공용 `ROLE`·`LessonRecorder.jsx`는 무변경. PC(≥768px) 레슨 폭 45rem→52rem, 선생님 380px 유지.
+- **파일**: `src/components/pictureWords/pictureImg.jsx` 1개(+6/-10). `PictureWordPractice.jsx`·`LessonRecorder.jsx`·테스트·데이터·오디오·녹음 로직 변경 0. 구현은 Sonnet 서브에이전트(implementer), 검증은 메인 세션.
+- **검증 — 통과(정적, dummy-env build, 0 경고)**: `testPictureWords` 785, `testPictureWordGames` 142, `testPhonicsGames` 428, `testPhonicsProgress` 111, `testLazyChunkGuards` 116, `testBundleBudget` 34.
+- **검증 — 통과(브라우저, 최종 빌드, 1종씩)**: `pictureWordPractice` 168/0(390·1280, 녹음 시작·종료·재생·단어 줄 이동·뒤로·터치), `phonicsGames` 304/0, `pictureWordGames` 151/0. 미mock 요청 0.
+- **캡처**: `C:\Users\jinal\voca-review\2026-10-14-lesson-v3\` — `m390-1-listen`…`4-next-word`, `pc1280-1`…`4`, `metrics.json`. 390×844: 장면+큰 버튼 2개가 첫 844px 안(장면 y159~, 버튼 y474 h76), 가로 넘침 0, 44px 미만 버튼 0, 페이지 오류 0. 변경 전 캡처는 `2026-10-13-lesson-screen-v2\`(코드 동일 상태).
+- **번들**: 2,198,053 / 2,200,000 B(여유 1,947 B, 278차 2,198,844에서 791 B 감소). 새 이미지·base64·새 import 0.
+- **시안과 다른 점(의도/에셋 부재)**: ① 시안의 가리키는 자세·상반신 선생님 → 에셋이 없어 서 있는 전신(승인 원본) 유지, 새로 그리지 않음. ② 시안의 창문·화분·칠판 낙서 장식 → 단색 칠판만(번들 여유·"장식 제거" 지시). ③ 이전/다음 단어 줄·단어 줄·"먼저 따라 말해 보세요"·"최대 20초까지 녹음돼요"는 시안에 없지만 단어 전환 기능과 정적 테스트 계약이라 남김.
+- **미완료/보류**: 실기기·iOS, 배포 Preview의 로그인 뒤 화면 직접 확인(Vercel SSO — 운영자 확인 필요), 버튼 명도 대비 미측정, 의상 타사 브랜드 표식(274/276차 미결), `verify:all`.
+- **하지 않은 것**: 테스트·데이터·오디오·기록 로직 변경 0. 첫 화면·승인 이미지 변경 0. DB·SQL·`.env`·Production·main·`C:\voca` 0.
+
 ## 278차 (2026-10-14): PAUL PHONICS 소리 풍선(Sound Bubble Pop) 화면을 운영자 승인 디자인(v3)으로 재설계 — 기능·테스트 불변
 - **상태 한 줄**: 운영자가 승인한 디자인 그림 `c:\Users\jinal\Dropbox\PC (4)\pic3\c0083e70-5018-42e5-ad08-0cf5da90137c.png`(1586×992, sha256 `fb3228ee…5181`, 2026-10-14)을 기준으로 소리 풍선 화면의 **UI만** 바꿨다(그림은 참조만, 자르거나 번들에 넣지 않음). 정답 판정·오디오·힌트·기록(`phonicsAttempt`)·진행률 로직 변경 0. 승인된 첫 화면(275차) 변경 0. 브랜치 `design/phonics-bubble-redesign-2026-10-14`.
 - **화면**: 상단 `✕ 나가기`(`pha-quit`, 풍선 게임에서만 위로 이동) / `Book n · Unit n`(`pbp-where`) / 진행률(초록 막대) → 우드 테두리 초록 칠판(`.pbp-board`): 승인된 첫 화면 선생님 조각(`phonics-home-teacher.webp`, 비율 유지, 상반신 영역 표시) + "잘 듣고 **소리**를 골라봐!" + 기존 안내 문장 → 하늘색 큰 `🔊 다시 듣기` → 선택 카드(흰/민트/하늘/살구, `pw-c0..3`, 2개 160px·4개 2×2 112px, "다른 소리"에 🎧 pseudo) → 밑줄 "힌트 보기" → 정답 뒤 기존 분홍 `듣기 단어` 카드(뜻을 카드 안으로) + 초록 칭찬 문구 + 네이비 `다음`. 소리 조절(`SfxControl`)은 풍선 게임에서만 맨 아래. 오답: "괜찮아요. 다시 들어 볼까요?".
